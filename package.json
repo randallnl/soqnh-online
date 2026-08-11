@@ -1,0 +1,38 @@
+{
+  "name": "soqnh-online",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A private collaboration hub for New Hampshire's queer community ecosystem.",
+  "type": "module",
+  "scripts": {
+    "build": "react-router build",
+    "cf-typegen": "wrangler types && react-router typegen",
+    "check": "npm run typecheck && npm run build && wrangler deploy --dry-run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply nh-solidarity-ecosystem --local",
+    "deploy": "wrangler deploy",
+    "dev": "react-router dev",
+    "preview": "npm run build && vite preview",
+    "typecheck": "npm run cf-typegen && tsc -b"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "isbot": "5.2.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router": "7.18.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.51.2",
+    "@react-router/dev": "7.18.2",
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "drizzle-kit": "0.31.10",
+    "typescript": "5.9.3",
+    "vite": "^7.0.0",
+    "vite-tsconfig-paths": "6.1.1",
+    "wrangler": "4.120.1"
+  }
+}

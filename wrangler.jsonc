@@ -1,0 +1,38 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "soqnh-online",
+	"main": "./workers/app.ts",
+	"compatibility_date": "2026-08-11",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": true,
+	"preview_urls": true,
+	"upload_source_maps": true,
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
+	"vars": {
+		"APP_ENV": "preview",
+		"SCRAPER_RUN_URL": "https://parter-event-scraper.randall-d53.workers.dev"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "nh-solidarity-ecosystem",
+			"database_id": "3ddedc39-ef24-45ef-a004-c1080fb73301",
+			"migrations_dir": "migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "ASSETS",
+			"bucket_name": "nh-ecosystem-assets"
+		}
+	],
+	"send_email": [
+		{
+			"name": "EMAIL",
+			"allowed_sender_addresses": ["no-reply@nhsolidarityecosystem.com"]
+		}
+	]
+}
