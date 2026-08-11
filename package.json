@@ -10,6 +10,7 @@
     "check": "npm run typecheck && npm run build && wrangler deploy --dry-run",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply nh-solidarity-ecosystem --local",
+    "db:migrations:list:remote": "wrangler d1 migrations list nh-solidarity-ecosystem --remote",
     "deploy": "wrangler deploy",
     "dev": "react-router dev",
     "preview": "npm run build && vite preview",

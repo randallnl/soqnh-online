@@ -1,6 +1,6 @@
 import { and, count, eq, gte } from "drizzle-orm";
 
-import { events, organizations, users } from "~/db/schema";
+import { events, organizations, posts, users } from "~/db/schema";
 import { createDatabase } from "~/lib/db.server";
 
 export type DashboardCounts = {
@@ -28,14 +28,18 @@ export async function getDashboardCounts(
 					.where(eq(organizations.status, "active")),
 				database
 					.select({ value: count() })
-					.from(events)
-					.where(eq(events.approvalStatus, "pending")),
+					.from(posts)
+					.where(
+						and(eq(posts.section, "event"), eq(posts.status, "draft")),
+					),
 				database
 					.select({ value: count() })
 					.from(events)
+					.innerJoin(posts, eq(events.postId, posts.id))
 					.where(
 						and(
-							eq(events.approvalStatus, "approved"),
+							eq(posts.section, "event"),
+							eq(posts.status, "published"),
 							gte(events.startsAt, now),
 						),
 					),

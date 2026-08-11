@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import {
 	type AnySQLiteColumn,
+	check,
 	index,
 	integer,
 	primaryKey,
@@ -22,30 +23,46 @@ export const users = sqliteTable(
 	"users",
 	{
 		id: text("id").primaryKey(),
-		email: text("email").notNull(),
-		displayName: text("display_name").notNull(),
-		pronouns: text("pronouns"),
-		bio: text("bio"),
-		avatarKey: text("avatar_key"),
-		role: text("role", { enum: ["member", "site_admin"] })
+		email: text("email").notNull().unique(),
+		name: text("name"),
+		avatarObjectKey: text("avatar_object_key"),
+		siteRole: text("site_role", { enum: ["member", "site_admin"] })
 			.notNull()
 			.default("member"),
 		status: text("status", { enum: ["invited", "active", "suspended"] })
 			.notNull()
 			.default("invited"),
-		profileVisibility: text("profile_visibility", {
-			enum: ["ecosystem", "affiliations", "organizations"],
-		})
-			.notNull()
-			.default("affiliations"),
-		lastLoginAt: text("last_login_at"),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
+		lastSeenAt: text("last_seen_at"),
+		profileTitle: text("profile_title"),
+		pronouns: text("pronouns"),
+		bio: text("bio"),
+		location: text("location"),
+		websiteUrl: text("website_url"),
+		profileVisibility: text("profile_visibility", {
+			enum: ["members", "hidden"],
+		})
+			.notNull()
+			.default("members"),
 	},
 	(table) => [
-		uniqueIndex("users_email_unique").on(table.email),
-		index("users_status_idx").on(table.status),
-		index("users_role_idx").on(table.role),
+		check(
+			"users_site_role_check",
+			sql`${table.siteRole} in ('member', 'site_admin')`,
+		),
+		check(
+			"users_status_check",
+			sql`${table.status} in ('invited', 'active', 'suspended')`,
+		),
+		check(
+			"users_profile_visibility_check",
+			sql`${table.profileVisibility} in ('members', 'hidden')`,
+		),
+		index("idx_users_profile_visibility").on(
+			table.profileVisibility,
+			table.name,
+		),
 	],
 );
 
@@ -57,33 +74,12 @@ export const sessions = sqliteTable(
 			.notNull()
 			.references(() => users.id, { onDelete: "cascade" }),
 		expiresAt: text("expires_at").notNull(),
-		lastSeenAt: text("last_seen_at").notNull(),
 		createdAt: createdAt(),
+		revokedAt: text("revoked_at"),
 	},
 	(table) => [
-		index("sessions_user_id_idx").on(table.userId),
-		index("sessions_expires_at_idx").on(table.expiresAt),
-	],
-);
-
-export const authTokens = sqliteTable(
-	"auth_tokens",
-	{
-		id: text("id").primaryKey(),
-		userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
-		email: text("email").notNull(),
-		tokenHash: text("token_hash").notNull(),
-		purpose: text("purpose", { enum: ["sign_in", "invitation"] })
-			.notNull()
-			.default("sign_in"),
-		expiresAt: text("expires_at").notNull(),
-		consumedAt: text("consumed_at"),
-		createdAt: createdAt(),
-	},
-	(table) => [
-		uniqueIndex("auth_tokens_token_hash_unique").on(table.tokenHash),
-		index("auth_tokens_email_idx").on(table.email),
-		index("auth_tokens_expires_at_idx").on(table.expiresAt),
+		index("idx_sessions_user_id").on(table.userId),
+		index("idx_sessions_expires_at").on(table.expiresAt),
 	],
 );
 
@@ -92,24 +88,32 @@ export const organizations = sqliteTable(
 	{
 		id: text("id").primaryKey(),
 		name: text("name").notNull(),
-		slug: text("slug").notNull(),
+		slug: text("slug").notNull().unique(),
+		summary: text("summary"),
 		description: text("description"),
-		logoKey: text("logo_key"),
 		websiteUrl: text("website_url"),
-		eventSourceUrl: text("event_source_url"),
-		status: text("status", { enum: ["active", "archived"] })
+		contactEmail: text("contact_email"),
+		logoObjectKey: text("logo_object_key"),
+		status: text("status", { enum: ["active", "inactive", "archived"] })
 			.notNull()
 			.default("active"),
-		createdByUserId: text("created_by_user_id").references(() => users.id, {
-			onDelete: "set null",
-		}),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
+		eventSourceUrl: text("event_source_url"),
+		eventParser: text("event_parser"),
+		eventScrapingEnabled: integer("event_scraping_enabled")
+			.notNull()
+			.default(0),
 	},
 	(table) => [
-		uniqueIndex("organizations_slug_unique").on(table.slug),
-		index("organizations_status_idx").on(table.status),
-		index("organizations_name_idx").on(table.name),
+		check(
+			"organizations_status_check",
+			sql`${table.status} in ('active', 'inactive', 'archived')`,
+		),
+		check(
+			"organizations_event_scraping_enabled_check",
+			sql`${table.eventScrapingEnabled} in (0, 1)`,
+		),
 	],
 );
 
@@ -122,43 +126,261 @@ export const organizationMemberships = sqliteTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => users.id, { onDelete: "cascade" }),
-		role: text("role", { enum: ["admin", "contributor", "viewer"] })
+		role: text("role", { enum: ["viewer", "contributor", "org_admin"] })
 			.notNull()
 			.default("viewer"),
-		status: text("status", { enum: ["pending", "active", "removed"] })
-			.notNull()
-			.default("active"),
 		createdAt: createdAt(),
-		updatedAt: updatedAt(),
 	},
 	(table) => [
 		primaryKey({ columns: [table.organizationId, table.userId] }),
-		index("organization_memberships_user_idx").on(table.userId),
-		index("organization_memberships_status_idx").on(table.status),
+		check(
+			"organization_memberships_role_check",
+			sql`${table.role} in ('viewer', 'contributor', 'org_admin')`,
+		),
+		index("idx_memberships_user_id").on(table.userId),
 	],
 );
 
-export const affiliations = sqliteTable(
-	"affiliations",
+export const invitations = sqliteTable(
+	"invitations",
 	{
 		id: text("id").primaryKey(),
-		name: text("name").notNull(),
-		slug: text("slug").notNull(),
-		description: text("description"),
-		kind: text("kind", { enum: ["coalition", "network", "region"] })
+		email: text("email").notNull(),
+		organizationId: text("organization_id").references(
+			() => organizations.id,
+			{ onDelete: "set null" },
+		),
+		invitedRole: text("invited_role", {
+			enum: ["viewer", "contributor", "org_admin"],
+		})
 			.notNull()
-			.default("coalition"),
-		visibility: text("visibility", { enum: ["listed", "private"] })
+			.default("viewer"),
+		tokenHash: text("token_hash").notNull().unique(),
+		invitedByUserId: text("invited_by_user_id").references(() => users.id, {
+			onDelete: "set null",
+		}),
+		expiresAt: text("expires_at").notNull(),
+		acceptedAt: text("accepted_at"),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		check(
+			"invitations_invited_role_check",
+			sql`${table.invitedRole} in ('viewer', 'contributor', 'org_admin')`,
+		),
+	],
+);
+
+export const posts = sqliteTable(
+	"posts",
+	{
+		id: text("id").primaryKey(),
+		organizationId: text("organization_id").references(
+			() => organizations.id,
+			{ onDelete: "set null" },
+		),
+		authorUserId: text("author_user_id")
 			.notNull()
-			.default("listed"),
+			.references(() => users.id, { onDelete: "cascade" }),
+		section: text("section", {
+			enum: ["legislation", "event", "project", "update"],
+		}).notNull(),
+		title: text("title").notNull(),
+		body: text("body").notNull(),
+		visibility: text("visibility", {
+			enum: ["members", "organization"],
+		})
+			.notNull()
+			.default("members"),
+		status: text("status", { enum: ["draft", "published", "archived"] })
+			.notNull()
+			.default("published"),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+		archivedAt: text("archived_at"),
+	},
+	(table) => [
+		check(
+			"posts_section_check",
+			sql`${table.section} in ('legislation', 'event', 'project', 'update')`,
+		),
+		check(
+			"posts_visibility_check",
+			sql`${table.visibility} in ('members', 'organization')`,
+		),
+		check(
+			"posts_status_check",
+			sql`${table.status} in ('draft', 'published', 'archived')`,
+		),
+		index("idx_posts_section_created_at").on(
+			table.section,
+			desc(table.createdAt),
+		),
+		index("idx_posts_organization_id").on(table.organizationId),
+	],
+);
+
+export const postTags = sqliteTable(
+	"post_tags",
+	{
+		postId: text("post_id")
+			.notNull()
+			.references(() => posts.id, { onDelete: "cascade" }),
+		tag: text("tag").notNull(),
+	},
+	(table) => [primaryKey({ columns: [table.postId, table.tag] })],
+);
+
+export const comments = sqliteTable(
+	"comments",
+	{
+		id: text("id").primaryKey(),
+		postId: text("post_id")
+			.notNull()
+			.references(() => posts.id, { onDelete: "cascade" }),
+		parentCommentId: text("parent_comment_id").references(
+			(): AnySQLiteColumn => comments.id,
+			{ onDelete: "cascade" },
+		),
+		authorUserId: text("author_user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		body: text("body").notNull(),
+		status: text("status", { enum: ["published", "hidden", "archived"] })
+			.notNull()
+			.default("published"),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},
 	(table) => [
-		uniqueIndex("affiliations_slug_unique").on(table.slug),
-		index("affiliations_kind_idx").on(table.kind),
+		check(
+			"comments_status_check",
+			sql`${table.status} in ('published', 'hidden', 'archived')`,
+		),
+		index("idx_comments_post_id_created_at").on(
+			table.postId,
+			table.createdAt,
+		),
 	],
 );
+
+export const events = sqliteTable(
+	"events",
+	{
+		postId: text("post_id")
+			.primaryKey()
+			.references(() => posts.id, { onDelete: "cascade" }),
+		startsAt: text("starts_at").notNull(),
+		endsAt: text("ends_at"),
+		locationName: text("location_name"),
+		locationUrl: text("location_url"),
+		registrationUrl: text("registration_url"),
+		sourceUrl: text("source_url"),
+		externalUrl: text("external_url"),
+		externalId: text("external_id"),
+		scrapedAt: text("scraped_at"),
+		imageUrl: text("image_url"),
+	},
+	(table) => [
+		uniqueIndex("idx_events_external_id")
+			.on(table.externalId)
+			.where(sql`${table.externalId} is not null`),
+		index("idx_events_starts_at").on(table.startsAt),
+	],
+);
+
+export const projects = sqliteTable("projects", {
+	postId: text("post_id")
+		.primaryKey()
+		.references(() => posts.id, { onDelete: "cascade" }),
+	projectStatus: text("project_status", {
+		enum: ["planning", "active", "paused", "completed"],
+	})
+		.notNull()
+		.default("planning"),
+	leadOrganizationId: text("lead_organization_id").references(
+		() => organizations.id,
+		{ onDelete: "set null" },
+	),
+	targetDate: text("target_date"),
+}, (table) => [
+	check(
+		"projects_project_status_check",
+		sql`${table.projectStatus} in ('planning', 'active', 'paused', 'completed')`,
+	),
+]);
+
+export const attachments = sqliteTable(
+	"attachments",
+	{
+		id: text("id").primaryKey(),
+		postId: text("post_id").references(() => posts.id, { onDelete: "cascade" }),
+		commentId: text("comment_id").references(() => comments.id, {
+			onDelete: "cascade",
+		}),
+		uploadedByUserId: text("uploaded_by_user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		objectKey: text("object_key").notNull().unique(),
+		filename: text("filename").notNull(),
+		contentType: text("content_type").notNull(),
+		byteSize: integer("byte_size").notNull(),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		check(
+			"attachments_parent_check",
+			sql`(${table.postId} is not null and ${table.commentId} is null) or (${table.postId} is null and ${table.commentId} is not null)`,
+		),
+		index("idx_attachments_post_id").on(table.postId),
+	],
+);
+
+export const auditLog = sqliteTable(
+	"audit_log",
+	{
+		id: text("id").primaryKey(),
+		actorUserId: text("actor_user_id").references(() => users.id, {
+			onDelete: "set null",
+		}),
+		action: text("action").notNull(),
+		entityType: text("entity_type").notNull(),
+		entityId: text("entity_id").notNull(),
+		metadataJson: text("metadata_json", { mode: "json" }).$type<
+			Record<string, unknown>
+		>(),
+		createdAt: createdAt(),
+	},
+	(table) => [index("idx_audit_log_entity").on(table.entityType, table.entityId)],
+);
+
+export const authTokens = sqliteTable(
+	"auth_tokens",
+	{
+		id: text("id").primaryKey(),
+		email: text("email").notNull(),
+		tokenHash: text("token_hash").notNull().unique(),
+		purpose: text("purpose", { enum: ["login", "invite"] }).notNull(),
+		expiresAt: text("expires_at").notNull(),
+		consumedAt: text("consumed_at"),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		check(
+			"auth_tokens_purpose_check",
+			sql`${table.purpose} in ('login', 'invite')`,
+		),
+		index("idx_auth_tokens_email").on(table.email),
+		index("idx_auth_tokens_expires_at").on(table.expiresAt),
+	],
+);
+
+export const affiliations = sqliteTable("affiliations", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull().unique(),
+	slug: text("slug").notNull().unique(),
+	createdAt: createdAt(),
+});
 
 export const organizationAffiliations = sqliteTable(
 	"organization_affiliations",
@@ -173,7 +395,7 @@ export const organizationAffiliations = sqliteTable(
 	},
 	(table) => [
 		primaryKey({ columns: [table.organizationId, table.affiliationId] }),
-		index("organization_affiliations_affiliation_idx").on(
+		index("idx_organization_affiliations_affiliation_id").on(
 			table.affiliationId,
 		),
 	],
@@ -188,213 +410,37 @@ export const userAffiliations = sqliteTable(
 		affiliationId: text("affiliation_id")
 			.notNull()
 			.references(() => affiliations.id, { onDelete: "cascade" }),
-		source: text("source", { enum: ["direct", "inherited"] })
-			.notNull()
-			.default("direct"),
 		createdAt: createdAt(),
 	},
 	(table) => [
 		primaryKey({ columns: [table.userId, table.affiliationId] }),
-		index("user_affiliations_affiliation_idx").on(table.affiliationId),
-	],
-);
-
-export const invitations = sqliteTable(
-	"invitations",
-	{
-		id: text("id").primaryKey(),
-		email: text("email").notNull(),
-		invitedByUserId: text("invited_by_user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "restrict" }),
-		organizationId: text("organization_id").references(
-			() => organizations.id,
-			{ onDelete: "cascade" },
-		),
-		organizationRole: text("organization_role", {
-			enum: ["admin", "contributor", "viewer"],
-		}),
-		tokenHash: text("token_hash").notNull(),
-		status: text("status", { enum: ["pending", "accepted", "expired", "revoked"] })
-			.notNull()
-			.default("pending"),
-		expiresAt: text("expires_at").notNull(),
-		acceptedAt: text("accepted_at"),
-		createdAt: createdAt(),
-	},
-	(table) => [
-		uniqueIndex("invitations_token_hash_unique").on(table.tokenHash),
-		index("invitations_email_idx").on(table.email),
-		index("invitations_status_idx").on(table.status),
-	],
-);
-
-export const posts = sqliteTable(
-	"posts",
-	{
-		id: text("id").primaryKey(),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "restrict" }),
-		organizationId: text("organization_id").references(
-			() => organizations.id,
-			{ onDelete: "set null" },
-		),
-		section: text("section", {
-			enum: ["legislation", "events", "projects", "updates"],
-		}).notNull(),
-		title: text("title").notNull(),
-		body: text("body").notNull(),
-		status: text("status", { enum: ["draft", "published", "archived"] })
-			.notNull()
-			.default("draft"),
-		visibility: text("visibility", {
-			enum: ["ecosystem", "affiliations", "organization"],
-		})
-			.notNull()
-			.default("affiliations"),
-		publishedAt: text("published_at"),
-		createdAt: createdAt(),
-		updatedAt: updatedAt(),
-	},
-	(table) => [
-		index("posts_section_status_idx").on(table.section, table.status),
-		index("posts_author_idx").on(table.authorUserId),
-		index("posts_organization_idx").on(table.organizationId),
-		index("posts_published_at_idx").on(table.publishedAt),
-	],
-);
-
-export const comments = sqliteTable(
-	"comments",
-	{
-		id: text("id").primaryKey(),
-		postId: text("post_id")
-			.notNull()
-			.references(() => posts.id, { onDelete: "cascade" }),
-		authorUserId: text("author_user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "restrict" }),
-		parentCommentId: text("parent_comment_id").references(
-			(): AnySQLiteColumn => comments.id,
-			{ onDelete: "cascade" },
-		),
-		body: text("body").notNull(),
-		deletedAt: text("deleted_at"),
-		createdAt: createdAt(),
-		updatedAt: updatedAt(),
-	},
-	(table) => [
-		index("comments_post_created_idx").on(table.postId, table.createdAt),
-		index("comments_author_idx").on(table.authorUserId),
-	],
-);
-
-export const events = sqliteTable(
-	"events",
-	{
-		id: text("id").primaryKey(),
-		postId: text("post_id")
-			.notNull()
-			.references(() => posts.id, { onDelete: "cascade" }),
-		startsAt: text("starts_at").notNull(),
-		endsAt: text("ends_at"),
-		timezone: text("timezone").notNull().default("America/New_York"),
-		locationName: text("location_name"),
-		address: text("address"),
-		externalUrl: text("external_url"),
-		imageKey: text("image_key"),
-		sourceUrl: text("source_url"),
-		approvalStatus: text("approval_status", {
-			enum: ["pending", "approved", "rejected"],
-		})
-			.notNull()
-			.default("pending"),
-		submittedByUserId: text("submitted_by_user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "restrict" }),
-		reviewedByUserId: text("reviewed_by_user_id").references(() => users.id, {
-			onDelete: "set null",
-		}),
-		reviewedAt: text("reviewed_at"),
-		rejectionReason: text("rejection_reason"),
-		createdAt: createdAt(),
-		updatedAt: updatedAt(),
-	},
-	(table) => [
-		uniqueIndex("events_post_id_unique").on(table.postId),
-		index("events_approval_status_idx").on(table.approvalStatus),
-		index("events_starts_at_idx").on(table.startsAt),
-		index("events_source_url_idx").on(table.sourceUrl),
-	],
-);
-
-export const projects = sqliteTable(
-	"projects",
-	{
-		id: text("id").primaryKey(),
-		postId: text("post_id")
-			.notNull()
-			.references(() => posts.id, { onDelete: "cascade" }),
-		ownerOrganizationId: text("owner_organization_id").references(
-			() => organizations.id,
-			{ onDelete: "set null" },
-		),
-		status: text("status", {
-			enum: ["proposed", "active", "on_hold", "completed"],
-		})
-			.notNull()
-			.default("proposed"),
-		startsAt: text("starts_at"),
-		endsAt: text("ends_at"),
-		createdAt: createdAt(),
-		updatedAt: updatedAt(),
-	},
-	(table) => [
-		uniqueIndex("projects_post_id_unique").on(table.postId),
-		index("projects_status_idx").on(table.status),
-		index("projects_owner_organization_idx").on(table.ownerOrganizationId),
-	],
-);
-
-export const attachments = sqliteTable(
-	"attachments",
-	{
-		id: text("id").primaryKey(),
-		postId: text("post_id").references(() => posts.id, { onDelete: "cascade" }),
-		commentId: text("comment_id").references(() => comments.id, {
-			onDelete: "cascade",
-		}),
-		r2Key: text("r2_key").notNull(),
-		fileName: text("file_name").notNull(),
-		mimeType: text("mime_type").notNull(),
-		sizeBytes: integer("size_bytes").notNull(),
-		altText: text("alt_text"),
-		createdByUserId: text("created_by_user_id")
-			.notNull()
-			.references(() => users.id, { onDelete: "restrict" }),
-		createdAt: createdAt(),
-	},
-	(table) => [
-		uniqueIndex("attachments_r2_key_unique").on(table.r2Key),
-		index("attachments_post_idx").on(table.postId),
-		index("attachments_comment_idx").on(table.commentId),
+		index("idx_user_affiliations_affiliation_id").on(table.affiliationId),
 	],
 );
 
 export const videoEmbeds = sqliteTable(
 	"video_embeds",
 	{
-		id: text("id").primaryKey(),
 		postId: text("post_id")
-			.notNull()
+			.primaryKey()
 			.references(() => posts.id, { onDelete: "cascade" }),
-		provider: text("provider").notNull(),
-		url: text("url").notNull(),
+		provider: text("provider", { enum: ["tiktok"] }).notNull(),
+		sourceUrl: text("source_url").notNull(),
+		videoId: text("video_id"),
 		title: text("title"),
+		authorName: text("author_name"),
+		authorUrl: text("author_url"),
+		thumbnailUrl: text("thumbnail_url"),
 		createdAt: createdAt(),
+		updatedAt: updatedAt(),
 	},
-	(table) => [index("video_embeds_post_idx").on(table.postId)],
+	(table) => [
+		check("video_embeds_provider_check", sql`${table.provider} in ('tiktok')`),
+		index("idx_video_embeds_provider_created_at").on(
+			table.provider,
+			desc(table.createdAt),
+		),
+	],
 );
 
 export const postReactions = sqliteTable(
@@ -406,14 +452,18 @@ export const postReactions = sqliteTable(
 		userId: text("user_id")
 			.notNull()
 			.references(() => users.id, { onDelete: "cascade" }),
-		reaction: text("reaction", {
-			enum: ["support", "celebrate", "insightful", "thanks"],
-		}).notNull(),
+		reaction: text("reaction", { enum: ["support"] })
+			.notNull()
+			.default("support"),
 		createdAt: createdAt(),
 	},
 	(table) => [
 		primaryKey({ columns: [table.postId, table.userId, table.reaction] }),
-		index("post_reactions_user_idx").on(table.userId),
+		check(
+			"post_reactions_reaction_check",
+			sql`${table.reaction} in ('support')`,
+		),
+		index("idx_post_reactions_user_id").on(table.userId),
 	],
 );
 
@@ -427,19 +477,25 @@ export const notifications = sqliteTable(
 		actorUserId: text("actor_user_id").references(() => users.id, {
 			onDelete: "set null",
 		}),
-		type: text("type", {
-			enum: ["mention", "comment", "reaction", "invitation", "moderation"],
-		}).notNull(),
 		postId: text("post_id").references(() => posts.id, { onDelete: "cascade" }),
 		commentId: text("comment_id").references(() => comments.id, {
 			onDelete: "cascade",
 		}),
+		type: text("type", { enum: ["comment", "mention", "approval"] }).notNull(),
+		body: text("body").notNull(),
 		readAt: text("read_at"),
 		createdAt: createdAt(),
 	},
 	(table) => [
-		index("notifications_user_read_idx").on(table.userId, table.readAt),
-		index("notifications_created_at_idx").on(table.createdAt),
+		check(
+			"notifications_type_check",
+			sql`${table.type} in ('comment', 'mention', 'approval')`,
+		),
+		index("idx_notifications_user_read_created").on(
+			table.userId,
+			table.readAt,
+			desc(table.createdAt),
+		),
 	],
 );
 
@@ -447,39 +503,26 @@ export const postMentions = sqliteTable(
 	"post_mentions",
 	{
 		id: text("id").primaryKey(),
-		postId: text("post_id")
-			.notNull()
-			.references(() => posts.id, { onDelete: "cascade" }),
+		postId: text("post_id").references(() => posts.id, { onDelete: "cascade" }),
 		commentId: text("comment_id").references(() => comments.id, {
 			onDelete: "cascade",
 		}),
 		mentionedUserId: text("mentioned_user_id")
 			.notNull()
 			.references(() => users.id, { onDelete: "cascade" }),
+		mentionedByUserId: text("mentioned_by_user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
 		createdAt: createdAt(),
 	},
 	(table) => [
-		index("post_mentions_user_idx").on(table.mentionedUserId),
-		index("post_mentions_post_idx").on(table.postId),
-	],
-);
-
-export const auditLog = sqliteTable(
-	"audit_log",
-	{
-		id: text("id").primaryKey(),
-		actorUserId: text("actor_user_id").references(() => users.id, {
-			onDelete: "set null",
-		}),
-		action: text("action").notNull(),
-		entityType: text("entity_type").notNull(),
-		entityId: text("entity_id"),
-		metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
-		createdAt: createdAt(),
-	},
-	(table) => [
-		index("audit_log_actor_idx").on(table.actorUserId),
-		index("audit_log_entity_idx").on(table.entityType, table.entityId),
-		index("audit_log_created_at_idx").on(table.createdAt),
+		check(
+			"post_mentions_parent_check",
+			sql`(${table.postId} is not null and ${table.commentId} is null) or (${table.postId} is null and ${table.commentId} is not null)`,
+		),
+		index("idx_post_mentions_mentioned_user").on(
+			table.mentionedUserId,
+			desc(table.createdAt),
+		),
 	],
 );

@@ -193,6 +193,7 @@ dist
 
 ### Wrangler ###
 .wrangler/
+database-exports/
 .env*
 !.env.example
 .dev.vars*

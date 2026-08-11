@@ -12,7 +12,7 @@
 		"head_sampling_rate": 1
 	},
 	"vars": {
-		"APP_ENV": "preview",
+		"APP_ENV": "production",
 		"SCRAPER_RUN_URL": "https://parter-event-scraper.randall-d53.workers.dev"
 	},
 	"d1_databases": [

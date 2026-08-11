@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f88ac496-6248-4771-b489-18b8f12cff5c",
+  "id": "e15586c6-5acf-4fb7-807f-c189803beac5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "affiliations": {
@@ -28,39 +28,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'coalition'"
-        },
-        "visibility": {
-          "name": "visibility",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'listed'"
-        },
         "created_at": {
           "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -69,19 +38,19 @@
         }
       },
       "indexes": {
+        "affiliations_name_unique": {
+          "name": "affiliations_name_unique",
+          "columns": [
+            "name"
+          ],
+          "isUnique": true
+        },
         "affiliations_slug_unique": {
           "name": "affiliations_slug_unique",
           "columns": [
             "slug"
           ],
           "isUnique": true
-        },
-        "affiliations_kind_idx": {
-          "name": "affiliations_kind_idx",
-          "columns": [
-            "kind"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {},
@@ -113,44 +82,37 @@
           "notNull": false,
           "autoincrement": false
         },
-        "r2_key": {
-          "name": "r2_key",
+        "uploaded_by_user_id": {
+          "name": "uploaded_by_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "file_name": {
-          "name": "file_name",
+        "object_key": {
+          "name": "object_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "mime_type": {
-          "name": "mime_type",
+        "filename": {
+          "name": "filename",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "size_bytes": {
-          "name": "size_bytes",
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "byte_size": {
+          "name": "byte_size",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "alt_text": {
-          "name": "alt_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -165,24 +127,17 @@
         }
       },
       "indexes": {
-        "attachments_r2_key_unique": {
-          "name": "attachments_r2_key_unique",
+        "attachments_object_key_unique": {
+          "name": "attachments_object_key_unique",
           "columns": [
-            "r2_key"
+            "object_key"
           ],
           "isUnique": true
         },
-        "attachments_post_idx": {
-          "name": "attachments_post_idx",
+        "idx_attachments_post_id": {
+          "name": "idx_attachments_post_id",
           "columns": [
             "post_id"
-          ],
-          "isUnique": false
-        },
-        "attachments_comment_idx": {
-          "name": "attachments_comment_idx",
-          "columns": [
-            "comment_id"
           ],
           "isUnique": false
         }
@@ -214,23 +169,28 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "attachments_created_by_user_id_users_id_fk": {
-          "name": "attachments_created_by_user_id_users_id_fk",
+        "attachments_uploaded_by_user_id_users_id_fk": {
+          "name": "attachments_uploaded_by_user_id_users_id_fk",
           "tableFrom": "attachments",
           "tableTo": "users",
           "columnsFrom": [
-            "created_by_user_id"
+            "uploaded_by_user_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "attachments_parent_check": {
+          "name": "attachments_parent_check",
+          "value": "(\"attachments\".\"post_id\" is not null and \"attachments\".\"comment_id\" is null) or (\"attachments\".\"post_id\" is null and \"attachments\".\"comment_id\" is not null)"
+        }
+      }
     },
     "audit_log": {
       "name": "audit_log",
@@ -267,11 +227,11 @@
           "name": "entity_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
-        "metadata": {
-          "name": "metadata",
+        "metadata_json": {
+          "name": "metadata_json",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -287,25 +247,11 @@
         }
       },
       "indexes": {
-        "audit_log_actor_idx": {
-          "name": "audit_log_actor_idx",
-          "columns": [
-            "actor_user_id"
-          ],
-          "isUnique": false
-        },
-        "audit_log_entity_idx": {
-          "name": "audit_log_entity_idx",
+        "idx_audit_log_entity": {
+          "name": "idx_audit_log_entity",
           "columns": [
             "entity_type",
             "entity_id"
-          ],
-          "isUnique": false
-        },
-        "audit_log_created_at_idx": {
-          "name": "audit_log_created_at_idx",
-          "columns": [
-            "created_at"
           ],
           "isUnique": false
         }
@@ -339,13 +285,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "email": {
           "name": "email",
           "type": "text",
@@ -365,8 +304,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'sign_in'"
+          "autoincrement": false
         },
         "expires_at": {
           "name": "expires_at",
@@ -399,39 +337,30 @@
           ],
           "isUnique": true
         },
-        "auth_tokens_email_idx": {
-          "name": "auth_tokens_email_idx",
+        "idx_auth_tokens_email": {
+          "name": "idx_auth_tokens_email",
           "columns": [
             "email"
           ],
           "isUnique": false
         },
-        "auth_tokens_expires_at_idx": {
-          "name": "auth_tokens_expires_at_idx",
+        "idx_auth_tokens_expires_at": {
+          "name": "idx_auth_tokens_expires_at",
           "columns": [
             "expires_at"
           ],
           "isUnique": false
         }
       },
-      "foreignKeys": {
-        "auth_tokens_user_id_users_id_fk": {
-          "name": "auth_tokens_user_id_users_id_fk",
-          "tableFrom": "auth_tokens",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "auth_tokens_purpose_check": {
+          "name": "auth_tokens_purpose_check",
+          "value": "\"auth_tokens\".\"purpose\" in ('login', 'invite')"
+        }
+      }
     },
     "comments": {
       "name": "comments",
@@ -450,18 +379,18 @@
           "notNull": true,
           "autoincrement": false
         },
-        "author_user_id": {
-          "name": "author_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "parent_comment_id": {
           "name": "parent_comment_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "author_user_id": {
+          "name": "author_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "body": {
@@ -471,12 +400,13 @@
           "notNull": true,
           "autoincrement": false
         },
-        "deleted_at": {
-          "name": "deleted_at",
+        "status": {
+          "name": "status",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'published'"
         },
         "created_at": {
           "name": "created_at",
@@ -496,18 +426,11 @@
         }
       },
       "indexes": {
-        "comments_post_created_idx": {
-          "name": "comments_post_created_idx",
+        "idx_comments_post_id_created_at": {
+          "name": "idx_comments_post_id_created_at",
           "columns": [
             "post_id",
             "created_at"
-          ],
-          "isUnique": false
-        },
-        "comments_author_idx": {
-          "name": "comments_author_idx",
-          "columns": [
-            "author_user_id"
           ],
           "isUnique": false
         }
@@ -526,19 +449,6 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "comments_author_user_id_users_id_fk": {
-          "name": "comments_author_user_id_users_id_fk",
-          "tableFrom": "comments",
-          "tableTo": "users",
-          "columnsFrom": [
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
         "comments_parent_comment_id_comments_id_fk": {
           "name": "comments_parent_comment_id_comments_id_fk",
           "tableFrom": "comments",
@@ -551,26 +461,37 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "comments_author_user_id_users_id_fk": {
+          "name": "comments_author_user_id_users_id_fk",
+          "tableFrom": "comments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "author_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "comments_status_check": {
+          "name": "comments_status_check",
+          "value": "\"comments\".\"status\" in ('published', 'hidden', 'archived')"
+        }
+      }
     },
     "events": {
       "name": "events",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
         "post_id": {
           "name": "post_id",
           "type": "text",
-          "primaryKey": false,
+          "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
@@ -588,14 +509,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "timezone": {
-          "name": "timezone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'America/New_York'"
-        },
         "location_name": {
           "name": "location_name",
           "type": "text",
@@ -603,22 +516,15 @@
           "notNull": false,
           "autoincrement": false
         },
-        "address": {
-          "name": "address",
+        "location_url": {
+          "name": "location_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "external_url": {
-          "name": "external_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "image_key": {
-          "name": "image_key",
+        "registration_url": {
+          "name": "registration_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -631,85 +537,48 @@
           "notNull": false,
           "autoincrement": false
         },
-        "approval_status": {
-          "name": "approval_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "submitted_by_user_id": {
-          "name": "submitted_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "reviewed_by_user_id": {
-          "name": "reviewed_by_user_id",
+        "external_url": {
+          "name": "external_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "reviewed_at": {
-          "name": "reviewed_at",
+        "external_id": {
+          "name": "external_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "rejection_reason": {
-          "name": "rejection_reason",
+        "scraped_at": {
+          "name": "scraped_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "created_at": {
-          "name": "created_at",
+        "image_url": {
+          "name": "image_url",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
-        "events_post_id_unique": {
-          "name": "events_post_id_unique",
+        "idx_events_external_id": {
+          "name": "idx_events_external_id",
           "columns": [
-            "post_id"
+            "external_id"
           ],
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"events\".\"external_id\" is not null"
         },
-        "events_approval_status_idx": {
-          "name": "events_approval_status_idx",
-          "columns": [
-            "approval_status"
-          ],
-          "isUnique": false
-        },
-        "events_starts_at_idx": {
-          "name": "events_starts_at_idx",
+        "idx_events_starts_at": {
+          "name": "idx_events_starts_at",
           "columns": [
             "starts_at"
-          ],
-          "isUnique": false
-        },
-        "events_source_url_idx": {
-          "name": "events_source_url_idx",
-          "columns": [
-            "source_url"
           ],
           "isUnique": false
         }
@@ -726,32 +595,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "events_submitted_by_user_id_users_id_fk": {
-          "name": "events_submitted_by_user_id_users_id_fk",
-          "tableFrom": "events",
-          "tableTo": "users",
-          "columnsFrom": [
-            "submitted_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "events_reviewed_by_user_id_users_id_fk": {
-          "name": "events_reviewed_by_user_id_users_id_fk",
-          "tableFrom": "events",
-          "tableTo": "users",
-          "columnsFrom": [
-            "reviewed_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -776,13 +619,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "invited_by_user_id": {
-          "name": "invited_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "organization_id": {
           "name": "organization_id",
           "type": "text",
@@ -790,12 +626,13 @@
           "notNull": false,
           "autoincrement": false
         },
-        "organization_role": {
-          "name": "organization_role",
+        "invited_role": {
+          "name": "invited_role",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'viewer'"
         },
         "token_hash": {
           "name": "token_hash",
@@ -804,13 +641,12 @@
           "notNull": true,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
+        "invited_by_user_id": {
+          "name": "invited_by_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
+          "notNull": false,
+          "autoincrement": false
         },
         "expires_at": {
           "name": "expires_at",
@@ -842,36 +678,9 @@
             "token_hash"
           ],
           "isUnique": true
-        },
-        "invitations_email_idx": {
-          "name": "invitations_email_idx",
-          "columns": [
-            "email"
-          ],
-          "isUnique": false
-        },
-        "invitations_status_idx": {
-          "name": "invitations_status_idx",
-          "columns": [
-            "status"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {
-        "invitations_invited_by_user_id_users_id_fk": {
-          "name": "invitations_invited_by_user_id_users_id_fk",
-          "tableFrom": "invitations",
-          "tableTo": "users",
-          "columnsFrom": [
-            "invited_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
         "invitations_organization_id_organizations_id_fk": {
           "name": "invitations_organization_id_organizations_id_fk",
           "tableFrom": "invitations",
@@ -882,13 +691,31 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "invitations_invited_by_user_id_users_id_fk": {
+          "name": "invitations_invited_by_user_id_users_id_fk",
+          "tableFrom": "invitations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "invited_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "invitations_invited_role_check": {
+          "name": "invitations_invited_role_check",
+          "value": "\"invitations\".\"invited_role\" in ('viewer', 'contributor', 'org_admin')"
+        }
+      }
     },
     "notifications": {
       "name": "notifications",
@@ -914,13 +741,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "post_id": {
           "name": "post_id",
           "type": "text",
@@ -933,6 +753,20 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "read_at": {
@@ -952,18 +786,12 @@
         }
       },
       "indexes": {
-        "notifications_user_read_idx": {
-          "name": "notifications_user_read_idx",
+        "idx_notifications_user_read_created": {
+          "name": "idx_notifications_user_read_created",
           "columns": [
             "user_id",
-            "read_at"
-          ],
-          "isUnique": false
-        },
-        "notifications_created_at_idx": {
-          "name": "notifications_created_at_idx",
-          "columns": [
-            "created_at"
+            "read_at",
+            "\"created_at\" desc"
           ],
           "isUnique": false
         }
@@ -1024,7 +852,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "notifications_type_check": {
+          "name": "notifications_type_check",
+          "value": "\"notifications\".\"type\" in ('comment', 'mention', 'approval')"
+        }
+      }
     },
     "organization_affiliations": {
       "name": "organization_affiliations",
@@ -1053,8 +886,8 @@
         }
       },
       "indexes": {
-        "organization_affiliations_affiliation_idx": {
-          "name": "organization_affiliations_affiliation_idx",
+        "idx_organization_affiliations_affiliation_id": {
+          "name": "idx_organization_affiliations_affiliation_id",
           "columns": [
             "affiliation_id"
           ],
@@ -1126,24 +959,8 @@
           "autoincrement": false,
           "default": "'viewer'"
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'active'"
-        },
         "created_at": {
           "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -1152,17 +969,10 @@
         }
       },
       "indexes": {
-        "organization_memberships_user_idx": {
-          "name": "organization_memberships_user_idx",
+        "idx_memberships_user_id": {
+          "name": "idx_memberships_user_id",
           "columns": [
             "user_id"
-          ],
-          "isUnique": false
-        },
-        "organization_memberships_status_idx": {
-          "name": "organization_memberships_status_idx",
-          "columns": [
-            "status"
           ],
           "isUnique": false
         }
@@ -1205,7 +1015,12 @@
         }
       },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "organization_memberships_role_check": {
+          "name": "organization_memberships_role_check",
+          "value": "\"organization_memberships\".\"role\" in ('viewer', 'contributor', 'org_admin')"
+        }
+      }
     },
     "organizations": {
       "name": "organizations",
@@ -1231,15 +1046,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
+        "summary": {
+          "name": "summary",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "logo_key": {
-          "name": "logo_key",
+        "description": {
+          "name": "description",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1252,8 +1067,15 @@
           "notNull": false,
           "autoincrement": false
         },
-        "event_source_url": {
-          "name": "event_source_url",
+        "contact_email": {
+          "name": "contact_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "logo_object_key": {
+          "name": "logo_object_key",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1266,13 +1088,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'active'"
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
@@ -1289,6 +1104,28 @@
           "notNull": true,
           "autoincrement": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "event_source_url": {
+          "name": "event_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_parser": {
+          "name": "event_parser",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_scraping_enabled": {
+          "name": "event_scraping_enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         }
       },
       "indexes": {
@@ -1298,40 +1135,21 @@
             "slug"
           ],
           "isUnique": true
-        },
-        "organizations_status_idx": {
-          "name": "organizations_status_idx",
-          "columns": [
-            "status"
-          ],
-          "isUnique": false
-        },
-        "organizations_name_idx": {
-          "name": "organizations_name_idx",
-          "columns": [
-            "name"
-          ],
-          "isUnique": false
         }
       },
-      "foreignKeys": {
-        "organizations_created_by_user_id_users_id_fk": {
-          "name": "organizations_created_by_user_id_users_id_fk",
-          "tableFrom": "organizations",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "organizations_status_check": {
+          "name": "organizations_status_check",
+          "value": "\"organizations\".\"status\" in ('active', 'inactive', 'archived')"
+        },
+        "organizations_event_scraping_enabled_check": {
+          "name": "organizations_event_scraping_enabled_check",
+          "value": "\"organizations\".\"event_scraping_enabled\" in (0, 1)"
+        }
+      }
     },
     "post_mentions": {
       "name": "post_mentions",
@@ -1347,7 +1165,7 @@
           "name": "post_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "comment_id": {
@@ -1364,6 +1182,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "mentioned_by_user_id": {
+          "name": "mentioned_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -1374,17 +1199,11 @@
         }
       },
       "indexes": {
-        "post_mentions_user_idx": {
-          "name": "post_mentions_user_idx",
+        "idx_post_mentions_mentioned_user": {
+          "name": "idx_post_mentions_mentioned_user",
           "columns": [
-            "mentioned_user_id"
-          ],
-          "isUnique": false
-        },
-        "post_mentions_post_idx": {
-          "name": "post_mentions_post_idx",
-          "columns": [
-            "post_id"
+            "mentioned_user_id",
+            "\"created_at\" desc"
           ],
           "isUnique": false
         }
@@ -1428,11 +1247,29 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "post_mentions_mentioned_by_user_id_users_id_fk": {
+          "name": "post_mentions_mentioned_by_user_id_users_id_fk",
+          "tableFrom": "post_mentions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "mentioned_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "post_mentions_parent_check": {
+          "name": "post_mentions_parent_check",
+          "value": "(\"post_mentions\".\"post_id\" is not null and \"post_mentions\".\"comment_id\" is null) or (\"post_mentions\".\"post_id\" is null and \"post_mentions\".\"comment_id\" is not null)"
+        }
+      }
     },
     "post_reactions": {
       "name": "post_reactions",
@@ -1456,7 +1293,8 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'support'"
         },
         "created_at": {
           "name": "created_at",
@@ -1468,8 +1306,8 @@
         }
       },
       "indexes": {
-        "post_reactions_user_idx": {
-          "name": "post_reactions_user_idx",
+        "idx_post_reactions_user_id": {
+          "name": "idx_post_reactions_user_id",
           "columns": [
             "user_id"
           ],
@@ -1515,6 +1353,57 @@
         }
       },
       "uniqueConstraints": {},
+      "checkConstraints": {
+        "post_reactions_reaction_check": {
+          "name": "post_reactions_reaction_check",
+          "value": "\"post_reactions\".\"reaction\" in ('support')"
+        }
+      }
+    },
+    "post_tags": {
+      "name": "post_tags",
+      "columns": {
+        "post_id": {
+          "name": "post_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tag": {
+          "name": "tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "post_tags_post_id_posts_id_fk": {
+          "name": "post_tags_post_id_posts_id_fk",
+          "tableFrom": "post_tags",
+          "tableTo": "posts",
+          "columnsFrom": [
+            "post_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "post_tags_post_id_tag_pk": {
+          "columns": [
+            "post_id",
+            "tag"
+          ],
+          "name": "post_tags_post_id_tag_pk"
+        }
+      },
+      "uniqueConstraints": {},
       "checkConstraints": {}
     },
     "posts": {
@@ -1527,18 +1416,18 @@
           "notNull": true,
           "autoincrement": false
         },
-        "author_user_id": {
-          "name": "author_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "organization_id": {
           "name": "organization_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "author_user_id": {
+          "name": "author_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "section": {
@@ -1562,28 +1451,21 @@
           "notNull": true,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'draft'"
-        },
         "visibility": {
           "name": "visibility",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'affiliations'"
+          "default": "'members'"
         },
-        "published_at": {
-          "name": "published_at",
+        "status": {
+          "name": "status",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'published'"
         },
         "created_at": {
           "name": "created_at",
@@ -1600,53 +1482,33 @@
           "notNull": true,
           "autoincrement": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
-        "posts_section_status_idx": {
-          "name": "posts_section_status_idx",
+        "idx_posts_section_created_at": {
+          "name": "idx_posts_section_created_at",
           "columns": [
             "section",
-            "status"
+            "\"created_at\" desc"
           ],
           "isUnique": false
         },
-        "posts_author_idx": {
-          "name": "posts_author_idx",
-          "columns": [
-            "author_user_id"
-          ],
-          "isUnique": false
-        },
-        "posts_organization_idx": {
-          "name": "posts_organization_idx",
+        "idx_posts_organization_id": {
+          "name": "idx_posts_organization_id",
           "columns": [
             "organization_id"
-          ],
-          "isUnique": false
-        },
-        "posts_published_at_idx": {
-          "name": "posts_published_at_idx",
-          "columns": [
-            "published_at"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "posts_author_user_id_users_id_fk": {
-          "name": "posts_author_user_id_users_id_fk",
-          "tableFrom": "posts",
-          "tableTo": "users",
-          "columnsFrom": [
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
         "posts_organization_id_organizations_id_fk": {
           "name": "posts_organization_id_organizations_id_fk",
           "tableFrom": "posts",
@@ -1659,98 +1521,72 @@
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
+        },
+        "posts_author_user_id_users_id_fk": {
+          "name": "posts_author_user_id_users_id_fk",
+          "tableFrom": "posts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "author_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "posts_section_check": {
+          "name": "posts_section_check",
+          "value": "\"posts\".\"section\" in ('legislation', 'event', 'project', 'update')"
+        },
+        "posts_visibility_check": {
+          "name": "posts_visibility_check",
+          "value": "\"posts\".\"visibility\" in ('members', 'organization')"
+        },
+        "posts_status_check": {
+          "name": "posts_status_check",
+          "value": "\"posts\".\"status\" in ('draft', 'published', 'archived')"
+        }
+      }
     },
     "projects": {
       "name": "projects",
       "columns": {
-        "id": {
-          "name": "id",
+        "post_id": {
+          "name": "post_id",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
-        "post_id": {
-          "name": "post_id",
+        "project_status": {
+          "name": "project_status",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'planning'"
         },
-        "owner_organization_id": {
-          "name": "owner_organization_id",
+        "lead_organization_id": {
+          "name": "lead_organization_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'proposed'"
-        },
-        "starts_at": {
-          "name": "starts_at",
+        "target_date": {
+          "name": "target_date",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
         }
       },
-      "indexes": {
-        "projects_post_id_unique": {
-          "name": "projects_post_id_unique",
-          "columns": [
-            "post_id"
-          ],
-          "isUnique": true
-        },
-        "projects_status_idx": {
-          "name": "projects_status_idx",
-          "columns": [
-            "status"
-          ],
-          "isUnique": false
-        },
-        "projects_owner_organization_idx": {
-          "name": "projects_owner_organization_idx",
-          "columns": [
-            "owner_organization_id"
-          ],
-          "isUnique": false
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "projects_post_id_posts_id_fk": {
           "name": "projects_post_id_posts_id_fk",
@@ -1765,12 +1601,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "projects_owner_organization_id_organizations_id_fk": {
-          "name": "projects_owner_organization_id_organizations_id_fk",
+        "projects_lead_organization_id_organizations_id_fk": {
+          "name": "projects_lead_organization_id_organizations_id_fk",
           "tableFrom": "projects",
           "tableTo": "organizations",
           "columnsFrom": [
-            "owner_organization_id"
+            "lead_organization_id"
           ],
           "columnsTo": [
             "id"
@@ -1781,7 +1617,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "projects_project_status_check": {
+          "name": "projects_project_status_check",
+          "value": "\"projects\".\"project_status\" in ('planning', 'active', 'paused', 'completed')"
+        }
+      }
     },
     "sessions": {
       "name": "sessions",
@@ -1807,13 +1648,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -1821,18 +1655,25 @@
           "notNull": true,
           "autoincrement": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
-        "sessions_user_id_idx": {
-          "name": "sessions_user_id_idx",
+        "idx_sessions_user_id": {
+          "name": "idx_sessions_user_id",
           "columns": [
             "user_id"
           ],
           "isUnique": false
         },
-        "sessions_expires_at_idx": {
-          "name": "sessions_expires_at_idx",
+        "idx_sessions_expires_at": {
+          "name": "idx_sessions_expires_at",
           "columns": [
             "expires_at"
           ],
@@ -1875,14 +1716,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'direct'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -1893,8 +1726,8 @@
         }
       },
       "indexes": {
-        "user_affiliations_affiliation_idx": {
-          "name": "user_affiliations_affiliation_idx",
+        "idx_user_affiliations_affiliation_id": {
+          "name": "idx_user_affiliations_affiliation_id",
           "columns": [
             "affiliation_id"
           ],
@@ -1958,11 +1791,64 @@
           "notNull": true,
           "autoincrement": false
         },
-        "display_name": {
-          "name": "display_name",
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "avatar_object_key": {
+          "name": "avatar_object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "site_role": {
+          "name": "site_role",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
+          "default": "'member'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'invited'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "profile_title": {
+          "name": "profile_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "pronouns": {
@@ -1979,28 +1865,19 @@
           "notNull": false,
           "autoincrement": false
         },
-        "avatar_key": {
-          "name": "avatar_key",
+        "location": {
+          "name": "location",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "role": {
-          "name": "role",
+        "website_url": {
+          "name": "website_url",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'member'"
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'invited'"
+          "notNull": false,
+          "autoincrement": false
         },
         "profile_visibility": {
           "name": "profile_visibility",
@@ -2008,10 +1885,98 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'affiliations'"
+          "default": "'members'"
+        }
+      },
+      "indexes": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "columns": [
+            "email"
+          ],
+          "isUnique": true
         },
-        "last_login_at": {
-          "name": "last_login_at",
+        "idx_users_profile_visibility": {
+          "name": "idx_users_profile_visibility",
+          "columns": [
+            "profile_visibility",
+            "name"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "users_site_role_check": {
+          "name": "users_site_role_check",
+          "value": "\"users\".\"site_role\" in ('member', 'site_admin')"
+        },
+        "users_status_check": {
+          "name": "users_status_check",
+          "value": "\"users\".\"status\" in ('invited', 'active', 'suspended')"
+        },
+        "users_profile_visibility_check": {
+          "name": "users_profile_visibility_check",
+          "value": "\"users\".\"profile_visibility\" in ('members', 'hidden')"
+        }
+      }
+    },
+    "video_embeds": {
+      "name": "video_embeds",
+      "columns": {
+        "post_id": {
+          "name": "post_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "video_id": {
+          "name": "video_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "author_name": {
+          "name": "author_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "author_url": {
+          "name": "author_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "thumbnail_url": {
+          "name": "thumbnail_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -2035,85 +2000,11 @@
         }
       },
       "indexes": {
-        "users_email_unique": {
-          "name": "users_email_unique",
+        "idx_video_embeds_provider_created_at": {
+          "name": "idx_video_embeds_provider_created_at",
           "columns": [
-            "email"
-          ],
-          "isUnique": true
-        },
-        "users_status_idx": {
-          "name": "users_status_idx",
-          "columns": [
-            "status"
-          ],
-          "isUnique": false
-        },
-        "users_role_idx": {
-          "name": "users_role_idx",
-          "columns": [
-            "role"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "video_embeds": {
-      "name": "video_embeds",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "post_id": {
-          "name": "post_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "url": {
-          "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "video_embeds_post_idx": {
-          "name": "video_embeds_post_idx",
-          "columns": [
-            "post_id"
+            "provider",
+            "\"created_at\" desc"
           ],
           "isUnique": false
         }
@@ -2135,7 +2026,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "video_embeds_provider_check": {
+          "name": "video_embeds_provider_check",
+          "value": "\"video_embeds\".\"provider\" in ('tiktok')"
+        }
+      }
     }
   },
   "views": {},
@@ -2146,6 +2042,35 @@
     "columns": {}
   },
   "internal": {
-    "indexes": {}
+    "indexes": {
+      "idx_notifications_user_read_created": {
+        "columns": {
+          "\"created_at\" desc": {
+            "isExpression": true
+          }
+        }
+      },
+      "idx_post_mentions_mentioned_user": {
+        "columns": {
+          "\"created_at\" desc": {
+            "isExpression": true
+          }
+        }
+      },
+      "idx_posts_section_created_at": {
+        "columns": {
+          "\"created_at\" desc": {
+            "isExpression": true
+          }
+        }
+      },
+      "idx_video_embeds_provider_created_at": {
+        "columns": {
+          "\"created_at\" desc": {
+            "isExpression": true
+          }
+        }
+      }
+    }
   }
 }
