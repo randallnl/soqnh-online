@@ -13,6 +13,10 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - D1-backed dashboard counts with a safe preview fallback
 - `/health` resource route that checks D1 and reports binding readiness
 - Same-origin protection and Zod validation on the sign-in action
+- Hashed, single-use magic links delivered through Cloudflare Email Service
+- Hashed D1-backed sessions with secure cookies, logout revocation, and active-account guards
+- Authentication audit events and per-address magic-link request throttling
+- Workers-runtime authentication tests against a migrated local D1 database
 - CI-ready type generation, typecheck, production build, and Wrangler dry run
 
 The production deployment target is the `soqnh-online` Worker. A custom production domain is not configured yet, so the app currently runs at its `workers.dev` URL.
@@ -33,6 +37,7 @@ Useful commands:
 
 ```bash
 npm run typecheck          # Regenerate Worker and route types, then run TypeScript
+npm test                   # Run authentication tests in the Workers runtime
 npm run build              # Production React Router build
 npm run check              # Typecheck, build, and Wrangler deploy dry run
 npm run db:generate        # Generate a migration after changing app/db/schema.ts
@@ -51,6 +56,8 @@ npm run deploy             # Deploy the soqnh-online production Worker (requires
 | `SCRAPER_RUN_URL` | Partner event scraper Worker URL | Existing scraper integration point |
 
 The health route reports configuration without sending email or listing R2 objects.
+
+`APP_ORIGIN` is the canonical origin placed in authentication emails. Update it when the production custom domain is connected; do not derive sign-in links from an untrusted request host.
 
 ### Production data safety
 
@@ -81,6 +88,8 @@ IDs are application-generated UUIDs. Timestamps are stored as ISO-compatible tex
 - `workers/app.ts` is deliberately small: it passes Cloudflare bindings and execution context into React Router.
 - Long-running scraper work will move to a Queue or Workflow rather than run inside a request.
 
-## Next build slice
+## Current build slice
 
-Authentication and authorization come next: hashed magic-link tokens, secure sessions, invite acceptance, active/suspended guards, admin routes, and audit events. Organization and affiliation visibility rules should be implemented alongside those guards before content authoring is enabled.
+Phase 2 authentication is underway. The first complete vertical slice now covers magic-link requests, one-time verification, secure sessions, active/suspended account enforcement, logout, and authentication audit events. See [docs/authentication.md](docs/authentication.md) for the security model and production checklist.
+
+The next slice is invitation and administration: site-admin route guards, creating invitations, accepting an invitation into an active account, and user status management. Organization and affiliation visibility rules follow before content authoring is enabled.

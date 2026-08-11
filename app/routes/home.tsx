@@ -2,6 +2,7 @@ import type { Route } from "./+types/home";
 import { Link } from "react-router";
 
 import { Icon, type IconName } from "~/components/icon";
+import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { getDashboardCounts } from "~/models/dashboard.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -14,9 +15,11 @@ export function meta(_args: Route.MetaArgs) {
 	];
 }
 
-export async function loader({ context }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
+	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	const counts = await getDashboardCounts(context.cloudflare.env.DB);
 	return {
+		user,
 		counts:
 			counts ??
 			{
@@ -167,7 +170,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							{loaderData.dataMode === "live" ? "Live D1 data" : "Preview data"}
 						</span>
 					</div>
-					<h1>Good afternoon, Randall.</h1>
+					<h1>Good afternoon, {loaderData.user.name?.split(/\s+/)[0] || "friend"}.</h1>
 					<p>Here’s what’s happening across the ecosystem today.</p>
 				</div>
 				<Link className="button button--secondary heading-action" to="/events">

@@ -13,6 +13,8 @@
 	},
 	"vars": {
 		"APP_ENV": "production",
+		"APP_ORIGIN": "https://soqnh-online.randall-d53.workers.dev",
+		"EMAIL_FROM": "no-reply@nhsolidarityecosystem.com",
 		"SCRAPER_RUN_URL": "https://parter-event-scraper.randall-d53.workers.dev"
 	},
 	"d1_databases": [

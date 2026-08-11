@@ -1,0 +1,18 @@
+{
+	"extends": "../tsconfig.cloudflare.json",
+	"compilerOptions": {
+		"composite": false,
+		"lib": ["DOM", "DOM.Iterable", "ES2022"],
+		"module": "ES2022",
+		"moduleResolution": "bundler",
+		"target": "ES2022",
+		"types": ["vite/client", "@cloudflare/vitest-pool-workers/types"]
+	},
+	"include": [
+		"../.react-router/types/**/*",
+		"./**/*.ts",
+		"../app/lib/auth.ts",
+		"../app/lib/auth.server.ts",
+		"../worker-configuration.d.ts"
+	]
+}

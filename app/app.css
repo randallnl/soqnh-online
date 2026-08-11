@@ -435,6 +435,25 @@ p {
 	border-top: 1px solid rgba(255, 255, 255, 0.09);
 }
 
+.sidebar-account form {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.sidebar-signout {
+	padding: 5px 8px 0;
+	border: 0;
+	color: rgba(255, 255, 255, 0.48);
+	background: transparent;
+	font: inherit;
+	font-size: 0.64rem;
+	cursor: pointer;
+}
+
+.sidebar-signout:hover {
+	color: #fff;
+}
+
 .avatar {
 	display: grid;
 	flex: 0 0 auto;

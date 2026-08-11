@@ -1,5 +1,6 @@
 import type { Route } from "./+types/section";
 import { Icon, type IconName } from "~/components/icon";
+import { requireAuthenticatedUser } from "~/lib/auth.server";
 
 type SectionDefinition = {
 	title: string;
@@ -109,7 +110,8 @@ const sections: Record<string, SectionDefinition> = {
 	},
 };
 
-export function loader({ params }: Route.LoaderArgs) {
+export async function loader({ request, context, params }: Route.LoaderArgs) {
+	await requireAuthenticatedUser(request, context.cloudflare.env);
 	const section = params.section ? sections[params.section] : undefined;
 	if (!section) throw new Response("Not found", { status: 404 });
 	return { section };

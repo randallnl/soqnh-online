@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router";
+import { Form, Link, NavLink, Outlet, useLocation } from "react-router";
 
+import type { Route } from "./+types/dashboard-layout";
 import { Icon, type IconName } from "~/components/icon";
+import { requireAuthenticatedUser } from "~/lib/auth.server";
 
 const primaryNavigation: Array<{
 	label: string;
@@ -58,8 +60,23 @@ function NavigationGroup({
 	);
 }
 
-export default function DashboardLayout() {
+export async function loader({ request, context }: Route.LoaderArgs) {
+	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
+	return { user };
+}
+
+function getInitials(name: string | null, email: string) {
+	const source = name?.trim() || email.split("@")[0] || "Member";
+	return source
+		.split(/\s+/)
+		.slice(0, 2)
+		.map((part) => part[0]?.toUpperCase())
+		.join("");
+}
+
+export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const [menuOpen, setMenuOpen] = useState(false);
+	const { user } = loaderData;
 	const location = useLocation();
 	const currentPage =
 		[...primaryNavigation, ...communityNavigation].find(
@@ -119,19 +136,24 @@ export default function DashboardLayout() {
 						<Icon name="sparkles" size={17} />
 					</span>
 					<div>
-						<strong>Preview workspace</strong>
-						<p>Foundation build · Phase 1</p>
+						<strong>Private workspace</strong>
+						<p>Authentication active · Phase 2</p>
 					</div>
 				</div>
 
-				<NavLink className="profile-card" to="/profile" onClick={() => setMenuOpen(false)}>
-					<span className="avatar">RN</span>
-					<span className="profile-copy">
-						<strong>Randall Nielsen</strong>
-						<small>Site administrator</small>
-					</span>
-					<Icon name="chevron-right" size={16} />
-				</NavLink>
+				<div className="sidebar-account">
+					<NavLink className="profile-card" to="/profile" onClick={() => setMenuOpen(false)}>
+						<span className="avatar">{getInitials(user.name, user.email)}</span>
+						<span className="profile-copy">
+							<strong>{user.name || user.email}</strong>
+							<small>{user.siteRole === "site_admin" ? "Site administrator" : "Member"}</small>
+						</span>
+						<Icon name="chevron-right" size={16} />
+					</NavLink>
+					<Form action="/logout" method="post">
+						<button className="sidebar-signout" type="submit">Sign out</button>
+					</Form>
+				</div>
 			</aside>
 
 			<div className="app-content">
