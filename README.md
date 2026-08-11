@@ -7,14 +7,15 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - React Router 7.18 with server rendering on Cloudflare Workers
 - Responsive dashboard, section workspaces, auth layout, and error boundary
 - D1, R2, Email Sending, and scraper configuration carried forward
-- Drizzle schema and generated local-first migration for the 19 core tables
+- Drizzle schema aligned to the existing 20-table production database
+- Production baseline migration for fresh local databases and future schema changes
 - Permission primitives for site and organization roles
 - D1-backed dashboard counts with a safe preview fallback
 - `/health` resource route that checks D1 and reports binding readiness
-- Same-origin protection and Zod validation on the preview sign-in action
+- Same-origin protection and Zod validation on the sign-in action
 - CI-ready type generation, typecheck, production build, and Wrangler dry run
 
-The production domain is intentionally **not** configured. The Worker name is `soqnh-online`, so the existing app remains untouched during the rebuild.
+The production deployment target is the `soqnh-online` Worker. A custom production domain is not configured yet, so the app currently runs at its `workers.dev` URL.
 
 ## Local development
 
@@ -36,7 +37,8 @@ npm run build              # Production React Router build
 npm run check              # Typecheck, build, and Wrangler deploy dry run
 npm run db:generate        # Generate a migration after changing app/db/schema.ts
 npm run db:migrate:local   # Apply pending migrations to local D1 only
-npm run deploy             # Deploy the soqnh-online preview Worker (requires Cloudflare auth)
+npm run db:migrations:list:remote # Read-only production migration check
+npm run deploy             # Deploy the soqnh-online production Worker (requires Cloudflare auth)
 ```
 
 ## Cloudflare bindings
@@ -54,15 +56,17 @@ The health route reports configuration without sending email or listing R2 objec
 
 `wrangler.jsonc` includes the existing D1 database ID so the binding is preserved, but `wrangler dev` and `npm run db:migrate:local` use local emulation by default.
 
-Do **not** run a remote migration against the existing D1 database until its current schema has been exported, compared with the new Drizzle model, and tested against a staging copy. Deploying the preview Worker does not apply these migrations or alter the production domain.
+The production schema was exported without data on August 11, 2026 and reconciled with `app/db/schema.ts`. `0000_production_baseline.sql` creates that structure for an empty local database and is recorded as an already-applied baseline in production. Future remote migrations remain an explicit, reviewed operation and are never run by the application deployment command.
+
+See [docs/production-database.md](docs/production-database.md) for the baseline evidence and migration checklist.
 
 ## Data model
 
-The first migration establishes:
+The production baseline contains:
 
 - identity: `users`, `sessions`, `auth_tokens`, `invitations`
 - community graph: `organizations`, `organization_memberships`, `affiliations`, `organization_affiliations`, `user_affiliations`
-- content: `posts`, `comments`, `post_reactions`, `post_mentions`
+- content: `posts`, `post_tags`, `comments`, `post_reactions`, `post_mentions`
 - structured content: `events`, `projects`, `attachments`, `video_embeds`
 - operations: `notifications`, `audit_log`
 
