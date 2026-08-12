@@ -13,6 +13,7 @@ export default [
 	route("logout", "routes/logout.ts"),
 	layout("routes/dashboard-layout.tsx", [
 		index("routes/home.tsx"),
+		route("notifications", "routes/notifications.tsx"),
 		route("posts/new", "routes/post-new.tsx"),
 		route("posts/:postId/edit", "routes/post-edit.tsx"),
 		route("posts/:postId", "routes/post-detail.tsx"),

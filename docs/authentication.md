@@ -95,6 +95,8 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 - `comment.created`
 - `comment.updated`
 - `comment.archived`
+- `post.supported`
+- `post.unsupported`
 
 ## Production configuration
 

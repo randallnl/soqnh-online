@@ -51,7 +51,11 @@ Posts can be saved as `draft` or `published`. Archiving removes a post from its 
 
 Post detail pages now include comments and one-level reply threads. Any active member who can view a published post can participate. Comment authors can edit or remove their own comments; site administrators and organization administrators for the post's organization can remove comments. Removed parent comments remain as body-free tombstones when they have visible replies, preserving conversation context.
 
-Comment creation, editing, and removal write `comment.created`, `comment.updated`, and `comment.archived` audit events. Draft and archived posts do not accept new conversation activity. Support reactions, mentions, and notifications remain the next Phase 4 interaction slice and will reuse the same post visibility boundary.
+Comment creation, editing, and removal write `comment.created`, `comment.updated`, and `comment.archived` audit events. Draft and archived posts do not accept new conversation activity.
+
+Published posts now support one reversible support reaction per member. Comments and replies can mention one active member who is allowed to see the post; hidden profiles are excluded except for site administrators. Mentions take precedence when a recipient would otherwise receive both a mention and comment notification, preventing duplicate inbox entries. Post authors and reply authors receive comment notifications, while self-notifications are suppressed.
+
+The notification inbox shows the latest 50 currently visible items, supports individual and bulk read states, and filters out activity for posts the member can no longer view. Support changes write `post.supported` and `post.unsupported` audit events.
 
 ## Verification
 

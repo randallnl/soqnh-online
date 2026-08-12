@@ -62,6 +62,16 @@ import {
 	listPostComments,
 	updateComment,
 } from "../app/models/comments.server";
+import {
+	listMentionableMembers,
+	togglePostSupport,
+} from "../app/models/interactions.server";
+import {
+	countUnreadNotifications,
+	listNotifications,
+	markAllNotificationsRead,
+	markNotificationRead,
+} from "../app/models/notifications.server";
 
 declare global {
 	namespace Cloudflare {
@@ -1005,5 +1015,82 @@ describe("post conversations", () => {
 		const actions = await env.DB.prepare("SELECT action FROM audit_log WHERE entity_type = 'comment' ORDER BY created_at, rowid").all<{ action: string }>();
 		expect(actions.results.map((entry) => entry.action)).toEqual(["comment.created", "comment.updated", "comment.archived"]);
 		expect(await listPostComments(env, activeUser, post.id)).toEqual([]);
+	});
+});
+
+describe("post interactions and notifications", () => {
+	it("toggles one support per member and audits both states", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		const post = await createPost(env, siteAdmin, {
+			organizationId: null, section: "update", title: "A supported update", body: "Members can signal support for this published update.", visibility: "members", status: "published", tags: [],
+		});
+		await expect(togglePostSupport(env, activeUser, post.id)).resolves.toBe(true);
+		await expect(getPostById(env, activeUser, post.id)).resolves.toMatchObject({ supportCount: 1, viewerSupported: true });
+		await expect(togglePostSupport(env, activeUser, post.id)).resolves.toBe(false);
+		await expect(getPostById(env, activeUser, post.id)).resolves.toMatchObject({ supportCount: 0, viewerSupported: false });
+		const actions = await env.DB.prepare("SELECT action FROM audit_log WHERE action LIKE 'post.%supported' ORDER BY created_at, rowid").all<{ action: string }>();
+		expect(actions.results.map((entry) => entry.action)).toEqual(["post.supported", "post.unsupported"]);
+	});
+
+	it("only offers mention targets who can see the post", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "viewer" });
+		const post = await createPost(env, activeUser, {
+			organizationId: "org-one", section: "project", title: "Internal mention test", body: "Only direct organization members can join this discussion.", visibility: "organization", status: "published", tags: [],
+		});
+		const mentionable = await listMentionableMembers(env, activeUser, post.id);
+		expect(mentionable.map((member) => member.id)).toContain(secondMember.id);
+		expect(mentionable.map((member) => member.id)).not.toContain(thirdMember.id);
+		await expect(createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "A crafted invalid mention.", mentionUserId: thirdMember.id })).rejects.toMatchObject({ reason: "member-unavailable" });
+		await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "A valid internal mention.", mentionUserId: secondMember.id });
+		expect(await countUnreadNotifications(env, secondMember)).toBe(1);
+		await removeOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id });
+		expect(await countUnreadNotifications(env, secondMember)).toBe(0);
+		expect(await listNotifications(env, secondMember)).toEqual([]);
+	});
+
+	it("creates deduplicated comment and mention notifications", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		const post = await createPost(env, siteAdmin, {
+			organizationId: null, section: "legislation", title: "Notification test", body: "A policy conversation that generates relevant notifications.", visibility: "members", status: "published", tags: [],
+		});
+		const root = await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "Mentioning a member in this policy thread.", mentionUserId: secondMember.id });
+		expect(await countUnreadNotifications(env, secondMember)).toBe(1);
+		expect(await listNotifications(env, secondMember)).toEqual([expect.objectContaining({ type: "mention", postId: post.id, commentId: root.id })]);
+		expect(await countUnreadNotifications(env, siteAdmin)).toBe(1);
+
+		await createComment(env, secondMember, { postId: post.id, parentCommentId: root.id, body: "Replying to the thread author.", mentionUserId: activeUser.id });
+		const activeNotifications = await listNotifications(env, activeUser);
+		expect(activeNotifications).toHaveLength(1);
+		expect(activeNotifications[0]).toMatchObject({ type: "mention" });
+		const mentionCount = await env.DB.prepare("SELECT count(*) AS count FROM post_mentions").first<number>("count");
+		expect(mentionCount).toBe(2);
+	});
+
+	it("marks individual and all notifications read without changing another inbox", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		const post = await createPost(env, siteAdmin, {
+			organizationId: null, section: "update", title: "Inbox controls", body: "A post used to validate notification read controls.", visibility: "members", status: "published", tags: [],
+		});
+		await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "First notification for the author." });
+		await createComment(env, secondMember, { postId: post.id, parentCommentId: null, body: "Second notification for the author." });
+		const inbox = await listNotifications(env, siteAdmin);
+		expect(inbox).toHaveLength(2);
+		await markNotificationRead(env, siteAdmin.id, inbox[0]!.id);
+		expect(await countUnreadNotifications(env, siteAdmin)).toBe(1);
+		await markNotificationRead(env, activeUser.id, inbox[1]!.id);
+		expect(await countUnreadNotifications(env, siteAdmin)).toBe(1);
+		await markAllNotificationsRead(env, siteAdmin.id);
+		expect(await countUnreadNotifications(env, siteAdmin)).toBe(0);
 	});
 });

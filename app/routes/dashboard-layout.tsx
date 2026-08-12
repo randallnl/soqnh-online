@@ -5,6 +5,7 @@ import type { Route } from "./+types/dashboard-layout";
 import { Icon, type IconName } from "~/components/icon";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { listManagedOrganizations } from "~/models/organizations.server";
+import { countUnreadNotifications } from "~/models/notifications.server";
 
 type NavigationItem = {
 	label: string;
@@ -37,10 +38,12 @@ function NavigationGroup({
 	label,
 	items,
 	onNavigate,
+	unreadCount,
 }: {
 	label: string;
 	items: NavigationItem[];
 	onNavigate: () => void;
+	unreadCount: number;
 }) {
 	return (
 		<div className="nav-group">
@@ -57,8 +60,8 @@ function NavigationGroup({
 				>
 					<Icon name={item.icon} size={18} />
 					<span>{item.label}</span>
-					{item.label === "Notifications" && (
-						<span className="nav-badge">3</span>
+					{item.label === "Notifications" && unreadCount > 0 && (
+						<span className="nav-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
 					)}
 				</NavLink>
 			))}
@@ -68,8 +71,8 @@ function NavigationGroup({
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const managedOrganizations = await listManagedOrganizations(context.cloudflare.env, user);
-	return { user, managedOrganizations };
+	const [managedOrganizations, unreadCount] = await Promise.all([listManagedOrganizations(context.cloudflare.env, user), countUnreadNotifications(context.cloudflare.env, user)]);
+	return { user, managedOrganizations, unreadCount };
 }
 
 function getInitials(name: string | null, email: string) {
@@ -135,24 +138,28 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 						items={primaryNavigation}
 						label="Workspace"
 						onNavigate={() => setMenuOpen(false)}
+						unreadCount={loaderData.unreadCount}
 					/>
 					{managedNavigation.length > 0 && (
 						<NavigationGroup
 							items={managedNavigation}
 							label="Manage organizations"
 							onNavigate={() => setMenuOpen(false)}
+							unreadCount={loaderData.unreadCount}
 						/>
 					)}
 					<NavigationGroup
 						items={communityNavigation}
 						label="Community"
 						onNavigate={() => setMenuOpen(false)}
+						unreadCount={loaderData.unreadCount}
 					/>
 					{user.siteRole === "site_admin" && (
 						<NavigationGroup
 							items={adminNavigation}
 							label="Administration"
 							onNavigate={() => setMenuOpen(false)}
+							unreadCount={loaderData.unreadCount}
 						/>
 					)}
 				</nav>
@@ -202,10 +209,10 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 						<kbd>⌘ K</kbd>
 					</label>
 					<div className="topbar-actions">
-						<button aria-label="Notifications" className="icon-button notification-button" type="button">
+						<Link aria-label="Notifications" className="icon-button notification-button" to="/notifications">
 							<Icon name="bell" />
-							<span />
-						</button>
+							{loaderData.unreadCount > 0 && <span />}
+						</Link>
 						<Link className="button button--primary button--compact" to="/posts/new?section=updates">
 							<Icon name="plus" size={17} />
 							<span>New post</span>

@@ -30,13 +30,15 @@ export type PostRecord = {
 	updatedAt: string;
 	commentCount: number;
 	supportCount: number;
+	viewerSupported: boolean;
 	tags: string[];
 	canEdit: boolean;
 };
 
-type PostRow = Omit<PostRecord, "tags" | "canEdit"> & {
+type PostRow = Omit<PostRecord, "tags" | "canEdit" | "viewerSupported"> & {
 	tagList: string | null;
 	canEdit: number;
+	viewerSupported: number;
 };
 
 export class PostMutationError extends Error {
@@ -57,6 +59,7 @@ function mapPost(row: PostRow): PostRecord {
 		...row,
 		tags: row.tagList ? row.tagList.split(",") : [],
 		canEdit: row.canEdit === 1,
+		viewerSupported: row.viewerSupported === 1,
 	};
 }
 
@@ -176,6 +179,7 @@ export async function listSectionPosts(
 			        p.created_at AS createdAt, p.updated_at AS updatedAt,
 			        (SELECT count(*) FROM comments WHERE post_id = p.id AND status = 'published') AS commentCount,
 			        (SELECT count(*) FROM post_reactions WHERE post_id = p.id AND reaction = 'support') AS supportCount,
+			        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
 			        (SELECT group_concat(tag, ',') FROM (SELECT tag FROM post_tags WHERE post_id = p.id ORDER BY tag)) AS tagList,
 			        CASE WHEN ?5 = 1 OR EXISTS (
 			          SELECT 1 FROM organization_memberships
@@ -241,6 +245,7 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		        p.created_at AS createdAt, p.updated_at AS updatedAt,
 		        (SELECT count(*) FROM comments WHERE post_id = p.id AND status = 'published') AS commentCount,
 		        (SELECT count(*) FROM post_reactions WHERE post_id = p.id AND reaction = 'support') AS supportCount,
+		        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
 		        (SELECT group_concat(tag, ',') FROM (SELECT tag FROM post_tags WHERE post_id = p.id ORDER BY tag)) AS tagList,
 		        CASE WHEN ?3 = 1 OR EXISTS (
 		          SELECT 1 FROM organization_memberships

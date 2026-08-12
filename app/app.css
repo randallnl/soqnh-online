@@ -1190,6 +1190,27 @@ p {
 	gap: 5px;
 }
 
+.support-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 9px;
+	border: 1px solid var(--ink-200);
+	border-radius: 999px;
+	color: var(--ink-600);
+	background: var(--surface);
+	cursor: pointer;
+	font: inherit;
+	font-weight: 720;
+}
+
+.support-button:hover,
+.support-button--active {
+	border-color: #d9a4aa;
+	color: #9c4652;
+	background: var(--rose-100);
+}
+
 .content-card footer a:first-of-type {
 	margin-left: auto;
 }
@@ -1339,6 +1360,31 @@ p {
 	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
 }
 
+.comment-mention-field {
+	display: grid;
+	gap: 6px;
+	color: var(--ink-600);
+	font-size: 0.62rem;
+	font-weight: 720;
+}
+
+.comment-mention-field select {
+	min-height: 40px;
+	padding: 8px 10px;
+	border: 1px solid var(--ink-200);
+	border-radius: 8px;
+	outline: 0;
+	color: var(--ink-950);
+	background: var(--surface);
+	font: inherit;
+	font-size: 0.68rem;
+}
+
+.comment-mention-field select:focus {
+	border-color: #8ebbad;
+	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+}
+
 .comment-compose-form > div {
 	display: flex;
 	align-items: center;
@@ -1399,6 +1445,16 @@ p {
 	color: var(--ink-500);
 	font-size: 0.68rem;
 	font-style: italic;
+}
+
+.comment-mention-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin: 9px 0 0 42px;
+	color: var(--blue-700);
+	font-size: 0.59rem;
+	font-weight: 700;
 }
 
 .comment-actions {
@@ -1464,6 +1520,81 @@ p {
 .conversation-empty p {
 	margin-top: 5px;
 	font-size: 0.65rem;
+}
+
+.notifications-page {
+	display: grid;
+	gap: 24px;
+}
+
+.notifications-heading {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+.notification-inbox {
+	overflow: hidden;
+}
+
+.notification-list {
+	display: grid;
+}
+
+.notification-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 14px;
+	padding: 18px 22px;
+	border-top: 1px solid var(--ink-100);
+}
+
+.notification-row:first-child {
+	border-top: 0;
+}
+
+.notification-row--unread {
+	background: var(--green-50);
+}
+
+.notification-row-icon {
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	color: var(--green-700);
+	background: var(--surface);
+	box-shadow: inset 0 0 0 1px var(--ink-100);
+}
+
+.notification-row p {
+	color: var(--ink-800);
+	font-size: 0.72rem;
+	line-height: 1.5;
+}
+
+.notification-row time {
+	display: block;
+	margin-top: 4px;
+	color: var(--ink-500);
+	font-size: 0.58rem;
+}
+
+.notification-open-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0;
+	border: 0;
+	color: var(--green-700);
+	background: transparent;
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.62rem;
+	font-weight: 740;
 }
 
 .content-coming-next {
@@ -3052,7 +3183,8 @@ p {
 
 	.comment-body,
 	.comment-tombstone,
-	.comment-actions {
+	.comment-actions,
+	.comment-mention-label {
 		margin-left: 0;
 	}
 
@@ -3063,6 +3195,22 @@ p {
 
 	.comment-inline-form {
 		width: calc(100vw - 100px);
+	}
+
+	.notifications-heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.notification-row {
+		grid-template-columns: auto minmax(0, 1fr);
+		padding: 16px;
+	}
+
+	.notification-row > form,
+	.notification-row > .notification-open-button {
+		grid-column: 2;
+		justify-self: start;
 	}
 
 	.auth-page {

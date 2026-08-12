@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from "../lib/auth.server";
 import { getPostById } from "./posts.server";
+import { getMentionRecipient } from "./interactions.server";
 
 export type CommentRecord = {
 	id: string;
@@ -11,6 +12,8 @@ export type CommentRecord = {
 	status: "published" | "archived";
 	createdAt: string;
 	updatedAt: string;
+	mentionedUserId: string | null;
+	mentionedUserName: string | null;
 	canEdit: boolean;
 	canDelete: boolean;
 	replies: CommentRecord[];
@@ -42,6 +45,8 @@ export async function listPostComments(env: Env, viewer: AuthenticatedUser, post
 		        c.author_user_id AS authorUserId, u.name AS authorName,
 		        CASE WHEN c.status = 'archived' THEN NULL ELSE c.body END AS body, c.status,
 		        c.created_at AS createdAt, c.updated_at AS updatedAt,
+		        CASE WHEN c.status = 'published' THEN (SELECT mentioned.id FROM post_mentions JOIN users AS mentioned ON mentioned.id = post_mentions.mentioned_user_id WHERE post_mentions.comment_id = c.id AND (?3 = 1 OR mentioned.id = ?1 OR mentioned.profile_visibility != 'hidden') LIMIT 1) END AS mentionedUserId,
+		        CASE WHEN c.status = 'published' THEN (SELECT coalesce(mentioned.name, 'Member') FROM post_mentions JOIN users AS mentioned ON mentioned.id = post_mentions.mentioned_user_id WHERE post_mentions.comment_id = c.id AND (?3 = 1 OR mentioned.id = ?1 OR mentioned.profile_visibility != 'hidden') LIMIT 1) END AS mentionedUserName,
 		        CASE WHEN c.status = 'published' AND c.author_user_id = ?1 THEN 1 ELSE 0 END AS canEdit,
 		        CASE WHEN c.status = 'published' AND (
 		          c.author_user_id = ?1 OR ?3 = 1 OR EXISTS (
@@ -82,21 +87,26 @@ export async function listPostComments(env: Env, viewer: AuthenticatedUser, post
 export async function createComment(
 	env: Env,
 	actor: AuthenticatedUser,
-	input: { postId: string; parentCommentId: string | null; body: string },
+	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null },
 ) {
-	await requirePublishedPost(env, actor, input.postId);
+	const post = await requirePublishedPost(env, actor, input.postId);
+	let parentAuthorUserId: string | null = null;
 	if (input.parentCommentId) {
 		const parent = await env.DB.prepare(
-			`SELECT parent_comment_id AS parentCommentId
+			`SELECT parent_comment_id AS parentCommentId, author_user_id AS authorUserId
 			 FROM comments
 			 WHERE id = ?1 AND post_id = ?2 AND status = 'published'`,
 		)
 			.bind(input.parentCommentId, input.postId)
-			.first<{ parentCommentId: string | null }>();
+			.first<{ parentCommentId: string | null; authorUserId: string }>();
 		if (!parent || parent.parentCommentId) throw new CommentMutationError("invalid-parent");
+		parentAuthorUserId = parent.authorUserId;
 	}
+	const mentioned = input.mentionUserId ? await getMentionRecipient(env, actor, input.postId, input.mentionUserId) : null;
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
+	const actorName = actor.name || "A member";
+	const commentRecipients = new Set([post.authorUserId, parentAuthorUserId].filter((userId): userId is string => Boolean(userId) && userId !== actor.id && userId !== mentioned?.id));
 	await env.DB.batch([
 		env.DB.prepare(
 			`INSERT INTO comments
@@ -108,6 +118,23 @@ export async function createComment(
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'comment.created', 'comment', ?3, ?4, ?5)`,
 		).bind(crypto.randomUUID(), actor.id, id, JSON.stringify({ postId: input.postId, parentCommentId: input.parentCommentId }), now),
+		...(mentioned ? [
+			env.DB.prepare(
+				`INSERT INTO post_mentions
+				 (id, post_id, comment_id, mentioned_user_id, mentioned_by_user_id, created_at)
+				 VALUES (?1, NULL, ?2, ?3, ?4, ?5)`,
+			).bind(crypto.randomUUID(), id, mentioned.id, actor.id, now),
+			env.DB.prepare(
+				`INSERT INTO notifications
+				 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
+				 VALUES (?1, ?2, ?3, ?4, ?5, 'mention', ?6, NULL, ?7)`,
+			).bind(crypto.randomUUID(), mentioned.id, actor.id, input.postId, id, `${actorName} mentioned you in a comment.`, now),
+		] : []),
+		...[...commentRecipients].map((userId) => env.DB.prepare(
+			`INSERT INTO notifications
+			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
+			 VALUES (?1, ?2, ?3, ?4, ?5, 'comment', ?6, NULL, ?7)`,
+		).bind(crypto.randomUUID(), userId, actor.id, input.postId, id, input.parentCommentId ? `${actorName} replied in a conversation you follow.` : `${actorName} commented on your post.`, now)),
 	]);
 	return { id };
 }
