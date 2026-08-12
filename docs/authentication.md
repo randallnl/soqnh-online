@@ -17,7 +17,18 @@ Phase 2 starts with an invitation-only, passwordless login flow backed by the ex
 
 The dashboard layout and every current dashboard child loader require an authenticated user whose current database status is `active`. Suspending a user therefore blocks an existing session on its next request; deleting a user cascades session deletion.
 
-`requireSiteAdmin()` is available for the invitation and administration routes in the next slice.
+`requireSiteAdmin()` protects `/admin/invitations`; members without the site-admin role receive a 403 response.
+
+## Invitation and activation flow
+
+1. A site administrator opens `/admin/invitations` and enters an email address, an optional organization, and an organization role.
+2. The Worker creates an `invited` user when needed, expires any older pending invitation for the same address, and stores only the SHA-256 hash of a new one-time token.
+3. The invitation email is sent through the `EMAIL` binding with both text and HTML bodies. Delivery failure expires the link and creates an audit record.
+4. The recipient opens `/invite/accept`, confirms their full name, and submits the same-origin form.
+5. A transactional D1 batch consumes the invitation, activates the user, applies the optional organization membership, and writes the acceptance audit event. Each write is conditional on that exact token being consumed in the batch.
+6. The Worker creates a secure session and redirects the new member to the dashboard. The invitation cannot be reused.
+
+Invitation links expire after seven days. Reissuing an invitation immediately expires all older pending links for that email address. Active accounts cannot be reinvited, and suspended accounts must be restored through member management rather than invitation.
 
 ## Enumeration and abuse controls
 
@@ -35,6 +46,9 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 - `auth.magic_link_delivery_failed`
 - `auth.login_succeeded`
 - `auth.logout`
+- `invitation.created`
+- `invitation.delivery_failed`
+- `invitation.accepted`
 
 ## Production configuration
 

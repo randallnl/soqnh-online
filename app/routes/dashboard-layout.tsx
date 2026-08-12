@@ -5,11 +5,13 @@ import type { Route } from "./+types/dashboard-layout";
 import { Icon, type IconName } from "~/components/icon";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 
-const primaryNavigation: Array<{
+type NavigationItem = {
 	label: string;
 	to: string;
 	icon: IconName;
-}> = [
+};
+
+const primaryNavigation: NavigationItem[] = [
 	{ label: "Overview", to: "/", icon: "dashboard" },
 	{ label: "Legislation", to: "/legislation", icon: "gavel" },
 	{ label: "Events", to: "/events", icon: "calendar" },
@@ -17,14 +19,14 @@ const primaryNavigation: Array<{
 	{ label: "Updates", to: "/updates", icon: "message" },
 ];
 
-const communityNavigation: Array<{
-	label: string;
-	to: string;
-	icon: IconName;
-}> = [
+const communityNavigation: NavigationItem[] = [
 	{ label: "Organizations", to: "/organizations", icon: "building" },
 	{ label: "Members", to: "/members", icon: "people" },
 	{ label: "Notifications", to: "/notifications", icon: "bell" },
+];
+
+const adminNavigation: NavigationItem[] = [
+	{ label: "Invitations", to: "/admin/invitations", icon: "user" },
 ];
 
 function NavigationGroup({
@@ -33,7 +35,7 @@ function NavigationGroup({
 	onNavigate,
 }: {
 	label: string;
-	items: typeof primaryNavigation;
+	items: NavigationItem[];
 	onNavigate: () => void;
 }) {
 	return (
@@ -79,7 +81,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const { user } = loaderData;
 	const location = useLocation();
 	const currentPage =
-		[...primaryNavigation, ...communityNavigation].find(
+		[...primaryNavigation, ...communityNavigation, ...adminNavigation].find(
 			(item) => item.to === location.pathname,
 		)?.label ?? "Overview";
 
@@ -129,6 +131,13 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 						label="Community"
 						onNavigate={() => setMenuOpen(false)}
 					/>
+					{user.siteRole === "site_admin" && (
+						<NavigationGroup
+							items={adminNavigation}
+							label="Administration"
+							onNavigate={() => setMenuOpen(false)}
+						/>
+					)}
 				</nav>
 
 				<div className="sidebar-callout">
@@ -137,7 +146,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 					</span>
 					<div>
 						<strong>Private workspace</strong>
-						<p>Authentication active · Phase 2</p>
+						<p>Invitations active · Phase 2</p>
 					</div>
 				</div>
 

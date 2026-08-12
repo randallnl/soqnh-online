@@ -14,6 +14,11 @@ import {
 	normalizeEmail,
 	revokeUserSession,
 } from "../app/lib/auth.server";
+import {
+	acceptInvitation,
+	createInvitation,
+	getInvitationByToken,
+} from "../app/models/invitations.server";
 
 declare global {
 	namespace Cloudflare {
@@ -28,6 +33,14 @@ const activeUser = {
 	email: "member@example.org",
 	name: "Test Member",
 	siteRole: "member" as const,
+	status: "active" as const,
+};
+
+const siteAdmin = {
+	id: "user-admin",
+	email: "admin@example.org",
+	name: "Site Admin",
+	siteRole: "site_admin" as const,
 	status: "active" as const,
 };
 
@@ -47,6 +60,31 @@ async function seedUser(status: "active" | "invited" | "suspended" = "active") {
 		.run();
 }
 
+async function seedSiteAdmin() {
+	await env.DB.prepare(
+		`INSERT INTO users
+		 (id, email, name, site_role, status, created_at, updated_at, profile_visibility)
+		 VALUES (?1, ?2, ?3, 'site_admin', 'active', ?4, ?4, 'members')`,
+	)
+		.bind(
+			siteAdmin.id,
+			siteAdmin.email,
+			siteAdmin.name,
+			new Date().toISOString(),
+		)
+		.run();
+}
+
+async function seedOrganization() {
+	await env.DB.prepare(
+		`INSERT INTO organizations
+		 (id, name, slug, status, created_at, updated_at, event_scraping_enabled)
+		 VALUES ('org-one', 'Community Center', 'community-center', 'active', ?1, ?1, 0)`,
+	)
+		.bind(new Date().toISOString())
+		.run();
+}
+
 beforeAll(async () => {
 	await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
 });
@@ -56,7 +94,10 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM audit_log"),
 		env.DB.prepare("DELETE FROM sessions"),
 		env.DB.prepare("DELETE FROM auth_tokens"),
+		env.DB.prepare("DELETE FROM organization_memberships"),
+		env.DB.prepare("DELETE FROM invitations"),
 		env.DB.prepare("DELETE FROM users"),
+		env.DB.prepare("DELETE FROM organizations"),
 	]);
 });
 
@@ -148,5 +189,122 @@ describe("database-backed sessions", () => {
 		});
 
 		await expect(getAuthenticatedUser(request, env)).resolves.toBeNull();
+	});
+});
+
+describe("member invitations", () => {
+	it("stores only the invitation hash and creates an invited account", async () => {
+		await seedSiteAdmin();
+		const invitation = await createInvitation(env, siteAdmin, {
+			email: " New.Member@Example.org ",
+			organizationId: null,
+			invitedRole: "viewer",
+		});
+
+		const stored = await env.DB.prepare(
+			`SELECT i.email, i.token_hash AS tokenHash, u.status
+			 FROM invitations AS i
+			 JOIN users AS u ON u.email = i.email
+			 WHERE i.id = ?1`,
+		)
+			.bind(invitation.id)
+			.first<{ email: string; tokenHash: string; status: string }>();
+
+		expect(stored).toEqual({
+			email: "new.member@example.org",
+			tokenHash: await hashSecret(invitation.token),
+			status: "invited",
+		});
+		expect(stored?.tokenHash).not.toContain(invitation.token);
+		await expect(getInvitationByToken(env, invitation.token)).resolves.toMatchObject({
+			id: invitation.id,
+			email: "new.member@example.org",
+			status: "pending",
+		});
+	});
+
+	it("activates the account, assigns its organization role, and consumes once", async () => {
+		await seedSiteAdmin();
+		await seedOrganization();
+		const invitation = await createInvitation(env, siteAdmin, {
+			email: "new.member@example.org",
+			organizationId: "org-one",
+			invitedRole: "contributor",
+		});
+
+		const accepted = await acceptInvitation(env, {
+			token: invitation.token,
+			name: "  New Member  ",
+		});
+
+		expect(accepted).toMatchObject({
+			email: "new.member@example.org",
+			name: "New Member",
+			siteRole: "member",
+			status: "active",
+		});
+		await expect(
+			acceptInvitation(env, {
+				token: invitation.token,
+				name: "New Member",
+			}),
+		).resolves.toBeNull();
+
+		const membership = await env.DB.prepare(
+			`SELECT om.role
+			 FROM organization_memberships AS om
+			 JOIN users AS u ON u.id = om.user_id
+			 WHERE om.organization_id = 'org-one' AND u.email = ?1`,
+		)
+			.bind("new.member@example.org")
+			.first<{ role: string }>();
+		expect(membership?.role).toBe("contributor");
+
+		const acceptedAuditCount = await env.DB.prepare(
+			"SELECT count(*) AS count FROM audit_log WHERE action = 'invitation.accepted'",
+		).first<number>("count");
+		expect(acceptedAuditCount).toBe(1);
+	});
+
+	it("expires an older pending link when an invitation is reissued", async () => {
+		await seedSiteAdmin();
+		const first = await createInvitation(env, siteAdmin, {
+			email: "new.member@example.org",
+			organizationId: null,
+			invitedRole: "viewer",
+		});
+		const second = await createInvitation(env, siteAdmin, {
+			email: "new.member@example.org",
+			organizationId: null,
+			invitedRole: "viewer",
+		});
+
+		await expect(getInvitationByToken(env, first.token)).resolves.toBeNull();
+		await expect(getInvitationByToken(env, second.token)).resolves.not.toBeNull();
+	});
+
+	it("does not invite an active or suspended account", async () => {
+		await seedSiteAdmin();
+		await seedUser("active");
+		await expect(
+			createInvitation(env, siteAdmin, {
+				email: activeUser.email,
+				organizationId: null,
+				invitedRole: "viewer",
+			}),
+		).rejects.toMatchObject({ reason: "active" });
+
+		await env.DB.prepare("UPDATE users SET status = 'suspended' WHERE id = ?1")
+			.bind(activeUser.id)
+			.run();
+		await expect(
+			createInvitation(env, siteAdmin, {
+				email: activeUser.email,
+				organizationId: null,
+				invitedRole: "viewer",
+			}),
+		).rejects.toMatchObject({
+			reason: "suspended",
+		});
 	});
 });

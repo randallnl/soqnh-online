@@ -41,3 +41,41 @@ export async function sendMagicLinkEmail(
 		].join(""),
 	});
 }
+
+export async function sendInvitationEmail(
+	env: Env,
+	input: {
+		to: string;
+		token: string;
+		organizationName: string | null;
+	},
+) {
+	const appOrigin = env.APP_ORIGIN.replace(/\/$/, "");
+	const url = new URL("/invite/accept", appOrigin);
+	url.searchParams.set("token", input.token);
+	const link = url.toString();
+	const safeLink = escapeHtml(link);
+	const organizationCopy = input.organizationName
+		? ` You are also being invited to join ${input.organizationName}.`
+		: "";
+	const safeOrganizationCopy = escapeHtml(organizationCopy);
+
+	return env.EMAIL.send({
+		to: input.to,
+		from: { email: env.EMAIL_FROM, name: SENDER_NAME },
+		subject: "You’re invited to State of Queer NH",
+		text: [
+			`You have been invited to the private State of Queer NH workspace.${organizationCopy}`,
+			"",
+			"Accept your invitation:",
+			link,
+			"",
+			"This one-time link expires in 7 days. If you were not expecting this invitation, you can ignore this email.",
+		].join("\n"),
+		html: [
+			`<p>You have been invited to the private State of Queer NH workspace.${safeOrganizationCopy}</p>`,
+			`<p><a href="${safeLink}">Accept your invitation</a></p>`,
+			"<p>This one-time link expires in 7 days. If you were not expecting this invitation, you can ignore this email.</p>",
+		].join(""),
+	});
+}
