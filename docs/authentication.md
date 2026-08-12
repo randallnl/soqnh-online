@@ -19,6 +19,16 @@ The dashboard layout and every current dashboard child loader require an authent
 
 `requireSiteAdmin()` protects `/admin/invitations`; members without the site-admin role receive a 403 response.
 
+### Member access management
+
+`/admin/members` gives site administrators a searchable view of active, invited, and suspended accounts, their organization memberships, and recent access changes.
+
+- Suspending an active member and revoking all of their unrevoked sessions happen in one transactional D1 batch.
+- Restoring a suspended member permits a future magic-link login but does not create a session for them.
+- Administrators cannot suspend their own account.
+- A conditional database guard prevents suspension when it would leave no active site administrator, including under concurrent requests.
+- Invited accounts are managed by reissuing an invitation rather than bypassing the acceptance flow.
+
 ## Invitation and activation flow
 
 1. A site administrator opens `/admin/invitations` and enters an email address, an optional organization, and an organization role.
@@ -49,6 +59,8 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 - `invitation.created`
 - `invitation.delivery_failed`
 - `invitation.accepted`
+- `member.suspended`
+- `member.restored`
 
 ## Production configuration
 

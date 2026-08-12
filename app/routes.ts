@@ -14,6 +14,7 @@ export default [
 	layout("routes/dashboard-layout.tsx", [
 		index("routes/home.tsx"),
 		route("admin/invitations", "routes/admin-invitations.tsx"),
+		route("admin/members", "routes/admin-members.tsx"),
 		route(":section", "routes/section.tsx"),
 	]),
 ] satisfies RouteConfig;

@@ -19,6 +19,11 @@ import {
 	createInvitation,
 	getInvitationByToken,
 } from "../app/models/invitations.server";
+import {
+	changeMemberStatus,
+	listManagedMembers,
+	listMemberAccessAudit,
+} from "../app/models/members.server";
 
 declare global {
 	namespace Cloudflare {
@@ -72,6 +77,16 @@ async function seedSiteAdmin() {
 			siteAdmin.name,
 			new Date().toISOString(),
 		)
+		.run();
+}
+
+async function seedAdditionalSiteAdmin() {
+	await env.DB.prepare(
+		`INSERT INTO users
+		 (id, email, name, site_role, status, created_at, updated_at, profile_visibility)
+		 VALUES ('user-admin-two', 'admin-two@example.org', 'Second Admin', 'site_admin', 'active', ?1, ?1, 'members')`,
+	)
+		.bind(new Date().toISOString())
 		.run();
 }
 
@@ -306,5 +321,101 @@ describe("member invitations", () => {
 		).rejects.toMatchObject({
 			reason: "suspended",
 		});
+	});
+});
+
+describe("member access management", () => {
+	it("suspends a member, revokes sessions, and records the actor", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await createUserSession(env, activeUser);
+
+		await expect(
+			changeMemberStatus(env, siteAdmin, {
+				targetUserId: activeUser.id,
+				nextStatus: "suspended",
+			}),
+		).resolves.toEqual({
+			targetUserId: activeUser.id,
+			previousStatus: "active",
+			nextStatus: "suspended",
+		});
+
+		const member = await env.DB.prepare(
+			"SELECT status FROM users WHERE id = ?1",
+		)
+			.bind(activeUser.id)
+			.first<{ status: string }>();
+		expect(member?.status).toBe("suspended");
+		const activeSessions = await env.DB.prepare(
+			"SELECT count(*) AS count FROM sessions WHERE user_id = ?1 AND revoked_at IS NULL",
+		)
+			.bind(activeUser.id)
+			.first<number>("count");
+		expect(activeSessions).toBe(0);
+
+		const events = await listMemberAccessAudit(env);
+		expect(events).toHaveLength(1);
+		expect(events[0]).toMatchObject({
+			action: "member.suspended",
+			targetEmail: activeUser.email,
+			actorEmail: siteAdmin.email,
+		});
+	});
+
+	it("restores a suspended member without creating a session", async () => {
+		await seedSiteAdmin();
+		await seedUser("suspended");
+
+		await changeMemberStatus(env, siteAdmin, {
+			targetUserId: activeUser.id,
+			nextStatus: "active",
+		});
+
+		const members = await listManagedMembers(env);
+		expect(members.find((member) => member.id === activeUser.id)?.status).toBe(
+			"active",
+		);
+		const sessionCount = await env.DB.prepare(
+			"SELECT count(*) AS count FROM sessions WHERE user_id = ?1",
+		)
+			.bind(activeUser.id)
+			.first<number>("count");
+		expect(sessionCount).toBe(0);
+	});
+
+	it("blocks self-suspension and invalid status transitions", async () => {
+		await seedSiteAdmin();
+		await seedUser("invited");
+
+		await expect(
+			changeMemberStatus(env, siteAdmin, {
+				targetUserId: siteAdmin.id,
+				nextStatus: "suspended",
+			}),
+		).rejects.toMatchObject({ reason: "self-suspension" });
+		await expect(
+			changeMemberStatus(env, siteAdmin, {
+				targetUserId: activeUser.id,
+				nextStatus: "active",
+			}),
+		).rejects.toMatchObject({ reason: "invalid-transition" });
+	});
+
+	it("allows one administrator to suspend another while one remains active", async () => {
+		await seedSiteAdmin();
+		await seedAdditionalSiteAdmin();
+
+		await changeMemberStatus(env, siteAdmin, {
+			targetUserId: "user-admin-two",
+			nextStatus: "suspended",
+		});
+
+		const activeAdminCount = await env.DB.prepare(
+			`SELECT count(*) AS count
+			 FROM users
+			 WHERE site_role = 'site_admin' AND status = 'active'`,
+		).first<number>("count");
+		expect(activeAdminCount).toBe(1);
 	});
 });
