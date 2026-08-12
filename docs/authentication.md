@@ -29,6 +29,18 @@ The dashboard layout and every current dashboard child loader require an authent
 - A conditional database guard prevents suspension when it would leave no active site administrator, including under concurrent requests.
 - Invited accounts are managed by reissuing an invitation rather than bypassing the acceptance flow.
 
+## Organization graph
+
+The first Phase 3 slice turns the existing organization tables into application workflows:
+
+- `/organizations` lists active organization profiles for authenticated members.
+- `/organizations/:slug` shows profile details and active organization members with their roles.
+- `/admin/organizations` lets site administrators create and update profiles, change lifecycle status, and add, change, or remove organization memberships.
+- Only active accounts can receive organization roles.
+- Profile and membership mutations use transactional D1 batches and write organization audit actions.
+
+Affiliations, inherited visibility, and organization-admin self-service remain the next Phase 3 slice.
+
 ## Invitation and activation flow
 
 1. A site administrator opens `/admin/invitations` and enters an email address, an optional organization, and an organization role.
@@ -61,6 +73,11 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 - `invitation.accepted`
 - `member.suspended`
 - `member.restored`
+- `organization.created`
+- `organization.updated`
+- `organization.membership_added`
+- `organization.membership_role_changed`
+- `organization.membership_removed`
 
 ## Production configuration
 

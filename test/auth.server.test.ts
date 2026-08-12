@@ -24,6 +24,15 @@ import {
 	listManagedMembers,
 	listMemberAccessAudit,
 } from "../app/models/members.server";
+import { slugifyOrganizationName } from "../app/lib/organizations";
+import {
+	createOrganization,
+	getOrganizationAdministrationData,
+	getOrganizationBySlug,
+	removeOrganizationMembership,
+	setOrganizationMembership,
+	updateOrganization,
+} from "../app/models/organizations.server";
 
 declare global {
 	namespace Cloudflare {
@@ -135,6 +144,12 @@ describe("authentication primitives", () => {
 		);
 		expect(sanitizeReturnTo("https://attacker.example/path")).toBe("/");
 		expect(sanitizeReturnTo("//attacker.example/path")).toBe("/");
+	});
+
+	it("creates stable organization slugs", () => {
+		expect(slugifyOrganizationName("  Seacoast Pride & Community  ")).toBe(
+			"seacoast-pride-community",
+		);
 	});
 });
 
@@ -417,5 +432,104 @@ describe("member access management", () => {
 			 WHERE site_role = 'site_admin' AND status = 'active'`,
 		).first<number>("count");
 		expect(activeAdminCount).toBe(1);
+	});
+});
+
+describe("organization administration", () => {
+	it("creates and updates a live organization profile with audit records", async () => {
+		await seedSiteAdmin();
+		const created = await createOrganization(env, siteAdmin, {
+			name: "Seacoast Pride",
+			slug: "seacoast-pride",
+			summary: "Community on the coast",
+			websiteUrl: "https://example.org",
+			contactEmail: "hello@example.org",
+		});
+
+		await updateOrganization(env, siteAdmin, {
+			organizationId: created.id,
+			name: "Seacoast Pride NH",
+			slug: "seacoast-pride-nh",
+			summary: "Updated summary",
+			description: "A longer organization profile.",
+			websiteUrl: "https://example.org",
+			contactEmail: "hello@example.org",
+			status: "active",
+		});
+
+		const profile = await getOrganizationBySlug(env, "seacoast-pride-nh");
+		expect(profile?.organization).toMatchObject({
+			name: "Seacoast Pride NH",
+			description: "A longer organization profile.",
+			memberCount: 0,
+		});
+		const auditCount = await env.DB.prepare(
+			`SELECT count(*) AS count FROM audit_log
+			 WHERE action IN ('organization.created', 'organization.updated')`,
+		).first<number>("count");
+		expect(auditCount).toBe(2);
+	});
+
+	it("adds, changes, and removes an active member role", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "viewer",
+		});
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "org_admin",
+		});
+
+		const data = await getOrganizationAdministrationData(env);
+		expect(data.memberships).toContainEqual(
+			expect.objectContaining({
+				organizationId: "org-one",
+				userId: activeUser.id,
+				role: "org_admin",
+			}),
+		);
+
+		await removeOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+		});
+		const membershipCount = await env.DB.prepare(
+			"SELECT count(*) AS count FROM organization_memberships",
+		).first<number>("count");
+		expect(membershipCount).toBe(0);
+		const auditCount = await env.DB.prepare(
+			`SELECT count(*) AS count FROM audit_log
+			 WHERE action LIKE 'organization.membership_%'`,
+		).first<number>("count");
+		expect(auditCount).toBe(3);
+	});
+
+	it("rejects suspended members and duplicate organization slugs", async () => {
+		await seedSiteAdmin();
+		await seedUser("suspended");
+		await seedOrganization();
+
+		await expect(
+			setOrganizationMembership(env, siteAdmin, {
+				organizationId: "org-one",
+				userId: activeUser.id,
+				role: "viewer",
+			}),
+		).rejects.toMatchObject({ reason: "member-unavailable" });
+		await expect(
+			createOrganization(env, siteAdmin, {
+				name: "Duplicate",
+				slug: "community-center",
+				summary: null,
+				websiteUrl: null,
+				contactEmail: null,
+			}),
+		).rejects.toMatchObject({ reason: "slug-conflict" });
 	});
 });

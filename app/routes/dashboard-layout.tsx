@@ -26,6 +26,7 @@ const communityNavigation: NavigationItem[] = [
 ];
 
 const adminNavigation: NavigationItem[] = [
+	{ label: "Organization admin", to: "/admin/organizations", icon: "building" },
 	{ label: "Member access", to: "/admin/members", icon: "people" },
 	{ label: "Invitations", to: "/admin/invitations", icon: "user" },
 ];

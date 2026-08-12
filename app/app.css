@@ -1763,6 +1763,305 @@ p {
 	font-size: 0.59rem;
 }
 
+.organization-page,
+.organization-detail-page,
+.organization-admin-page {
+	display: grid;
+	gap: 24px;
+}
+
+.organization-card-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 18px;
+}
+
+.organization-card {
+	display: flex;
+	flex-direction: column;
+	min-height: 225px;
+	padding: 24px;
+	border: 1px solid var(--ink-100);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	box-shadow: var(--shadow-sm);
+	transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.organization-card:hover {
+	box-shadow: var(--shadow-md);
+	transform: translateY(-2px);
+}
+
+.organization-monogram {
+	display: grid;
+	place-items: center;
+	width: 46px;
+	height: 46px;
+	border-radius: 12px;
+	color: var(--green-800);
+	background: var(--green-100);
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 0.88rem;
+	font-weight: 700;
+}
+
+.organization-card h2 {
+	margin-top: 20px;
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1.28rem;
+	font-weight: 570;
+}
+
+.organization-card h2 + p {
+	margin-top: 9px;
+	color: var(--ink-600);
+	font-size: 0.72rem;
+	line-height: 1.6;
+}
+
+.organization-card footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: auto;
+	padding-top: 18px;
+	color: var(--ink-500);
+	font-size: 0.63rem;
+}
+
+.organization-card footer span {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.back-link {
+	width: fit-content;
+	color: var(--green-700);
+	font-size: 0.7rem;
+	font-weight: 720;
+}
+
+.organization-profile {
+	padding: 34px;
+}
+
+.organization-profile-header {
+	display: flex;
+	align-items: center;
+	gap: 22px;
+}
+
+.organization-monogram--large {
+	flex: 0 0 auto;
+	width: 78px;
+	height: 78px;
+	border-radius: 20px;
+	font-size: 1.4rem;
+}
+
+.organization-profile h1 {
+	margin-top: 7px;
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 2.25rem;
+	font-weight: 560;
+}
+
+.organization-profile-header div > p:last-child,
+.organization-description {
+	margin-top: 9px;
+	color: var(--ink-600);
+	font-size: 0.78rem;
+	line-height: 1.65;
+}
+
+.organization-description {
+	max-width: 800px;
+	padding-top: 24px;
+	margin-top: 26px;
+	border-top: 1px solid var(--ink-100);
+}
+
+.organization-contact-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 24px;
+}
+
+.organization-contact-row a {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 11px;
+	border-radius: 8px;
+	color: var(--green-800);
+	background: var(--green-50);
+	font-size: 0.67rem;
+	font-weight: 700;
+}
+
+.organization-member-panel {
+	overflow: hidden;
+}
+
+.organization-member-panel .panel-heading > span {
+	color: var(--ink-500);
+	font-size: 0.68rem;
+}
+
+.organization-member-list {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	border-top: 1px solid var(--ink-100);
+}
+
+.organization-member-list article {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 18px 22px;
+	border-right: 1px solid var(--ink-100);
+	border-bottom: 1px solid var(--ink-100);
+}
+
+.organization-member-list article strong {
+	font-size: 0.7rem;
+}
+
+.organization-member-list article p {
+	margin-top: 3px;
+	color: var(--ink-500);
+	font-size: 0.6rem;
+}
+
+.organization-create-panel {
+	overflow: hidden;
+}
+
+.organization-create-form,
+.organization-edit-form {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+	padding: 4px 24px 24px;
+}
+
+.organization-create-form label,
+.organization-edit-form label {
+	display: grid;
+	gap: 7px;
+	color: var(--ink-700);
+	font-size: 0.65rem;
+	font-weight: 720;
+}
+
+.organization-create-form input,
+.organization-edit-form input,
+.organization-edit-form select,
+.organization-edit-form textarea,
+.membership-add-form select,
+.managed-membership-list select {
+	width: 100%;
+	min-height: 42px;
+	padding: 9px 11px;
+	border: 1px solid var(--ink-200);
+	border-radius: 8px;
+	outline: 0;
+	color: var(--ink-950);
+	background: var(--surface);
+	font: inherit;
+	font-size: 0.7rem;
+}
+
+.wide-field {
+	grid-column: 1 / -1;
+}
+
+.organization-create-form .button,
+.organization-edit-form .button {
+	justify-self: start;
+}
+
+.organization-admin-list {
+	display: grid;
+	gap: 14px;
+}
+
+.organization-admin-card {
+	overflow: hidden;
+}
+
+.organization-admin-card summary {
+	display: grid;
+	grid-template-columns: auto 1fr auto auto;
+	gap: 14px;
+	align-items: center;
+	padding: 18px 22px;
+	cursor: pointer;
+	list-style: none;
+}
+
+.organization-admin-card summary::-webkit-details-marker { display: none; }
+.organization-admin-card summary strong { font-size: 0.8rem; }
+.organization-admin-card summary p { margin-top: 4px; color: var(--ink-500); font-size: 0.63rem; }
+.organization-admin-card[open] summary > svg { transform: rotate(90deg); }
+
+.status-pill--inactive { color: #865d13; background: #fff4d8; }
+.status-pill--archived { color: var(--ink-600); background: var(--ink-100); }
+
+.organization-admin-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
+	border-top: 1px solid var(--ink-100);
+}
+
+.organization-edit-form {
+	padding: 24px;
+}
+
+.organization-membership-manager {
+	padding: 24px;
+	border-left: 1px solid var(--ink-100);
+	background: var(--ink-50);
+}
+
+.subsection-heading {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+}
+
+.subsection-heading h3 { margin-top: 5px; font-family: Georgia, "Times New Roman", serif; }
+.subsection-heading > a { color: var(--green-700); font-size: 0.62rem; font-weight: 720; }
+
+.membership-add-form {
+	display: grid;
+	grid-template-columns: minmax(150px, 1fr) 130px auto;
+	gap: 8px;
+	margin-top: 18px;
+}
+
+.managed-membership-list {
+	display: grid;
+	margin-top: 16px;
+	border-top: 1px solid var(--ink-200);
+}
+
+.managed-membership-list article {
+	display: grid;
+	grid-template-columns: 1fr 130px auto;
+	gap: 9px;
+	align-items: center;
+	padding: 11px 0;
+	border-bottom: 1px solid var(--ink-200);
+}
+
+.managed-membership-list strong { font-size: 0.67rem; }
+.managed-membership-list p, .muted-empty { margin-top: 3px; color: var(--ink-500); font-size: 0.58rem; }
+.muted-empty { padding: 18px 0; }
+
 .text-link {
 	display: block;
 	margin-top: 12px;
@@ -1974,6 +2273,10 @@ p {
 	.member-last-seen {
 		display: none;
 	}
+
+	.organization-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.organization-admin-body { grid-template-columns: 1fr; }
+	.organization-membership-manager { border-top: 1px solid var(--ink-100); border-left: 0; }
 }
 
 @media (max-width: 700px) {
@@ -2149,6 +2452,19 @@ p {
 	.audit-row time {
 		grid-column: 2;
 	}
+
+	.organization-card-grid,
+	.organization-member-list,
+	.organization-create-form,
+	.organization-edit-form { grid-template-columns: 1fr; }
+	.wide-field { grid-column: auto; }
+	.organization-profile { padding: 24px; }
+	.organization-profile-header { align-items: flex-start; flex-direction: column; }
+	.organization-profile h1 { font-size: 1.9rem; }
+	.membership-add-form { grid-template-columns: 1fr; }
+	.managed-membership-list article { grid-template-columns: 1fr auto; }
+	.managed-membership-list article > form:first-of-type { grid-column: 1; }
+	.managed-membership-list article > form:last-of-type { grid-row: 1 / span 2; grid-column: 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {
