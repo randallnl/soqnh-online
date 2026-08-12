@@ -16,6 +16,9 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - Hashed, single-use magic links delivered through Cloudflare Email Service
 - Hashed D1-backed sessions with secure cookies, logout revocation, and active-account guards
 - Authentication audit events and per-address magic-link request throttling
+- Affiliation-aware organization discovery with direct and inherited access
+- Site-admin affiliation management and organization-admin self-service
+- Hidden-profile enforcement in organization member lists
 - Workers-runtime authentication tests against a migrated local D1 database
 - CI-ready type generation, typecheck, production build, and Wrangler dry run
 
@@ -90,6 +93,6 @@ IDs are application-generated UUIDs. Timestamps are stored as ISO-compatible tex
 
 ## Current build slice
 
-Phase 2 authentication is underway. The first complete vertical slice now covers magic-link requests, one-time verification, secure sessions, active/suspended account enforcement, logout, and authentication audit events. See [docs/authentication.md](docs/authentication.md) for the security model and production checklist.
+Phase 3 is complete. Site administrators can manage organizations, memberships, affiliations, and direct member affiliations. Organization administrators have a scoped self-service workspace for their profile and members. The organization directory and profiles now enforce shared effective affiliations, with inheritance through organization membership. See [docs/affiliations.md](docs/affiliations.md) for the access model and [docs/authentication.md](docs/authentication.md) for identity controls.
 
-The next slice is invitation and administration: site-admin route guards, creating invitations, accepting an invitation into an active account, and user status management. Organization and affiliation visibility rules follow before content authoring is enabled.
+The next phase is the generalized content system: affiliation-filtered section feeds, post creation and editing, organization-scoped visibility, comments, reactions, mentions, and post detail pages.

@@ -25,13 +25,27 @@ import {
 	listMemberAccessAudit,
 } from "../app/models/members.server";
 import { slugifyOrganizationName } from "../app/lib/organizations";
+import { slugifyAffiliationName } from "../app/lib/affiliations";
+import {
+	addOrganizationAffiliation,
+	addUserAffiliation,
+	createAffiliation,
+	getAffiliationAdministrationData,
+	removeOrganizationAffiliation,
+	removeUserAffiliation,
+	updateAffiliation,
+} from "../app/models/affiliations.server";
 import {
 	createOrganization,
 	getOrganizationAdministrationData,
 	getOrganizationBySlug,
+	getOrganizationManagementData,
+	listManagedOrganizations,
+	listVisibleOrganizations,
 	removeOrganizationMembership,
 	setOrganizationMembership,
 	updateOrganization,
+	updateManagedOrganizationProfile,
 } from "../app/models/organizations.server";
 
 declare global {
@@ -55,6 +69,14 @@ const siteAdmin = {
 	email: "admin@example.org",
 	name: "Site Admin",
 	siteRole: "site_admin" as const,
+	status: "active" as const,
+};
+
+const secondMember = {
+	id: "user-second",
+	email: "second@example.org",
+	name: "Second Member",
+	siteRole: "member" as const,
 	status: "active" as const,
 };
 
@@ -89,6 +111,22 @@ async function seedSiteAdmin() {
 		.run();
 }
 
+async function seedSecondMember(profileVisibility: "members" | "hidden" = "members") {
+	await env.DB.prepare(
+		`INSERT INTO users
+		 (id, email, name, site_role, status, created_at, updated_at, profile_visibility)
+		 VALUES (?1, ?2, ?3, 'member', 'active', ?4, ?4, ?5)`,
+	)
+		.bind(
+			secondMember.id,
+			secondMember.email,
+			secondMember.name,
+			new Date().toISOString(),
+			profileVisibility,
+		)
+		.run();
+}
+
 async function seedAdditionalSiteAdmin() {
 	await env.DB.prepare(
 		`INSERT INTO users
@@ -109,6 +147,29 @@ async function seedOrganization() {
 		.run();
 }
 
+async function seedSecondOrganization() {
+	await env.DB.prepare(
+		`INSERT INTO organizations
+		 (id, name, slug, status, created_at, updated_at, event_scraping_enabled)
+		 VALUES ('org-two', 'Shared Network Org', 'shared-network-org', 'active', ?1, ?1, 0)`,
+	)
+		.bind(new Date().toISOString())
+		.run();
+}
+
+async function seedAffiliation(
+	id = "aff-shared",
+	name = "Shared Coalition",
+	slug = "shared-coalition",
+) {
+	await env.DB.prepare(
+		`INSERT INTO affiliations (id, name, slug, created_at)
+		 VALUES (?1, ?2, ?3, ?4)`,
+	)
+		.bind(id, name, slug, new Date().toISOString())
+		.run();
+}
+
 beforeAll(async () => {
 	await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
 });
@@ -118,10 +179,13 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM audit_log"),
 		env.DB.prepare("DELETE FROM sessions"),
 		env.DB.prepare("DELETE FROM auth_tokens"),
+		env.DB.prepare("DELETE FROM organization_affiliations"),
+		env.DB.prepare("DELETE FROM user_affiliations"),
 		env.DB.prepare("DELETE FROM organization_memberships"),
 		env.DB.prepare("DELETE FROM invitations"),
 		env.DB.prepare("DELETE FROM users"),
 		env.DB.prepare("DELETE FROM organizations"),
+		env.DB.prepare("DELETE FROM affiliations"),
 	]);
 });
 
@@ -149,6 +213,12 @@ describe("authentication primitives", () => {
 	it("creates stable organization slugs", () => {
 		expect(slugifyOrganizationName("  Seacoast Pride & Community  ")).toBe(
 			"seacoast-pride-community",
+		);
+	});
+
+	it("creates stable affiliation slugs", () => {
+		expect(slugifyAffiliationName("  NH Queer Consortium  ")).toBe(
+			"nh-queer-consortium",
 		);
 	});
 });
@@ -457,7 +527,7 @@ describe("organization administration", () => {
 			status: "active",
 		});
 
-		const profile = await getOrganizationBySlug(env, "seacoast-pride-nh");
+		const profile = await getOrganizationBySlug(env, "seacoast-pride-nh", siteAdmin);
 		expect(profile?.organization).toMatchObject({
 			name: "Seacoast Pride NH",
 			description: "A longer organization profile.",
@@ -531,5 +601,203 @@ describe("organization administration", () => {
 				contactEmail: null,
 			}),
 		).rejects.toMatchObject({ reason: "slug-conflict" });
+	});
+});
+
+describe("affiliation visibility and administration", () => {
+	it("limits the directory to direct, inherited, or site-admin access", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		await seedSecondOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			organizationId: "org-one",
+		});
+		await addOrganizationAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			organizationId: "org-two",
+		});
+
+		await expect(listVisibleOrganizations(env, activeUser)).resolves.toEqual([]);
+		await addUserAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			userId: activeUser.id,
+		});
+		await expect(listVisibleOrganizations(env, activeUser)).resolves.toHaveLength(2);
+
+		await removeUserAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			userId: activeUser.id,
+		});
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "viewer",
+		});
+		const inherited = await listVisibleOrganizations(env, activeUser);
+		expect(inherited.map((organization) => organization.id)).toEqual(["org-one", "org-two"]);
+		await expect(listVisibleOrganizations(env, siteAdmin)).resolves.toHaveLength(2);
+	});
+
+	it("does not reveal hidden organization members to ordinary viewers", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember("hidden");
+		await seedOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			organizationId: "org-one",
+		});
+		await addUserAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			userId: activeUser.id,
+		});
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: secondMember.id,
+			role: "contributor",
+		});
+
+		const memberView = await getOrganizationBySlug(env, "community-center", activeUser);
+		expect(memberView?.members).toEqual([]);
+		const adminView = await getOrganizationBySlug(env, "community-center", siteAdmin);
+		expect(adminView?.members.map((member) => member.userId)).toContain(secondMember.id);
+	});
+
+	it("creates and assigns affiliations with audit records", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		const created = await createAffiliation(env, siteAdmin, {
+			name: "Regional Network",
+			slug: "regional-network",
+		});
+		await updateAffiliation(env, siteAdmin, {
+			affiliationId: created.id,
+			name: "Regional Coalition",
+			slug: "regional-coalition",
+		});
+		await addOrganizationAffiliation(env, siteAdmin, {
+			affiliationId: created.id,
+			organizationId: "org-one",
+		});
+		await addUserAffiliation(env, siteAdmin, {
+			affiliationId: created.id,
+			userId: activeUser.id,
+		});
+
+		const data = await getAffiliationAdministrationData(env);
+		expect(data.affiliations[0]).toMatchObject({
+			name: "Regional Coalition",
+			organizationCount: 1,
+			directMemberCount: 1,
+			effectiveMemberCount: 1,
+		});
+		await removeOrganizationAffiliation(env, siteAdmin, {
+			affiliationId: created.id,
+			organizationId: "org-one",
+		});
+		await removeUserAffiliation(env, siteAdmin, {
+			affiliationId: created.id,
+			userId: activeUser.id,
+		});
+		const auditCount = await env.DB.prepare(
+			"SELECT count(*) AS count FROM audit_log WHERE action LIKE 'affiliation.%'",
+		).first<number>("count");
+		expect(auditCount).toBe(6);
+	});
+
+	it("rejects affiliation mutations from ordinary members", async () => {
+		await seedUser();
+		await expect(
+			createAffiliation(env, activeUser, {
+				name: "Unauthorized Network",
+				slug: "unauthorized-network",
+			}),
+		).rejects.toMatchObject({ reason: "forbidden" });
+	});
+});
+
+describe("organization-admin self-service", () => {
+	it("lets organization admins update profiles and manage visible members", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			organizationId: "org-one",
+		});
+		await addUserAffiliation(env, siteAdmin, {
+			affiliationId: "aff-shared",
+			userId: secondMember.id,
+		});
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "org_admin",
+		});
+
+		const management = await getOrganizationManagementData(env, activeUser, "community-center");
+		expect(management?.availableMembers.map((member) => member.id)).toContain(secondMember.id);
+		await updateManagedOrganizationProfile(env, activeUser, {
+			organizationId: "org-one",
+			name: "Community Center NH",
+			summary: "Updated by its administrator",
+			description: null,
+			websiteUrl: null,
+			contactEmail: null,
+		});
+		await setOrganizationMembership(env, activeUser, {
+			organizationId: "org-one",
+			userId: secondMember.id,
+			role: "contributor",
+		});
+		const profile = await getOrganizationBySlug(env, "community-center", activeUser);
+		expect(profile?.organization.name).toBe("Community Center NH");
+		expect(profile?.members.map((member) => member.userId)).toContain(secondMember.id);
+		await expect(listManagedOrganizations(env, activeUser)).resolves.toEqual([
+			{ name: "Community Center NH", slug: "community-center" },
+		]);
+	});
+
+	it("blocks cross-organization changes and self-demotion", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		await seedSecondOrganization();
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "org_admin",
+		});
+
+		await expect(
+			updateManagedOrganizationProfile(env, activeUser, {
+				organizationId: "org-two",
+				name: "Unauthorized",
+				summary: null,
+				description: null,
+				websiteUrl: null,
+				contactEmail: null,
+			}),
+		).rejects.toMatchObject({ reason: "forbidden" });
+		await expect(
+			setOrganizationMembership(env, activeUser, {
+				organizationId: "org-one",
+				userId: activeUser.id,
+				role: "viewer",
+			}),
+		).rejects.toMatchObject({ reason: "self-management" });
+		await expect(
+			removeOrganizationMembership(env, activeUser, {
+				organizationId: "org-one",
+				userId: activeUser.id,
+			}),
+		).rejects.toMatchObject({ reason: "self-management" });
 	});
 });

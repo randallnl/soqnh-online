@@ -14,7 +14,9 @@ export default [
 	layout("routes/dashboard-layout.tsx", [
 		index("routes/home.tsx"),
 		route("organizations", "routes/organizations.tsx"),
+		route("organizations/:slug/manage", "routes/organization-manage.tsx"),
 		route("organizations/:slug", "routes/organization-detail.tsx"),
+		route("admin/affiliations", "routes/admin-affiliations.tsx"),
 		route("admin/organizations", "routes/admin-organizations.tsx"),
 		route("admin/invitations", "routes/admin-invitations.tsx"),
 		route("admin/members", "routes/admin-members.tsx"),

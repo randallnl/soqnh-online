@@ -31,15 +31,19 @@ The dashboard layout and every current dashboard child loader require an authent
 
 ## Organization graph
 
-The first Phase 3 slice turns the existing organization tables into application workflows:
+Phase 3 turns the existing organization and affiliation tables into application workflows:
 
 - `/organizations` lists active organization profiles for authenticated members.
 - `/organizations/:slug` shows profile details and active organization members with their roles.
 - `/admin/organizations` lets site administrators create and update profiles, change lifecycle status, and add, change, or remove organization memberships.
 - Only active accounts can receive organization roles.
 - Profile and membership mutations use transactional D1 batches and write organization audit actions.
+- `/admin/affiliations` lets site administrators manage coalitions, organization links, and direct member links.
+- Effective affiliations combine direct assignments with affiliations inherited through organization membership.
+- Organization discovery is fail-closed for ordinary members and requires direct membership or a shared effective affiliation.
+- `/organizations/:slug/manage` gives organization administrators scoped profile and membership management.
 
-Affiliations, inherited visibility, and organization-admin self-service remain the next Phase 3 slice.
+See [affiliations.md](affiliations.md) for the complete visibility and administration policy.
 
 ## Invitation and activation flow
 
@@ -78,6 +82,13 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 - `organization.membership_added`
 - `organization.membership_role_changed`
 - `organization.membership_removed`
+- `organization.profile_updated`
+- `affiliation.created`
+- `affiliation.updated`
+- `affiliation.organization_added`
+- `affiliation.organization_removed`
+- `affiliation.user_added`
+- `affiliation.user_removed`
 
 ## Production configuration
 

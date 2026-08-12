@@ -13,11 +13,16 @@ export function meta({ data }: Route.MetaArgs) {
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const result = await getOrganizationBySlug(context.cloudflare.env, params.slug);
-	if (!result || (result.organization.status !== "active" && user.siteRole !== "site_admin")) {
+	const result = await getOrganizationBySlug(context.cloudflare.env, params.slug, user);
+	if (!result) {
 		throw new Response("Organization not found", { status: 404 });
 	}
-	return result;
+	return {
+		...result,
+		canManage:
+			user.siteRole === "site_admin" ||
+			result.members.some((member) => member.userId === user.id && member.role === "org_admin"),
+	};
 }
 
 function initials(value: string) {
@@ -28,7 +33,10 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 	const { organization, members } = loaderData;
 	return (
 		<div className="organization-detail-page">
-			<Link className="back-link" to="/organizations">← All organizations</Link>
+			<div className="organization-detail-actions">
+				<Link className="back-link" to="/organizations">← All organizations</Link>
+				{loaderData.canManage && <Link className="button button--secondary button--compact" to={`/organizations/${organization.slug}/manage`}><Icon name="settings" size={16} /> Manage organization</Link>}
+			</div>
 			<section className="organization-profile panel">
 				<div className="organization-profile-header">
 					<span className="organization-monogram organization-monogram--large">{initials(organization.name)}</span>
@@ -39,6 +47,12 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 					</div>
 				</div>
 				{organization.description && <p className="organization-description">{organization.description}</p>}
+				{organization.affiliations.length > 0 && (
+					<div className="organization-affiliations">
+						<p className="eyebrow">Affiliations</p>
+						<div className="affiliation-chip-row">{organization.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>
+					</div>
+				)}
 				<div className="organization-contact-row">
 					{organization.websiteUrl && <a href={organization.websiteUrl} rel="noreferrer" target="_blank"><Icon name="activity" size={16} /> Visit website</a>}
 					{organization.contactEmail && <a href={`mailto:${organization.contactEmail}`}><Icon name="message" size={16} /> {organization.contactEmail}</a>}
@@ -51,8 +65,8 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 					<div className="organization-member-list">
 						{members.map((member) => (
 							<article key={member.userId}>
-								<span className="avatar">{initials(member.name || member.email)}</span>
-								<div><strong>{member.name || member.email}</strong><p>{roleLabels[member.role]}</p></div>
+								<span className="avatar">{initials(member.name || "Member")}</span>
+								<div><strong>{member.name || "Member"}</strong><p>{roleLabels[member.role]}</p></div>
 							</article>
 						))}
 					</div>

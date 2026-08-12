@@ -4,6 +4,7 @@ import { Form, Link, NavLink, Outlet, useLocation } from "react-router";
 import type { Route } from "./+types/dashboard-layout";
 import { Icon, type IconName } from "~/components/icon";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
+import { listManagedOrganizations } from "~/models/organizations.server";
 
 type NavigationItem = {
 	label: string;
@@ -27,6 +28,7 @@ const communityNavigation: NavigationItem[] = [
 
 const adminNavigation: NavigationItem[] = [
 	{ label: "Organization admin", to: "/admin/organizations", icon: "building" },
+	{ label: "Affiliations", to: "/admin/affiliations", icon: "people" },
 	{ label: "Member access", to: "/admin/members", icon: "people" },
 	{ label: "Invitations", to: "/admin/invitations", icon: "user" },
 ];
@@ -66,7 +68,8 @@ function NavigationGroup({
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	return { user };
+	const managedOrganizations = await listManagedOrganizations(context.cloudflare.env, user);
+	return { user, managedOrganizations };
 }
 
 function getInitials(name: string | null, email: string) {
@@ -81,9 +84,14 @@ function getInitials(name: string | null, email: string) {
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const { user } = loaderData;
+	const managedNavigation: NavigationItem[] = loaderData.managedOrganizations.map((organization) => ({
+		label: organization.name,
+		to: `/organizations/${organization.slug}/manage`,
+		icon: "settings",
+	}));
 	const location = useLocation();
 	const currentPage =
-		[...primaryNavigation, ...communityNavigation, ...adminNavigation].find(
+		[...primaryNavigation, ...communityNavigation, ...managedNavigation, ...adminNavigation].find(
 			(item) => item.to === location.pathname,
 		)?.label ?? "Overview";
 
@@ -128,6 +136,13 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 						label="Workspace"
 						onNavigate={() => setMenuOpen(false)}
 					/>
+					{managedNavigation.length > 0 && (
+						<NavigationGroup
+							items={managedNavigation}
+							label="Manage organizations"
+							onNavigate={() => setMenuOpen(false)}
+						/>
+					)}
 					<NavigationGroup
 						items={communityNavigation}
 						label="Community"
@@ -148,7 +163,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 					</span>
 					<div>
 						<strong>Private workspace</strong>
-						<p>Invitations active · Phase 2</p>
+						<p>Affiliation-aware · Phase 3</p>
 					</div>
 				</div>
 

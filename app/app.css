@@ -1765,9 +1765,18 @@ p {
 
 .organization-page,
 .organization-detail-page,
-.organization-admin-page {
+.organization-admin-page,
+.affiliation-admin-page,
+.organization-manage-page {
 	display: grid;
 	gap: 24px;
+}
+
+.organization-detail-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
 }
 
 .organization-card-grid {
@@ -1818,6 +1827,25 @@ p {
 	color: var(--ink-600);
 	font-size: 0.72rem;
 	line-height: 1.6;
+}
+
+.affiliation-chip-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+
+.organization-card .affiliation-chip-row {
+	margin-top: 14px;
+}
+
+.affiliation-chip-row span {
+	padding: 5px 8px;
+	border-radius: 999px;
+	color: var(--green-800);
+	background: var(--green-50);
+	font-size: 0.56rem;
+	font-weight: 720;
 }
 
 .organization-card footer {
@@ -1874,6 +1902,16 @@ p {
 	color: var(--ink-600);
 	font-size: 0.78rem;
 	line-height: 1.65;
+}
+
+.organization-affiliations {
+	padding-top: 20px;
+	margin-top: 22px;
+	border-top: 1px solid var(--ink-100);
+}
+
+.organization-affiliations .affiliation-chip-row {
+	margin-top: 10px;
 }
 
 .organization-description {
@@ -1941,7 +1979,9 @@ p {
 }
 
 .organization-create-form,
-.organization-edit-form {
+.organization-edit-form,
+.affiliation-create-form,
+.affiliation-edit-form {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 14px;
@@ -1949,7 +1989,9 @@ p {
 }
 
 .organization-create-form label,
-.organization-edit-form label {
+.organization-edit-form label,
+.affiliation-create-form label,
+.affiliation-edit-form label {
 	display: grid;
 	gap: 7px;
 	color: var(--ink-700);
@@ -1961,6 +2003,9 @@ p {
 .organization-edit-form input,
 .organization-edit-form select,
 .organization-edit-form textarea,
+.affiliation-create-form input,
+.affiliation-edit-form input,
+.affiliation-link-form select,
 .membership-add-form select,
 .managed-membership-list select {
 	width: 100%;
@@ -1980,7 +2025,9 @@ p {
 }
 
 .organization-create-form .button,
-.organization-edit-form .button {
+.organization-edit-form .button,
+.affiliation-create-form .button,
+.affiliation-edit-form .button {
 	justify-self: start;
 }
 
@@ -2025,6 +2072,108 @@ p {
 	padding: 24px;
 	border-left: 1px solid var(--ink-100);
 	background: var(--ink-50);
+}
+
+.affiliation-admin-body {
+	border-top: 1px solid var(--ink-100);
+}
+
+.affiliation-edit-form {
+	padding-top: 24px;
+	border-bottom: 1px solid var(--ink-100);
+}
+
+.affiliation-manager-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.affiliation-manager-grid > section {
+	padding: 24px;
+}
+
+.affiliation-manager-grid > section + section {
+	border-left: 1px solid var(--ink-100);
+}
+
+.subsection-heading > span {
+	color: var(--ink-500);
+	font-size: 0.64rem;
+}
+
+.affiliation-link-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 8px;
+	margin-top: 18px;
+}
+
+.affiliation-link-list {
+	display: grid;
+	margin-top: 16px;
+	border-top: 1px solid var(--ink-200);
+}
+
+.affiliation-link-list article {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 11px 0;
+	border-bottom: 1px solid var(--ink-200);
+}
+
+.affiliation-link-list strong {
+	font-size: 0.67rem;
+}
+
+.affiliation-link-list p {
+	margin-top: 3px;
+	color: var(--ink-500);
+	font-size: 0.58rem;
+}
+
+.effective-affiliation-summary {
+	padding: 18px 24px;
+	border-top: 1px solid var(--ink-100);
+	background: var(--green-50);
+}
+
+.effective-affiliation-summary strong,
+.managed-affiliation-note h3 {
+	font-size: 0.72rem;
+}
+
+.effective-affiliation-summary p,
+.managed-affiliation-note > p,
+.managed-affiliation-note small,
+.managed-lifecycle-link {
+	margin-top: 5px;
+	color: var(--ink-600);
+	font-size: 0.63rem;
+	line-height: 1.55;
+}
+
+.managed-profile-panel,
+.managed-members-panel {
+	overflow: hidden;
+}
+
+.managed-affiliation-note {
+	display: grid;
+	gap: 12px;
+	padding: 20px 24px;
+	border-top: 1px solid var(--ink-100);
+	background: var(--ink-50);
+}
+
+.managed-members-panel .organization-membership-manager {
+	border: 0;
+}
+
+.managed-lifecycle-link a {
+	color: var(--green-700);
+	font-weight: 720;
 }
 
 .subsection-heading {
@@ -2277,6 +2426,8 @@ p {
 	.organization-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.organization-admin-body { grid-template-columns: 1fr; }
 	.organization-membership-manager { border-top: 1px solid var(--ink-100); border-left: 0; }
+	.affiliation-manager-grid { grid-template-columns: 1fr; }
+	.affiliation-manager-grid > section + section { border-top: 1px solid var(--ink-100); border-left: 0; }
 }
 
 @media (max-width: 700px) {
@@ -2456,7 +2607,9 @@ p {
 	.organization-card-grid,
 	.organization-member-list,
 	.organization-create-form,
-	.organization-edit-form { grid-template-columns: 1fr; }
+	.organization-edit-form,
+	.affiliation-create-form,
+	.affiliation-edit-form { grid-template-columns: 1fr; }
 	.wide-field { grid-column: auto; }
 	.organization-profile { padding: 24px; }
 	.organization-profile-header { align-items: flex-start; flex-direction: column; }
@@ -2465,6 +2618,8 @@ p {
 	.managed-membership-list article { grid-template-columns: 1fr auto; }
 	.managed-membership-list article > form:first-of-type { grid-column: 1; }
 	.managed-membership-list article > form:last-of-type { grid-row: 1 / span 2; grid-column: 2; }
+	.organization-detail-actions { align-items: stretch; flex-direction: column; }
+	.affiliation-link-form { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

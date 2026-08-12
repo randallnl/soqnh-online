@@ -107,6 +107,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				"slug-conflict": "That organization URL slug is already in use.",
 				"member-unavailable": "Only active members can be assigned to an organization.",
 				"membership-not-found": "That membership has already been removed.",
+				"forbidden": "You no longer have permission to manage that organization.",
+				"self-management": "Organization administrators cannot remove or demote their own access.",
 			};
 			return { ok: false as const, error: messages[error.reason] };
 		}
