@@ -1026,6 +1026,290 @@ p {
 	gap: 20px;
 }
 
+.post-editor-page,
+.post-detail-page {
+	display: grid;
+	gap: 24px;
+}
+
+.content-filter-panel {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 20px;
+	padding: 18px 20px;
+}
+
+.content-filter-panel > p {
+	flex: 0 0 auto;
+	color: var(--ink-500);
+	font-size: 0.65rem;
+}
+
+.content-filter-form {
+	display: flex;
+	align-items: flex-end;
+	gap: 10px;
+}
+
+.content-filter-form label {
+	display: grid;
+	gap: 6px;
+	color: var(--ink-600);
+	font-size: 0.6rem;
+	font-weight: 720;
+}
+
+.content-filter-form select,
+.post-editor-grid input,
+.post-editor-grid select,
+.post-editor-grid textarea {
+	min-height: 42px;
+	padding: 9px 11px;
+	border: 1px solid var(--ink-200);
+	border-radius: 8px;
+	outline: 0;
+	color: var(--ink-950);
+	background: var(--surface);
+	font: inherit;
+	font-size: 0.7rem;
+}
+
+.content-filter-form select:focus,
+.post-editor-grid input:focus,
+.post-editor-grid select:focus,
+.post-editor-grid textarea:focus {
+	border-color: #8ebbad;
+	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+}
+
+.content-clear-link {
+	align-self: center;
+	color: var(--green-700);
+	font-size: 0.65rem;
+	font-weight: 720;
+}
+
+.content-feed {
+	display: grid;
+	gap: 16px;
+}
+
+.content-card {
+	padding: 24px;
+}
+
+.content-card-meta {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.content-card-meta > div {
+	min-width: 0;
+}
+
+.content-card-meta strong {
+	display: block;
+	font-size: 0.7rem;
+}
+
+.content-card-meta p {
+	margin-top: 3px;
+	color: var(--ink-500);
+	font-size: 0.58rem;
+}
+
+.visibility-pill {
+	padding: 5px 8px;
+	margin-left: auto;
+	border-radius: 999px;
+	color: var(--blue-700);
+	background: var(--blue-50);
+	font-size: 0.55rem;
+	font-weight: 720;
+}
+
+.content-card-link {
+	display: block;
+	margin-top: 18px;
+}
+
+.content-card-link h2,
+.post-detail-card h1 {
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1.35rem;
+	font-weight: 570;
+	letter-spacing: -0.02em;
+}
+
+.content-card-link > p {
+	display: -webkit-box;
+	overflow: hidden;
+	margin-top: 9px;
+	color: var(--ink-600);
+	font-size: 0.75rem;
+	line-height: 1.65;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}
+
+.content-tag-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+	margin-top: 16px;
+}
+
+.content-tag-row a {
+	padding: 5px 8px;
+	border-radius: 999px;
+	color: var(--green-800);
+	background: var(--green-50);
+	font-size: 0.58rem;
+	font-weight: 720;
+}
+
+.content-card footer,
+.post-detail-card footer {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	padding-top: 17px;
+	margin-top: 18px;
+	border-top: 1px solid var(--ink-100);
+	color: var(--ink-500);
+	font-size: 0.62rem;
+}
+
+.content-card footer span,
+.content-card footer a,
+.post-detail-card footer span {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.content-card footer a:first-of-type {
+	margin-left: auto;
+}
+
+.content-card footer a {
+	color: var(--green-700);
+	font-weight: 720;
+}
+
+.content-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+}
+
+.content-pagination span {
+	color: var(--ink-500);
+	font-size: 0.65rem;
+}
+
+.content-empty-state p {
+	color: var(--ink-500);
+	font-size: 0.68rem;
+}
+
+.post-editor-form {
+	padding: 26px;
+}
+
+.post-editor-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+}
+
+.post-editor-grid label {
+	display: grid;
+	gap: 7px;
+	color: var(--ink-700);
+	font-size: 0.66rem;
+	font-weight: 720;
+}
+
+.post-editor-grid textarea {
+	resize: vertical;
+	line-height: 1.6;
+}
+
+.post-editor-actions {
+	display: flex;
+	gap: 10px;
+	margin-top: 20px;
+}
+
+.post-detail-card {
+	padding: 34px;
+}
+
+.post-detail-card > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+.post-detail-pills {
+	display: flex;
+	gap: 8px;
+}
+
+.post-detail-pills .visibility-pill {
+	margin: 0;
+}
+
+.post-detail-card h1 {
+	max-width: 850px;
+	margin-top: 30px;
+	font-size: clamp(1.8rem, 4vw, 2.7rem);
+}
+
+.post-body {
+	display: grid;
+	gap: 16px;
+	max-width: 850px;
+	margin-top: 22px;
+	color: var(--ink-700);
+	font-size: 0.83rem;
+	line-height: 1.75;
+}
+
+.content-coming-next {
+	display: flex;
+	gap: 14px;
+	padding: 22px;
+	color: var(--ink-600);
+}
+
+.content-coming-next > svg {
+	flex: 0 0 auto;
+	color: var(--green-700);
+}
+
+.content-coming-next h2 {
+	margin-top: 5px;
+	color: var(--ink-950);
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1rem;
+}
+
+.content-coming-next h2 + p {
+	margin-top: 6px;
+	font-size: 0.68rem;
+	line-height: 1.55;
+}
+
+.post-archive-form {
+	justify-self: end;
+}
+
 .section-hero {
 	display: flex;
 	align-items: center;
@@ -2057,6 +2341,8 @@ p {
 
 .status-pill--inactive { color: #865d13; background: #fff4d8; }
 .status-pill--archived { color: var(--ink-600); background: var(--ink-100); }
+.status-pill--draft { color: #865d13; background: #fff4d8; }
+.status-pill--published { color: var(--green-800); background: var(--green-50); }
 
 .organization-admin-body {
 	display: grid;
@@ -2515,6 +2801,59 @@ p {
 	.section-footer-card {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	.content-filter-panel,
+	.content-filter-form {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.content-filter-panel > p {
+		padding-top: 12px;
+		border-top: 1px solid var(--ink-100);
+	}
+
+	.content-card,
+	.post-editor-form,
+	.post-detail-card {
+		padding: 20px;
+	}
+
+	.content-card-meta {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.visibility-pill {
+		margin-left: 0;
+	}
+
+	.content-card footer {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.content-card footer a:first-of-type {
+		margin-left: 0;
+	}
+
+	.post-editor-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.post-editor-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.post-detail-card > header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.post-detail-pills {
+		flex-wrap: wrap;
 	}
 
 	.auth-page {

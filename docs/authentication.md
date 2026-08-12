@@ -89,6 +89,9 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 - `affiliation.organization_removed`
 - `affiliation.user_added`
 - `affiliation.user_removed`
+- `post.created`
+- `post.updated`
+- `post.archived`
 
 ## Production configuration
 

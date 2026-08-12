@@ -47,6 +47,15 @@ import {
 	updateOrganization,
 	updateManagedOrganizationProfile,
 } from "../app/models/organizations.server";
+import { normalizeTags } from "../app/lib/content";
+import {
+	archivePost,
+	createPost,
+	getPostById,
+	listPostOrganizations,
+	listSectionPosts,
+	updatePost,
+} from "../app/models/posts.server";
 
 declare global {
 	namespace Cloudflare {
@@ -76,6 +85,14 @@ const secondMember = {
 	id: "user-second",
 	email: "second@example.org",
 	name: "Second Member",
+	siteRole: "member" as const,
+	status: "active" as const,
+};
+
+const thirdMember = {
+	id: "user-third",
+	email: "third@example.org",
+	name: "Third Member",
 	siteRole: "member" as const,
 	status: "active" as const,
 };
@@ -124,6 +141,16 @@ async function seedSecondMember(profileVisibility: "members" | "hidden" = "membe
 			new Date().toISOString(),
 			profileVisibility,
 		)
+		.run();
+}
+
+async function seedThirdMember() {
+	await env.DB.prepare(
+		`INSERT INTO users
+		 (id, email, name, site_role, status, created_at, updated_at, profile_visibility)
+		 VALUES (?1, ?2, ?3, 'member', 'active', ?4, ?4, 'members')`,
+	)
+		.bind(thirdMember.id, thirdMember.email, thirdMember.name, new Date().toISOString())
 		.run();
 }
 
@@ -177,6 +204,16 @@ beforeAll(async () => {
 beforeEach(async () => {
 	await env.DB.batch([
 		env.DB.prepare("DELETE FROM audit_log"),
+		env.DB.prepare("DELETE FROM notifications"),
+		env.DB.prepare("DELETE FROM post_mentions"),
+		env.DB.prepare("DELETE FROM attachments"),
+		env.DB.prepare("DELETE FROM comments"),
+		env.DB.prepare("DELETE FROM post_reactions"),
+		env.DB.prepare("DELETE FROM post_tags"),
+		env.DB.prepare("DELETE FROM events"),
+		env.DB.prepare("DELETE FROM projects"),
+		env.DB.prepare("DELETE FROM video_embeds"),
+		env.DB.prepare("DELETE FROM posts"),
 		env.DB.prepare("DELETE FROM sessions"),
 		env.DB.prepare("DELETE FROM auth_tokens"),
 		env.DB.prepare("DELETE FROM organization_affiliations"),
@@ -799,5 +836,108 @@ describe("organization-admin self-service", () => {
 				userId: activeUser.id,
 			}),
 		).rejects.toMatchObject({ reason: "self-management" });
+	});
+});
+
+describe("content feeds and post permissions", () => {
+	it("shows shared-network posts through direct or inherited affiliations", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: secondMember.id });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+
+		const created = await createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "update",
+			title: "A shared network update",
+			body: "This update is visible across the shared coalition.",
+			visibility: "members",
+			status: "published",
+			tags: ["network"],
+		});
+		const authorFeed = await listSectionPosts(env, activeUser, { section: "update", tag: null, organizationId: null, page: 1 });
+		const sharedFeed = await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, page: 1 });
+		const unrelatedFeed = await listSectionPosts(env, thirdMember, { section: "update", tag: null, organizationId: null, page: 1 });
+		expect(authorFeed.posts.map((post) => post.id)).toContain(created.id);
+		expect(sharedFeed.posts.map((post) => post.id)).toContain(created.id);
+		expect(unrelatedFeed.posts).toEqual([]);
+	});
+
+	it("requires direct membership for organization-only posts", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: secondMember.id });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		const created = await createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "project",
+			title: "Internal project coordination",
+			body: "Only direct organization members should see this post.",
+			visibility: "organization",
+			status: "published",
+			tags: ["internal"],
+		});
+
+		await expect(getPostById(env, secondMember, created.id)).resolves.toBeNull();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "viewer" });
+		await expect(getPostById(env, secondMember, created.id)).resolves.toMatchObject({ id: created.id });
+	});
+
+	it("enforces contributor authoring and organization-admin editing", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedOrganization();
+		await expect(listPostOrganizations(env, activeUser)).resolves.toEqual([]);
+		await expect(createPost(env, activeUser, {
+			organizationId: "org-one", section: "legislation", title: "Unauthorized post", body: "This should not be created.", visibility: "members", status: "published", tags: [],
+		})).rejects.toMatchObject({ reason: "organization-unavailable" });
+
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "org_admin" });
+		const created = await createPost(env, activeUser, {
+			organizationId: "org-one", section: "legislation", title: "Policy briefing", body: "A detailed policy briefing for the network.", visibility: "members", status: "draft", tags: ["policy"],
+		});
+		await updatePost(env, secondMember, {
+			postId: created.id, organizationId: "org-one", title: "Published policy briefing", body: "The organization administrator reviewed this briefing.", visibility: "members", status: "published", tags: ["policy", "action"],
+		});
+		await expect(getPostById(env, activeUser, created.id)).resolves.toMatchObject({ title: "Published policy briefing", status: "published", tags: ["action", "policy"] });
+	});
+
+	it("filters tags, paginates, archives, and audits post changes", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		for (let index = 0; index < 11; index += 1) {
+			await createPost(env, siteAdmin, {
+				organizationId: null,
+				section: "update",
+				title: `Ecosystem update ${index}`,
+				body: "An ecosystem-wide update with enough detail to publish.",
+				visibility: "members",
+				status: "published",
+				tags: index === 0 ? normalizeTags("Mutual Aid, mutual aid, invalid tag!") : ["general"],
+			});
+		}
+		const firstPage = await listSectionPosts(env, activeUser, { section: "update", tag: null, organizationId: null, page: 1 });
+		const secondPage = await listSectionPosts(env, activeUser, { section: "update", tag: null, organizationId: null, page: 2 });
+		expect(firstPage.posts).toHaveLength(10);
+		expect(secondPage.posts).toHaveLength(1);
+		expect(firstPage.totalPages).toBe(2);
+		const filtered = await listSectionPosts(env, activeUser, { section: "update", tag: "mutual-aid", organizationId: null, page: 1 });
+		expect(filtered.posts).toHaveLength(1);
+		await archivePost(env, siteAdmin, filtered.posts[0]!.id);
+		const afterArchive = await listSectionPosts(env, activeUser, { section: "update", tag: "mutual-aid", organizationId: null, page: 1 });
+		expect(afterArchive.posts).toEqual([]);
+		const auditCount = await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('post.created', 'post.archived')").first<number>("count");
+		expect(auditCount).toBe(12);
 	});
 });

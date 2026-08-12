@@ -13,6 +13,9 @@ export default [
 	route("logout", "routes/logout.ts"),
 	layout("routes/dashboard-layout.tsx", [
 		index("routes/home.tsx"),
+		route("posts/new", "routes/post-new.tsx"),
+		route("posts/:postId/edit", "routes/post-edit.tsx"),
+		route("posts/:postId", "routes/post-detail.tsx"),
 		route("organizations", "routes/organizations.tsx"),
 		route("organizations/:slug/manage", "routes/organization-manage.tsx"),
 		route("organizations/:slug", "routes/organization-detail.tsx"),

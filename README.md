@@ -19,6 +19,9 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - Affiliation-aware organization discovery with direct and inherited access
 - Site-admin affiliation management and organization-admin self-service
 - Hidden-profile enforcement in organization member lists
+- D1-backed legislation, event, project, and update feeds
+- Affiliation-aware and organization-only post visibility
+- Scoped post authoring, editing, drafts, archiving, tags, filters, and pagination
 - Workers-runtime authentication tests against a migrated local D1 database
 - CI-ready type generation, typecheck, production build, and Wrangler dry run
 
@@ -93,6 +96,6 @@ IDs are application-generated UUIDs. Timestamps are stored as ISO-compatible tex
 
 ## Current build slice
 
-Phase 3 is complete. Site administrators can manage organizations, memberships, affiliations, and direct member affiliations. Organization administrators have a scoped self-service workspace for their profile and members. The organization directory and profiles now enforce shared effective affiliations, with inheritance through organization membership. See [docs/affiliations.md](docs/affiliations.md) for the access model and [docs/authentication.md](docs/authentication.md) for identity controls.
+Phase 4 is underway. The first content slice replaces the four placeholder workspaces with D1-backed feeds, affiliation and organization visibility, post creation and editing, draft and archive states, tags, filters, pagination, detail pages, and content audit records. See [docs/content.md](docs/content.md) for the content access model. Phase 3 organization and affiliation controls are documented in [docs/affiliations.md](docs/affiliations.md).
 
-The next phase is the generalized content system: affiliation-filtered section feeds, post creation and editing, organization-scoped visibility, comments, reactions, mentions, and post detail pages.
+The next Phase 4 slice adds comments and replies, support reactions, member mentions, notification creation, and inline interaction on post detail pages.

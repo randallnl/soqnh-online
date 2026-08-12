@@ -206,7 +206,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 							<Icon name="bell" />
 							<span />
 						</button>
-						<Link className="button button--primary button--compact" to="/updates?compose=true">
+						<Link className="button button--primary button--compact" to="/posts/new?section=updates">
 							<Icon name="plus" size={17} />
 							<span>New post</span>
 						</Link>
