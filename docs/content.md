@@ -49,7 +49,9 @@ Posts can be saved as `draft` or `published`. Archiving removes a post from its 
 
 ## Next slice
 
-The post detail route already reports comment and support counts from the existing tables. The next Phase 4 slice will add comments and replies, support reactions, mentions, and notifications without changing this visibility boundary.
+Post detail pages now include comments and one-level reply threads. Any active member who can view a published post can participate. Comment authors can edit or remove their own comments; site administrators and organization administrators for the post's organization can remove comments. Removed parent comments remain as body-free tombstones when they have visible replies, preserving conversation context.
+
+Comment creation, editing, and removal write `comment.created`, `comment.updated`, and `comment.archived` audit events. Draft and archived posts do not accept new conversation activity. Support reactions, mentions, and notifications remain the next Phase 4 interaction slice and will reuse the same post visibility boundary.
 
 ## Verification
 

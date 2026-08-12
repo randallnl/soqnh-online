@@ -98,4 +98,4 @@ IDs are application-generated UUIDs. Timestamps are stored as ISO-compatible tex
 
 Phase 4 is underway. The first content slice replaces the four placeholder workspaces with D1-backed feeds, affiliation and organization visibility, post creation and editing, draft and archive states, tags, filters, pagination, detail pages, and content audit records. See [docs/content.md](docs/content.md) for the content access model. Phase 3 organization and affiliation controls are documented in [docs/affiliations.md](docs/affiliations.md).
 
-The next Phase 4 slice adds comments and replies, support reactions, member mentions, notification creation, and inline interaction on post detail pages.
+Post detail pages now support comments, one-level threaded replies, author editing, soft deletion, organization moderation, and comment audit events. The next Phase 4 slice adds support reactions, member mentions, and notification creation.

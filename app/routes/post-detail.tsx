@@ -3,33 +3,58 @@ import { z } from "zod";
 
 import type { Route } from "./+types/post-detail";
 import { Icon } from "~/components/icon";
+import { CommentThread } from "~/components/comment-thread";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { routeSectionForDatabase, sectionDefinitions } from "~/lib/content";
 import { archivePost, getPostById, PostMutationError } from "~/models/posts.server";
+import { archiveComment, CommentMutationError, createComment, listPostComments, updateComment } from "~/models/comments.server";
 
-const actionSchema = z.object({ intent: z.literal("archive"), postId: z.string().uuid() });
+const actionSchema = z.discriminatedUnion("intent", [
+	z.object({ intent: z.literal("archive-post"), postId: z.string().uuid() }),
+	z.object({ intent: z.literal("create-comment"), postId: z.string().uuid(), parentCommentId: z.preprocess((value) => typeof value === "string" && value ? value : null, z.string().uuid().nullable()), body: z.string().trim().min(2).max(4000) }),
+	z.object({ intent: z.literal("update-comment"), postId: z.string().uuid(), commentId: z.string().uuid(), body: z.string().trim().min(2).max(4000) }),
+	z.object({ intent: z.literal("archive-comment"), postId: z.string().uuid(), commentId: z.string().uuid() }),
+]);
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	const post = await getPostById(context.cloudflare.env, user, params.postId);
 	if (!post) throw new Response("Post not found", { status: 404 });
-	return { post, section: routeSectionForDatabase(post.section) };
+	const comments = await listPostComments(context.cloudflare.env, user, post.id);
+	return { post, comments, section: routeSectionForDatabase(post.section) };
 }
 
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context, params }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	const result = actionSchema.safeParse(Object.fromEntries(await request.formData()));
 	if (!result.success) return { ok: false as const, error: "That request is invalid." };
+	if (result.data.postId !== params.postId) return { ok: false as const, error: "That request is invalid." };
 	try {
-		await archivePost(context.cloudflare.env, user, result.data.postId);
-		const post = await getPostById(context.cloudflare.env, user, result.data.postId);
-		throw redirect(`/${post ? routeSectionForDatabase(post.section) : "updates"}`);
+		if (result.data.intent === "archive-post") {
+			await archivePost(context.cloudflare.env, user, result.data.postId);
+			const post = await getPostById(context.cloudflare.env, user, result.data.postId);
+			throw redirect(`/${post ? routeSectionForDatabase(post.section) : "updates"}`);
+		}
+		if (result.data.intent === "create-comment") {
+			const created = await createComment(context.cloudflare.env, user, result.data);
+			throw redirect(`/posts/${result.data.postId}#comment-${created.id}`);
+		}
+		if (result.data.intent === "update-comment") {
+			await updateComment(context.cloudflare.env, user, result.data);
+			throw redirect(`/posts/${result.data.postId}#comment-${result.data.commentId}`);
+		}
+		await archiveComment(context.cloudflare.env, user, result.data);
+		throw redirect(`/posts/${result.data.postId}#conversation`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (error instanceof PostMutationError) return { ok: false as const, error: error.reason === "forbidden" ? "You cannot archive this post." : "That post is no longer available." };
-		return { ok: false as const, error: "The post could not be archived." };
+		if (error instanceof CommentMutationError) {
+			const messages = { "not-found": "That comment is no longer available.", forbidden: "You cannot change that comment.", "post-unavailable": "Comments are only available on published posts you can view.", "invalid-parent": "That conversation can no longer accept replies." };
+			return { ok: false as const, error: messages[error.reason] };
+		}
+		return { ok: false as const, error: "That request could not be completed." };
 	}
 }
 
@@ -42,7 +67,7 @@ function formatDate(value: string) {
 }
 
 export default function PostDetail({ loaderData }: Route.ComponentProps) {
-	const { post, section } = loaderData;
+	const { post, comments, section } = loaderData;
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
 	return (
@@ -55,9 +80,13 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 				{post.tags.length > 0 && <div className="content-tag-row">{post.tags.map((tag) => <Link key={tag} to={`/${section}?tag=${encodeURIComponent(tag)}`}>#{tag}</Link>)}</div>}
 				<footer><span><Icon name="message" size={16} /> {post.commentCount} comments</span><span><Icon name="heart" size={16} /> {post.supportCount} supports</span></footer>
 			</article>
-			<section className="panel content-coming-next"><Icon name="message" size={22} /><div><p className="eyebrow">Next Phase 4 slice</p><h2>Conversation and response</h2><p>Comments, replies, support reactions, and member mentions will attach to this post detail page next.</p></div></section>
+			<section className="panel conversation-panel" id="conversation">
+				<div className="conversation-heading"><div><p className="eyebrow">Conversation</p><h2>{post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</h2></div><Icon name="message" size={22} /></div>
+				{post.status === "published" && <Form className="comment-compose-form" method="post"><input name="intent" type="hidden" value="create-comment" /><input name="postId" type="hidden" value={post.id} /><label htmlFor="new-comment">Add to the conversation</label><textarea id="new-comment" maxLength={4000} minLength={2} name="body" placeholder="Share context, a question, or a next step…" required rows={4} /><div><span>Keep comments constructive and relevant to this post.</span><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Post comment</button></div></Form>}
+				{comments.length > 0 ? <CommentThread comments={comments} interactive={post.status === "published"} postId={post.id} submitting={navigation.state === "submitting"} /> : <div className="conversation-empty"><strong>No comments yet</strong><p>Start the conversation with a question, resource, or next step.</p></div>}
+			</section>
 			{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}
-			{post.canEdit && post.status !== "archived" && <Form className="post-archive-form" method="post" onSubmit={(event) => { if (!window.confirm("Archive this post? It will leave the section feed.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Archive post</button></Form>}
+			{post.canEdit && post.status !== "archived" && <Form className="post-archive-form" method="post" onSubmit={(event) => { if (!window.confirm("Archive this post? It will leave the section feed.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-post" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Archive post</button></Form>}
 		</div>
 	);
 }

@@ -56,6 +56,12 @@ import {
 	listSectionPosts,
 	updatePost,
 } from "../app/models/posts.server";
+import {
+	archiveComment,
+	createComment,
+	listPostComments,
+	updateComment,
+} from "../app/models/comments.server";
 
 declare global {
 	namespace Cloudflare {
@@ -939,5 +945,65 @@ describe("content feeds and post permissions", () => {
 		expect(afterArchive.posts).toEqual([]);
 		const auditCount = await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('post.created', 'post.archived')").first<number>("count");
 		expect(auditCount).toBe(12);
+	});
+});
+
+describe("post conversations", () => {
+	it("creates comments and one-level reply threads on visible published posts", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		const post = await createPost(env, siteAdmin, {
+			organizationId: null, section: "update", title: "Community conversation", body: "A published update open to ecosystem conversation.", visibility: "members", status: "published", tags: [],
+		});
+		const root = await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "Here is some useful context." });
+		const reply = await createComment(env, secondMember, { postId: post.id, parentCommentId: root.id, body: "Thanks — this helps clarify the next step." });
+
+		const comments = await listPostComments(env, activeUser, post.id);
+		expect(comments).toHaveLength(1);
+		expect(comments[0]).toMatchObject({ id: root.id, body: "Here is some useful context.", canEdit: true });
+		expect(comments[0]?.replies[0]).toMatchObject({ id: reply.id, parentCommentId: root.id });
+		await expect(createComment(env, activeUser, { postId: post.id, parentCommentId: reply.id, body: "A reply that is nested too deeply." })).rejects.toMatchObject({ reason: "invalid-parent" });
+	});
+
+	it("limits editing to authors and lets organization admins remove comments", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "org_admin" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: thirdMember.id, role: "viewer" });
+		const post = await createPost(env, activeUser, {
+			organizationId: "org-one", section: "project", title: "Project discussion", body: "An organization project with a focused discussion.", visibility: "organization", status: "published", tags: [],
+		});
+		const root = await createComment(env, thirdMember, { postId: post.id, parentCommentId: null, body: "My first version of this comment." });
+		const reply = await createComment(env, activeUser, { postId: post.id, parentCommentId: root.id, body: "A reply that should remain visible." });
+		await expect(updateComment(env, activeUser, { postId: post.id, commentId: root.id, body: "Unauthorized rewrite." })).rejects.toMatchObject({ reason: "forbidden" });
+		await updateComment(env, thirdMember, { postId: post.id, commentId: root.id, body: "My corrected comment." });
+		await archiveComment(env, secondMember, { postId: post.id, commentId: root.id });
+
+		const comments = await listPostComments(env, thirdMember, post.id);
+		expect(comments[0]).toMatchObject({ id: root.id, body: null, status: "archived", canEdit: false, canDelete: false });
+		expect(comments[0]?.replies[0]).toMatchObject({ id: reply.id, body: "A reply that should remain visible." });
+	});
+
+	it("blocks comments on drafts and records the comment lifecycle", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		const draft = await createPost(env, siteAdmin, {
+			organizationId: null, section: "legislation", title: "Draft policy note", body: "This draft is not open for conversation yet.", visibility: "members", status: "draft", tags: [],
+		});
+		await expect(createComment(env, siteAdmin, { postId: draft.id, parentCommentId: null, body: "Do not add this." })).rejects.toMatchObject({ reason: "post-unavailable" });
+		const post = await createPost(env, siteAdmin, {
+			organizationId: null, section: "legislation", title: "Published policy note", body: "This policy note is ready for member discussion.", visibility: "members", status: "published", tags: [],
+		});
+		const comment = await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "Initial policy response." });
+		await updateComment(env, activeUser, { postId: post.id, commentId: comment.id, body: "Updated policy response." });
+		await archiveComment(env, siteAdmin, { postId: post.id, commentId: comment.id });
+		const actions = await env.DB.prepare("SELECT action FROM audit_log WHERE entity_type = 'comment' ORDER BY created_at, rowid").all<{ action: string }>();
+		expect(actions.results.map((entry) => entry.action)).toEqual(["comment.created", "comment.updated", "comment.archived"]);
+		expect(await listPostComments(env, activeUser, post.id)).toEqual([]);
 	});
 });
