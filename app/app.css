@@ -1663,6 +1663,215 @@ p {
 	line-height: 1.55;
 }
 
+.section-hero-actions,
+.organization-detail-actions > div {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.event-editor-fields {
+	padding: 18px;
+	border: 1px solid var(--ink-100);
+	border-radius: 10px;
+	background: var(--green-50);
+}
+
+.event-editor-fields legend {
+	padding: 0 7px;
+	color: var(--green-800);
+	font-size: 0.72rem;
+	font-weight: 760;
+}
+
+.event-editor-fields label span {
+	color: var(--ink-500);
+	font-weight: 500;
+}
+
+.event-card-image,
+.event-detail-image {
+	display: block;
+	width: 100%;
+	object-fit: cover;
+	background: var(--green-50);
+}
+
+.event-content-card {
+	overflow: hidden;
+}
+
+.event-content-card > .event-card-image {
+	width: calc(100% + 48px);
+	height: 220px;
+	margin: -24px -24px 20px;
+}
+
+.event-date-line {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 7px;
+	margin-bottom: 15px;
+	color: var(--green-800);
+	font-size: 0.66rem;
+}
+
+.event-date-line span {
+	color: var(--ink-600);
+}
+
+.event-detail-image {
+	max-height: 420px;
+	margin-bottom: 28px;
+	border-radius: 10px;
+}
+
+.event-detail-facts {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 24px;
+	padding: 18px;
+	margin-top: 22px;
+	border: 1px solid var(--green-100);
+	border-radius: 10px;
+	background: var(--green-50);
+}
+
+.event-detail-facts > div:not(.event-detail-links) {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	color: var(--green-800);
+}
+
+.event-detail-facts span {
+	display: grid;
+	gap: 4px;
+	color: var(--ink-800);
+	font-size: 0.68rem;
+}
+
+.event-detail-facts small,
+.event-detail-facts a:not(.button) {
+	color: var(--ink-600);
+	font-size: 0.59rem;
+}
+
+.event-detail-links {
+	display: flex;
+	gap: 8px;
+	margin-left: auto;
+}
+
+.event-review-banner {
+	display: grid;
+	gap: 4px;
+	padding: 14px 18px;
+	border: 1px solid #ead6a7;
+	border-radius: 10px;
+	color: #715923;
+	background: #fff8e7;
+	font-size: 0.68rem;
+}
+
+.event-review-banner--rejected {
+	border-color: #e6c5c8;
+	color: #873d47;
+	background: var(--rose-100);
+}
+
+.moderation-list {
+	display: grid;
+	gap: 18px;
+}
+
+.moderation-card {
+	display: grid;
+	grid-template-columns: minmax(190px, 0.32fr) minmax(0, 1fr);
+	overflow: hidden;
+}
+
+.moderation-card > .event-card-image {
+	height: 100%;
+	min-height: 300px;
+}
+
+.moderation-card-body {
+	padding: 24px;
+}
+
+.moderation-card h2 {
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1.35rem;
+	font-weight: 570;
+}
+
+.moderation-card h2 + p {
+	display: -webkit-box;
+	overflow: hidden;
+	margin-top: 9px;
+	color: var(--ink-600);
+	font-size: 0.72rem;
+	line-height: 1.6;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}
+
+.moderation-card .content-card-meta {
+	flex-wrap: wrap;
+	margin-top: 15px;
+	color: var(--ink-500);
+	font-size: 0.59rem;
+}
+
+.moderation-actions {
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
+	padding-top: 18px;
+	margin-top: 18px;
+	border-top: 1px solid var(--ink-100);
+}
+
+.event-reject-form {
+	display: flex;
+	align-items: flex-end;
+	gap: 8px;
+	flex: 1;
+}
+
+.event-reject-form label {
+	display: grid;
+	flex: 1;
+	gap: 6px;
+	color: var(--ink-600);
+	font-size: 0.59rem;
+	font-weight: 720;
+}
+
+.event-reject-form input {
+	min-height: 38px;
+	padding: 8px 10px;
+	border: 1px solid var(--ink-200);
+	border-radius: 8px;
+	font: inherit;
+}
+
+.summary-stat {
+	display: grid;
+	min-width: 92px;
+	padding: 12px 18px;
+	border-radius: 10px;
+	color: var(--green-800);
+	background: var(--green-50);
+	text-align: center;
+}
+
+.summary-stat strong { font-size: 1.35rem; }
+.summary-stat span { color: var(--ink-500); font-size: 0.57rem; }
+
 .foundation-panel {
 	overflow: hidden;
 }
@@ -3103,6 +3312,45 @@ p {
 
 	.section-hero-copy {
 		gap: 12px;
+	}
+
+	.section-hero-actions,
+	.organization-detail-actions > div,
+	.event-detail-links,
+	.moderation-actions,
+	.event-reject-form {
+		align-items: stretch;
+		flex-direction: column;
+		width: 100%;
+	}
+
+	.section-hero-actions .button,
+	.organization-detail-actions > div .button {
+		width: 100%;
+	}
+
+	.event-content-card > .event-card-image {
+		width: calc(100% + 40px);
+		height: 180px;
+		margin: -20px -20px 18px;
+	}
+
+	.event-detail-facts {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.event-detail-links {
+		margin-left: 0;
+	}
+
+	.moderation-card {
+		grid-template-columns: 1fr;
+	}
+
+	.moderation-card > .event-card-image {
+		height: 190px;
+		min-height: 0;
 	}
 
 	.section-hero-icon {

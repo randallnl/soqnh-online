@@ -6,6 +6,7 @@ import { PostEditor } from "~/components/post-editor";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { contentSections, isContentSection, normalizeTags, postStatuses, postVisibilities, sectionDefinitions } from "~/lib/content";
 import { requireSameOrigin } from "~/lib/http.server";
+import { parseEventDetails } from "~/lib/events";
 import { createPost, listPostOrganizations, PostMutationError } from "~/models/posts.server";
 
 const optionalOrganization = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().max(100).nullable());
@@ -25,6 +26,7 @@ function messageFor(error: PostMutationError) {
 		"forbidden": "You do not have permission to create this post.",
 		"organization-required": "Choose an organization for this post and visibility setting.",
 		"organization-unavailable": "You need a contributor or organization-admin role to post for that organization.",
+		"event-details-required": "Add the event date and time before submitting it.",
 	}[error.reason];
 }
 
@@ -40,13 +42,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const result = formSchema.safeParse(Object.fromEntries(await request.formData()));
+	const formData = await request.formData();
+	const result = formSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the post details" };
+	const eventResult = result.data.section === "events" ? parseEventDetails(formData) : null;
+	if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
 	try {
 		const created = await createPost(context.cloudflare.env, user, {
 			...result.data,
 			section: sectionDefinitions[result.data.section].databaseValue,
 			tags: normalizeTags(result.data.tags),
+			event: eventResult?.data,
 		});
 		throw redirect(`/posts/${created.id}`);
 	} catch (error) {
@@ -64,5 +70,5 @@ export function meta({ data }: Route.MetaArgs) {
 export default function PostNew({ loaderData }: Route.ComponentProps) {
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
-	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">{loaderData.definition.eyebrow}</p><h1>{loaderData.definition.action}</h1><p>Create a focused post for the people and organizations who should see it.</p></div></section><PostEditor allowEcosystemWide={loaderData.allowEcosystemWide} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
+	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">{loaderData.definition.eyebrow}</p><h1>{loaderData.definition.action}</h1><p>{loaderData.section === "events" ? "Submit an event with the details moderators need to review and publish it." : "Create a focused post for the people and organizations who should see it."}</p></div></section><PostEditor allowEcosystemWide={loaderData.allowEcosystemWide} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
 }

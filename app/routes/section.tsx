@@ -4,6 +4,7 @@ import type { Route } from "./+types/section";
 import { Icon } from "~/components/icon";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { isContentSection, sectionDefinitions } from "~/lib/content";
+import { formatEventDateTime } from "~/lib/events";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 import { listPostOrganizations, listSectionPosts } from "~/models/posts.server";
 
@@ -27,6 +28,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		feed,
 		visibleOrganizations,
 		canCreate: user.siteRole === "site_admin" || authoringOrganizations.length > 0,
+		canModerateEvents: user.siteRole === "site_admin" || authoringOrganizations.some((organization) => organization.role === "org_admin"),
 		filters: { tag, organizationId },
 	};
 }
@@ -56,7 +58,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 					<span className="section-hero-icon"><Icon name={section.icon} size={24} /></span>
 					<div><p className="eyebrow">{section.eyebrow}</p><h1>{section.title}</h1><p>{section.description}</p></div>
 				</div>
-				{loaderData.canCreate && <Link className="button button--primary" to={`/posts/new?section=${sectionKey}`}><Icon name="plus" size={17} />{section.action}</Link>}
+				<div className="section-hero-actions">{sectionKey === "events" && loaderData.canModerateEvents && <Link className="button button--secondary" to="/events/moderation"><Icon name="settings" size={17} />Moderate</Link>}{loaderData.canCreate && <Link className="button button--primary" to={`/posts/new?section=${sectionKey}`}><Icon name="plus" size={17} />{section.action}</Link>}</div>
 			</section>
 
 			<section className="panel content-filter-panel">
@@ -74,7 +76,9 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 			) : (
 				<section className="content-feed" aria-label={`${section.title} posts`}>
 					{feed.posts.map((post) => (
-						<article className="panel content-card" key={post.id}>
+						<article className={`panel content-card${post.section === "event" ? " event-content-card" : ""}`} key={post.id}>
+							{post.eventImageUrl && <img alt="" className="event-card-image" loading="lazy" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
+							{post.eventStartsAt && <div className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(post.eventStartsAt)}</strong>{post.eventEndsAt && <span>to {formatEventDateTime(post.eventEndsAt)}</span>}{post.eventLocationName && <span>· {post.eventLocationName}</span>}</div>}
 							<div className="content-card-meta">
 								<span className="avatar">{(post.authorName || "Member").split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}</span>
 								<div><strong>{post.authorName || "Member"}</strong><p>{post.organizationName || "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div>

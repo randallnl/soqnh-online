@@ -22,6 +22,7 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - D1-backed legislation, event, project, and update feeds
 - Affiliation-aware and organization-only post visibility
 - Scoped post authoring, editing, drafts, archiving, tags, filters, and pagination
+- First-class event dates, locations, registration/source links, images, and approval moderation
 - Workers-runtime authentication tests against a migrated local D1 database
 - CI-ready type generation, typecheck, production build, and Wrangler dry run
 
@@ -96,6 +97,8 @@ IDs are application-generated UUIDs. Timestamps are stored as ISO-compatible tex
 
 ## Current build slice
 
-Phase 4 is underway. The first content slice replaces the four placeholder workspaces with D1-backed feeds, affiliation and organization visibility, post creation and editing, draft and archive states, tags, filters, pagination, detail pages, and content audit records. See [docs/content.md](docs/content.md) for the content access model. Phase 3 organization and affiliation controls are documented in [docs/affiliations.md](docs/affiliations.md).
+Phase 4 is complete. The four workspaces now have D1-backed feeds, affiliation and organization visibility, post creation and editing, draft and archive states, tags, filters, pagination, conversations, reactions, mentions, notifications, detail pages, and content audit records. See [docs/content.md](docs/content.md) for the content access model. Phase 3 organization and affiliation controls are documented in [docs/affiliations.md](docs/affiliations.md).
 
 Post detail pages now support comments, one-level threaded replies, support reactions, visibility-safe member mentions, author editing, soft deletion, organization moderation, and interaction audit events. Members have an in-app notification inbox with unread badges and individual or bulk read controls.
+
+Phase 5 is underway. Events now have structured schedule, location, registration, source, and image metadata. New or edited events remain private until a site administrator or an administrator for the owning organization approves them. Rejections preserve a private reason for the author, and decisions create audit records and inbox notifications. See [docs/events.md](docs/events.md).

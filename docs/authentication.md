@@ -97,6 +97,9 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 - `comment.archived`
 - `post.supported`
 - `post.unsupported`
+- `event.submitted`
+- `event.approved`
+- `event.rejected`
 
 ## Production configuration
 

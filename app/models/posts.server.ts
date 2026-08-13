@@ -33,11 +33,32 @@ export type PostRecord = {
 	viewerSupported: boolean;
 	tags: string[];
 	canEdit: boolean;
+	canModerateEvent: boolean;
+	eventStartsAt: string | null;
+	eventEndsAt: string | null;
+	eventLocationName: string | null;
+	eventLocationUrl: string | null;
+	eventRegistrationUrl: string | null;
+	eventSourceUrl: string | null;
+	eventImageUrl: string | null;
+	eventModerationStatus: "pending" | "approved" | "rejected" | null;
+	eventRejectionReason: string | null;
 };
 
-type PostRow = Omit<PostRecord, "tags" | "canEdit" | "viewerSupported"> & {
+export type EventDetailsInput = {
+	startsAt: string;
+	endsAt: string | null;
+	locationName: string | null;
+	locationUrl: string | null;
+	registrationUrl: string | null;
+	sourceUrl: string | null;
+	imageUrl: string | null;
+};
+
+type PostRow = Omit<PostRecord, "tags" | "canEdit" | "canModerateEvent" | "viewerSupported"> & {
 	tagList: string | null;
 	canEdit: number;
+	canModerateEvent: number;
 	viewerSupported: number;
 };
 
@@ -47,7 +68,8 @@ export class PostMutationError extends Error {
 			| "not-found"
 			| "forbidden"
 			| "organization-required"
-			| "organization-unavailable",
+			| "organization-unavailable"
+			| "event-details-required",
 	) {
 		super(reason);
 		this.name = "PostMutationError";
@@ -59,6 +81,7 @@ function mapPost(row: PostRow): PostRecord {
 		...row,
 		tags: row.tagList ? row.tagList.split(",") : [],
 		canEdit: row.canEdit === 1,
+		canModerateEvent: row.canModerateEvent === 1,
 		viewerSupported: row.viewerSupported === 1,
 	};
 }
@@ -127,8 +150,10 @@ export async function listSectionPosts(
 		 )`;
 	const visibleFrom = `FROM posts AS p
 		 LEFT JOIN organizations AS o ON o.id = p.organization_id
+		 LEFT JOIN events AS e ON e.post_id = p.id
 		 WHERE p.section = ?2
 		   AND p.status = 'published'
+		   AND (p.section != 'event' OR e.moderation_status = 'approved')
 		   AND (?3 IS NULL OR p.organization_id = ?3)
 		   AND (?4 IS NULL OR EXISTS (
 		     SELECT 1 FROM post_tags WHERE post_id = p.id AND tag = ?4
@@ -177,6 +202,11 @@ export async function listSectionPosts(
 			        p.author_user_id AS authorUserId, u.name AS authorName,
 			        p.section, p.title, p.body, p.visibility, p.status,
 			        p.created_at AS createdAt, p.updated_at AS updatedAt,
+			        e.starts_at AS eventStartsAt, e.ends_at AS eventEndsAt,
+			        e.location_name AS eventLocationName, e.location_url AS eventLocationUrl,
+			        e.registration_url AS eventRegistrationUrl, e.source_url AS eventSourceUrl,
+			        e.image_url AS eventImageUrl, e.moderation_status AS eventModerationStatus,
+			        e.rejection_reason AS eventRejectionReason,
 			        (SELECT count(*) FROM comments WHERE post_id = p.id AND status = 'published') AS commentCount,
 			        (SELECT count(*) FROM post_reactions WHERE post_id = p.id AND reaction = 'support') AS supportCount,
 			        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
@@ -187,11 +217,17 @@ export async function listSectionPosts(
 			        ) OR (p.author_user_id = ?1 AND EXISTS (
 			          SELECT 1 FROM organization_memberships
 			          WHERE organization_id = p.organization_id AND user_id = ?1 AND role IN ('contributor', 'org_admin')
-			        )) THEN 1 ELSE 0 END AS canEdit
+			        )) THEN 1 ELSE 0 END AS canEdit,
+			        CASE WHEN p.section = 'event' AND (?5 = 1 OR EXISTS (
+			          SELECT 1 FROM organization_memberships
+			          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
+			        )) THEN 1 ELSE 0 END AS canModerateEvent
 			 FROM posts AS p
 			 JOIN users AS u ON u.id = p.author_user_id
 			 LEFT JOIN organizations AS o ON o.id = p.organization_id
+			 LEFT JOIN events AS e ON e.post_id = p.id
 			 WHERE p.section = ?2 AND p.status = 'published'
+			   AND (p.section != 'event' OR e.moderation_status = 'approved')
 			   AND (?3 IS NULL OR p.organization_id = ?3)
 			   AND (?4 IS NULL OR EXISTS (SELECT 1 FROM post_tags WHERE post_id = p.id AND tag = ?4))
 			   AND (
@@ -203,7 +239,8 @@ export async function listSectionPosts(
 			       WHERE organization_affiliation.organization_id = p.organization_id
 			     ))
 			   )
-			 ORDER BY p.created_at DESC, p.id DESC
+			 ORDER BY CASE WHEN p.section = 'event' THEN e.starts_at END ASC,
+			          p.created_at DESC, p.id DESC
 			 LIMIT ?6 OFFSET ?7`,
 		)
 			.bind(...bindings, PAGE_SIZE, offset)
@@ -243,6 +280,11 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		        p.author_user_id AS authorUserId, u.name AS authorName,
 		        p.section, p.title, p.body, p.visibility, p.status,
 		        p.created_at AS createdAt, p.updated_at AS updatedAt,
+		        e.starts_at AS eventStartsAt, e.ends_at AS eventEndsAt,
+		        e.location_name AS eventLocationName, e.location_url AS eventLocationUrl,
+		        e.registration_url AS eventRegistrationUrl, e.source_url AS eventSourceUrl,
+		        e.image_url AS eventImageUrl, e.moderation_status AS eventModerationStatus,
+		        e.rejection_reason AS eventRejectionReason,
 		        (SELECT count(*) FROM comments WHERE post_id = p.id AND status = 'published') AS commentCount,
 		        (SELECT count(*) FROM post_reactions WHERE post_id = p.id AND reaction = 'support') AS supportCount,
 		        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
@@ -253,10 +295,15 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		        ) OR (p.author_user_id = ?1 AND EXISTS (
 		          SELECT 1 FROM organization_memberships
 		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role IN ('contributor', 'org_admin')
-		        )) THEN 1 ELSE 0 END AS canEdit
+		        )) THEN 1 ELSE 0 END AS canEdit,
+		        CASE WHEN p.section = 'event' AND (?3 = 1 OR EXISTS (
+		          SELECT 1 FROM organization_memberships
+		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
+		        )) THEN 1 ELSE 0 END AS canModerateEvent
 		 FROM posts AS p
 		 JOIN users AS u ON u.id = p.author_user_id
 		 LEFT JOIN organizations AS o ON o.id = p.organization_id
+		 LEFT JOIN events AS e ON e.post_id = p.id
 		 WHERE p.id = ?2
 		   AND (
 		     ?3 = 1
@@ -290,26 +337,42 @@ export async function createPost(
 		visibility: PostVisibility;
 		status: EditablePostStatus;
 		tags: string[];
+		event?: EventDetailsInput;
 	},
 ) {
 	await requirePostOrganization(env, actor, input.organizationId);
 	if (input.visibility === "organization" && !input.organizationId) {
 		throw new PostMutationError("organization-required");
 	}
+	if (input.section === "event" && !input.event) {
+		throw new PostMutationError("event-details-required");
+	}
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
+	const status = input.section === "event" ? "draft" : input.status;
 	await env.DB.batch([
 		env.DB.prepare(
 			`INSERT INTO posts
 			 (id, organization_id, author_user_id, section, title, body, visibility, status, created_at, updated_at, archived_at)
 			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, NULL)`,
-		).bind(id, input.organizationId, actor.id, input.section, input.title, input.body, input.visibility, input.status, now),
+		).bind(id, input.organizationId, actor.id, input.section, input.title, input.body, input.visibility, status, now),
+		...(input.event ? [env.DB.prepare(
+			`INSERT INTO events
+			 (post_id, starts_at, ends_at, location_name, location_url, registration_url, source_url, image_url,
+			  moderation_status, reviewed_by_user_id, reviewed_at, rejection_reason)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', NULL, NULL, NULL)`,
+		).bind(id, input.event.startsAt, input.event.endsAt, input.event.locationName, input.event.locationUrl, input.event.registrationUrl, input.event.sourceUrl, input.event.imageUrl)] : []),
 		...input.tags.map((tag) => env.DB.prepare("INSERT INTO post_tags (post_id, tag) VALUES (?1, ?2)").bind(id, tag)),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'post.created', 'post', ?3, ?4, ?5)`,
-		).bind(crypto.randomUUID(), actor.id, id, JSON.stringify({ section: input.section, status: input.status, visibility: input.visibility, organizationId: input.organizationId }), now),
+		).bind(crypto.randomUUID(), actor.id, id, JSON.stringify({ section: input.section, status, visibility: input.visibility, organizationId: input.organizationId }), now),
+		...(input.event ? [env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 VALUES (?1, ?2, 'event.submitted', 'event', ?3, NULL, ?4)`,
+		).bind(crypto.randomUUID(), actor.id, id, now)] : []),
 	]);
 	return { id };
 }
@@ -325,6 +388,7 @@ export async function updatePost(
 		visibility: PostVisibility;
 		status: EditablePostStatus;
 		tags: string[];
+		event?: EventDetailsInput;
 	},
 ) {
 	const existing = await getPostById(env, actor, input.postId);
@@ -334,20 +398,35 @@ export async function updatePost(
 	if (input.visibility === "organization" && !input.organizationId) {
 		throw new PostMutationError("organization-required");
 	}
+	if (existing.section === "event" && !input.event) {
+		throw new PostMutationError("event-details-required");
+	}
 	const now = new Date().toISOString();
+	const status = existing.section === "event" ? "draft" : input.status;
 	const statements = [
 		env.DB.prepare(
 			`UPDATE posts SET organization_id = ?1, title = ?2, body = ?3,
 			 visibility = ?4, status = ?5, updated_at = ?6, archived_at = NULL
 			 WHERE id = ?7`,
-		).bind(input.organizationId, input.title, input.body, input.visibility, input.status, now, input.postId),
+		).bind(input.organizationId, input.title, input.body, input.visibility, status, now, input.postId),
+		...(input.event ? [env.DB.prepare(
+			`UPDATE events SET starts_at = ?1, ends_at = ?2, location_name = ?3,
+			 location_url = ?4, registration_url = ?5, source_url = ?6, image_url = ?7,
+			 moderation_status = 'pending', reviewed_by_user_id = NULL, reviewed_at = NULL, rejection_reason = NULL
+			 WHERE post_id = ?8`,
+		).bind(input.event.startsAt, input.event.endsAt, input.event.locationName, input.event.locationUrl, input.event.registrationUrl, input.event.sourceUrl, input.event.imageUrl, input.postId)] : []),
 		env.DB.prepare("DELETE FROM post_tags WHERE post_id = ?1").bind(input.postId),
 		...input.tags.map((tag) => env.DB.prepare("INSERT INTO post_tags (post_id, tag) VALUES (?1, ?2)").bind(input.postId, tag)),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'post.updated', 'post', ?3, ?4, ?5)`,
-		).bind(crypto.randomUUID(), actor.id, input.postId, JSON.stringify({ status: input.status, visibility: input.visibility, organizationId: input.organizationId }), now),
+		).bind(crypto.randomUUID(), actor.id, input.postId, JSON.stringify({ status, visibility: input.visibility, organizationId: input.organizationId }), now),
+		...(input.event ? [env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 VALUES (?1, ?2, 'event.submitted', 'event', ?3, NULL, ?4)`,
+		).bind(crypto.randomUUID(), actor.id, input.postId, now)] : []),
 	];
 	await env.DB.batch(statements);
 }

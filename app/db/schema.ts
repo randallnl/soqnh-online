@@ -280,12 +280,21 @@ export const events = sqliteTable(
 		externalId: text("external_id"),
 		scrapedAt: text("scraped_at"),
 		imageUrl: text("image_url"),
+		moderationStatus: text("moderation_status", {
+			enum: ["pending", "approved", "rejected"],
+		})
+			.notNull()
+			.default("pending"),
+		reviewedByUserId: text("reviewed_by_user_id"),
+		reviewedAt: text("reviewed_at"),
+		rejectionReason: text("rejection_reason"),
 	},
 	(table) => [
 		uniqueIndex("idx_events_external_id")
 			.on(table.externalId)
 			.where(sql`${table.externalId} is not null`),
 		index("idx_events_starts_at").on(table.startsAt),
+		index("idx_events_moderation_status").on(table.moderationStatus),
 	],
 );
 

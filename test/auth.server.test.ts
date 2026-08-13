@@ -72,6 +72,11 @@ import {
 	markAllNotificationsRead,
 	markNotificationRead,
 } from "../app/models/notifications.server";
+import {
+	canModerateEvents,
+	listPendingEvents,
+	reviewEvent,
+} from "../app/models/events.server";
 
 declare global {
 	namespace Cloudflare {
@@ -955,6 +960,76 @@ describe("content feeds and post permissions", () => {
 		expect(afterArchive.posts).toEqual([]);
 		const auditCount = await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('post.created', 'post.archived')").first<number>("count");
 		expect(auditCount).toBe(12);
+	});
+});
+
+describe("event moderation", () => {
+	const eventDetails = {
+		startsAt: "2026-09-12T18:00",
+		endsAt: "2026-09-12T20:00",
+		locationName: "Community Hall, Concord",
+		locationUrl: "https://example.org/location",
+		registrationUrl: "https://example.org/register",
+		sourceUrl: "https://example.org/event",
+		imageUrl: "https://example.org/event.jpg",
+	};
+
+	it("keeps submitted events private until an organization admin approves them", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "org_admin" });
+
+		const event = await createPost(env, activeUser, {
+			organizationId: "org-one", section: "event", title: "Queer community gathering",
+			body: "An evening gathering for community connection and shared learning.",
+			visibility: "members", status: "published", tags: ["community"], event: eventDetails,
+		});
+		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({
+			status: "draft", eventModerationStatus: "pending", eventStartsAt: eventDetails.startsAt,
+		});
+		expect((await listSectionPosts(env, activeUser, { section: "event", tag: null, organizationId: null, page: 1 })).posts).toEqual([]);
+		expect((await listPendingEvents(env, secondMember)).map((item) => item.postId)).toContain(event.id);
+		expect(await listPendingEvents(env, thirdMember)).toEqual([]);
+		await expect(reviewEvent(env, thirdMember, { postId: event.id, decision: "approve", reason: null })).rejects.toMatchObject({ reason: "forbidden" });
+
+		await reviewEvent(env, secondMember, { postId: event.id, decision: "approve", reason: null });
+		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({ status: "published", eventModerationStatus: "approved" });
+		expect((await listSectionPosts(env, activeUser, { section: "event", tag: null, organizationId: null, page: 1 })).posts[0]).toMatchObject({ id: event.id, eventLocationName: eventDetails.locationName });
+		expect(await listNotifications(env, activeUser)).toEqual([expect.objectContaining({ type: "approval", postId: event.id })]);
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE entity_id = ?1 AND action IN ('event.submitted', 'event.approved')").bind(event.id).first<number>("count")).toBe(2);
+	});
+
+	it("returns rejected and edited events to the queue with a visible reason", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		const event = await createPost(env, activeUser, {
+			organizationId: "org-one", section: "event", title: "Draft event listing",
+			body: "This listing needs a clearer location before it can be published.",
+			visibility: "members", status: "draft", tags: [], event: eventDetails,
+		});
+
+		await reviewEvent(env, siteAdmin, { postId: event.id, decision: "reject", reason: "Confirm the accessible entrance." });
+		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({
+			status: "draft", eventModerationStatus: "rejected", eventRejectionReason: "Confirm the accessible entrance.",
+		});
+		await expect(reviewEvent(env, siteAdmin, { postId: event.id, decision: "approve", reason: null })).rejects.toMatchObject({ reason: "already-reviewed" });
+
+		await updatePost(env, activeUser, {
+			postId: event.id, organizationId: "org-one", title: "Accessible event listing",
+			body: "The accessible entrance is on the east side of the community hall.",
+			visibility: "members", status: "published", tags: ["accessible"],
+			event: { ...eventDetails, locationName: "Community Hall, east entrance" },
+		});
+		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({ eventModerationStatus: "pending", eventRejectionReason: null });
+		expect((await listPendingEvents(env, siteAdmin)).map((item) => item.postId)).toContain(event.id);
+		expect(await canModerateEvents(env, activeUser)).toBe(false);
+		expect(await canModerateEvents(env, siteAdmin)).toBe(true);
 	});
 });
 
