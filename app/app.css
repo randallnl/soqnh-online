@@ -2171,6 +2171,98 @@ p {
 	gap: 28px;
 }
 
+.scraper-admin-page {
+	display: grid;
+	gap: 22px;
+}
+
+.scraper-summary-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.scraper-summary-grid > div {
+	display: grid;
+	gap: 4px;
+	padding: 20px 22px;
+}
+
+.scraper-summary-grid strong {
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1.65rem;
+}
+
+.scraper-summary-grid span,
+.scraper-panel .panel-heading > span {
+	color: var(--ink-500);
+	font-size: 0.64rem;
+}
+
+.scraper-panel { overflow: hidden; }
+.scraper-source-list, .scraper-run-list, .scraper-import-list { display: grid; }
+
+.scraper-source-row {
+	display: grid;
+	grid-template-columns: minmax(170px, .8fr) minmax(260px, 1.5fr) minmax(190px, .8fr) auto auto;
+	gap: 14px;
+	align-items: end;
+	padding: 16px 22px;
+	border-top: 1px solid var(--ink-100);
+}
+
+.scraper-source-row label {
+	display: grid;
+	gap: 7px;
+	color: var(--ink-700);
+	font-size: 0.62rem;
+	font-weight: 720;
+}
+
+.scraper-source-row input[type="url"], .scraper-source-row select {
+	width: 100%;
+	height: 40px;
+	padding: 0 10px;
+	border: 1px solid var(--ink-200);
+	border-radius: 8px;
+	background: var(--surface);
+	font: inherit;
+	font-size: 0.68rem;
+}
+
+.scraper-source-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 40px; }
+.scraper-source-name strong { font-size: 0.72rem; }
+.scraper-source-row .scraper-toggle { display: flex; flex-direction: row; align-items: center; gap: 7px; min-height: 40px; }
+.scraper-source-row .scraper-toggle input { width: 16px; height: 16px; }
+
+.scraper-operations-grid {
+	display: grid;
+	grid-template-columns: minmax(320px, .8fr) minmax(500px, 1.2fr);
+	gap: 18px;
+	align-items: start;
+}
+
+.scraper-run-list article, .scraper-import-list article {
+	display: grid;
+	gap: 12px;
+	padding: 16px 22px;
+	border-top: 1px solid var(--ink-100);
+}
+
+.scraper-run-list article { grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr); }
+.scraper-run-list article > div { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; }
+.scraper-run-list small { grid-column: 1 / -1; color: var(--ink-500); font-size: 0.58rem; }
+.scraper-run-list p { align-self: center; color: var(--ink-600); font-size: 0.64rem; line-height: 1.45; }
+.scraper-import-list article { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.scraper-import-list strong { display: block; overflow: hidden; font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+.scraper-import-list p { margin-top: 4px; color: var(--ink-500); font-size: 0.59rem; }
+.scraper-import-list time { color: var(--ink-500); font-size: 0.57rem; white-space: nowrap; }
+.scraper-empty { padding: 24px; border-top: 1px solid var(--ink-100); }
+.scraper-status--succeeded, .scraper-outcome--imported, .scraper-outcome--updated { color: var(--green-800); background: var(--green-50); }
+.scraper-status--running { color: #865d13; background: #fff4d8; }
+.scraper-status--failed, .scraper-outcome--invalid { color: #9e342d; background: #fff0ee; }
+.scraper-outcome--duplicate { color: var(--ink-600); background: var(--ink-100); }
+
 .admin-grid {
 	display: grid;
 	grid-template-columns: minmax(300px, 0.72fr) minmax(420px, 1.28fr);
@@ -3087,6 +3179,11 @@ p {
 }
 
 @media (max-width: 1180px) {
+	.scraper-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.scraper-source-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.scraper-source-name { grid-column: 1 / -1; }
+	.scraper-operations-grid { grid-template-columns: 1fr; }
+
 	.topbar {
 		grid-template-columns: 1fr minmax(240px, 390px) 1fr;
 		padding-inline: 24px;
@@ -3242,6 +3339,11 @@ p {
 }
 
 @media (max-width: 700px) {
+	.scraper-summary-grid, .scraper-source-row { grid-template-columns: 1fr; }
+	.scraper-source-name { grid-column: auto; }
+	.scraper-import-list article, .scraper-run-list article { grid-template-columns: 1fr; }
+	.scraper-import-list time { justify-self: start; }
+
 	.topbar {
 		padding-inline: 14px;
 	}

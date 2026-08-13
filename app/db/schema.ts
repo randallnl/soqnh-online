@@ -298,6 +298,92 @@ export const events = sqliteTable(
 	],
 );
 
+export const scraperRuns = sqliteTable(
+	"scraper_runs",
+	{
+		id: text("id").primaryKey(),
+		triggerType: text("trigger_type", {
+			enum: ["manual", "callback"],
+		}).notNull(),
+		status: text("status", {
+			enum: ["running", "succeeded", "failed"],
+		})
+			.notNull()
+			.default("running"),
+		initiatedByUserId: text("initiated_by_user_id").references(
+			() => users.id,
+			{ onDelete: "set null" },
+		),
+		partnersCount: integer("partners_count").notNull().default(0),
+		scrapedCount: integer("scraped_count").notNull().default(0),
+		submittedCount: integer("submitted_count").notNull().default(0),
+		importedCount: integer("imported_count").notNull().default(0),
+		updatedCount: integer("updated_count").notNull().default(0),
+		skippedCount: integer("skipped_count").notNull().default(0),
+		failureCount: integer("failure_count").notNull().default(0),
+		resultJson: text("result_json", { mode: "json" }).$type<
+			Record<string, unknown>
+		>(),
+		errorMessage: text("error_message"),
+		startedAt: text("started_at").notNull(),
+		finishedAt: text("finished_at"),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		check(
+			"scraper_runs_trigger_type_check",
+			sql`${table.triggerType} in ('manual', 'callback')`,
+		),
+		check(
+			"scraper_runs_status_check",
+			sql`${table.status} in ('running', 'succeeded', 'failed')`,
+		),
+		index("idx_scraper_runs_started_at").on(desc(table.startedAt)),
+	],
+);
+
+export const scraperImports = sqliteTable(
+	"scraper_imports",
+	{
+		id: text("id").primaryKey(),
+		runId: text("run_id").references(() => scraperRuns.id, {
+			onDelete: "set null",
+		}),
+		organizationId: text("organization_id").references(
+			() => organizations.id,
+			{ onDelete: "set null" },
+		),
+		postId: text("post_id").references(() => posts.id, {
+			onDelete: "set null",
+		}),
+		externalId: text("external_id"),
+		outcome: text("outcome", {
+			enum: ["imported", "updated", "duplicate", "invalid"],
+		}).notNull(),
+		title: text("title"),
+		startsAt: text("starts_at"),
+		sourceUrl: text("source_url"),
+		reason: text("reason"),
+		payloadJson: text("payload_json", { mode: "json" }).$type<
+			Record<string, unknown>
+		>(),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		check(
+			"scraper_imports_outcome_check",
+			sql`${table.outcome} in ('imported', 'updated', 'duplicate', 'invalid')`,
+		),
+		index("idx_scraper_imports_run_id").on(table.runId),
+		index("idx_scraper_imports_organization_created_at").on(
+			table.organizationId,
+			desc(table.createdAt),
+		),
+		index("idx_scraper_imports_external_id").on(table.externalId),
+	],
+);
+
 export const projects = sqliteTable("projects", {
 	postId: text("post_id")
 		.primaryKey()

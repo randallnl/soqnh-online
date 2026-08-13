@@ -33,6 +33,6 @@ The workflow writes:
 - `event.approved` when a moderator publishes it
 - `event.rejected` with the reviewer reason in audit metadata
 
-## Deferred to Phase 6
+## Phase 6 scraper destination
 
-Scraper triggers, schedules, import previews, duplicate matching, approval of imported records, and run history remain a separate background-work phase. This moderation workflow is the stable destination those imports will use.
+Partner scraper imports now use this moderation workflow as their stable destination. New and updated scraper records become private pending events; approved imports are protected from silent updates. Source configuration, duplicate decisions, and run/import history are documented in [scraper.md](scraper.md).

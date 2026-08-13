@@ -23,6 +23,7 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - Affiliation-aware and organization-only post visibility
 - Scoped post authoring, editing, drafts, archiving, tags, filters, and pagination
 - First-class event dates, locations, registration/source links, images, and approval moderation
+- Authenticated partner event imports with duplicate protection, run history, and admin source controls
 - Workers-runtime authentication tests against a migrated local D1 database
 - CI-ready type generation, typecheck, production build, and Wrangler dry run
 
@@ -61,6 +62,8 @@ npm run deploy             # Deploy the soqnh-online production Worker (requires
 | `ASSETS` | `nh-ecosystem-assets` | Logos, profile photos, event images, and uploads in R2 |
 | `EMAIL` | `no-reply@nhsolidarityecosystem.com` | Magic links and notifications |
 | `SCRAPER_RUN_URL` | Partner event scraper Worker URL | Existing scraper integration point |
+| `SCRAPER_API_TOKEN` | Worker secret | Shared bearer token for scraper callbacks |
+| `SCRAPER_ADMIN_TOKEN` | Worker secret | Bearer token used to start manual scraper runs |
 
 The health route reports configuration without sending email or listing R2 objects.
 
@@ -76,13 +79,13 @@ See [docs/production-database.md](docs/production-database.md) for the baseline 
 
 ## Data model
 
-The production baseline contains:
+The production schema contains:
 
 - identity: `users`, `sessions`, `auth_tokens`, `invitations`
 - community graph: `organizations`, `organization_memberships`, `affiliations`, `organization_affiliations`, `user_affiliations`
 - content: `posts`, `post_tags`, `comments`, `post_reactions`, `post_mentions`
 - structured content: `events`, `projects`, `attachments`, `video_embeds`
-- operations: `notifications`, `audit_log`
+- operations: `notifications`, `audit_log`, `scraper_runs`, `scraper_imports`
 
 IDs are application-generated UUIDs. Timestamps are stored as ISO-compatible text, binary files stay in R2, and D1 stores only their object keys and metadata.
 
@@ -101,4 +104,4 @@ Phase 4 is complete. The four workspaces now have D1-backed feeds, affiliation a
 
 Post detail pages now support comments, one-level threaded replies, support reactions, visibility-safe member mentions, author editing, soft deletion, organization moderation, and interaction audit events. Members have an in-app notification inbox with unread badges and individual or bulk read controls.
 
-Phase 5 is underway. Events now have structured schedule, location, registration, source, and image metadata. New or edited events remain private until a site administrator or an administrator for the owning organization approves them. Rejections preserve a private reason for the author, and decisions create audit records and inbox notifications. See [docs/events.md](docs/events.md).
+Phase 6 is underway. The existing Partner Event Scraper can now load enabled organization sources and submit event batches through authenticated callback routes. Imports use stable identities plus likely-match checks, preserve approved events, enter the Phase 5 moderation queue, and leave a durable decision trail. Site administrators can configure sources, run the scraper manually, and inspect run/import history. See [docs/scraper.md](docs/scraper.md).

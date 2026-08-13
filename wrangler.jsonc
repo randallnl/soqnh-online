@@ -17,6 +17,9 @@
 		"EMAIL_FROM": "no-reply@nhsolidarityecosystem.com",
 		"SCRAPER_RUN_URL": "https://parter-event-scraper.randall-d53.workers.dev"
 	},
+	"secrets": {
+		"required": ["SCRAPER_API_TOKEN", "SCRAPER_ADMIN_TOKEN"]
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",

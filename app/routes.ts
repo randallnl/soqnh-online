@@ -9,6 +9,8 @@ export default [
 	route("health", "routes/health.ts"),
 	route("login", "routes/login.tsx"),
 	route("auth/verify", "routes/auth-verify.ts"),
+	route("api/scraper/organizations", "routes/api-scraper-organizations.ts"),
+	route("api/scraper/events", "routes/api-scraper-events.ts"),
 	route("invite/accept", "routes/invite-accept.tsx"),
 	route("logout", "routes/logout.ts"),
 	layout("routes/dashboard-layout.tsx", [
@@ -23,6 +25,7 @@ export default [
 		route("organizations/:slug", "routes/organization-detail.tsx"),
 		route("admin/affiliations", "routes/admin-affiliations.tsx"),
 		route("admin/organizations", "routes/admin-organizations.tsx"),
+		route("admin/scraper", "routes/admin-scraper.tsx"),
 		route("admin/invitations", "routes/admin-invitations.tsx"),
 		route("admin/members", "routes/admin-members.tsx"),
 		route(":section", "routes/section.tsx"),

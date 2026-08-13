@@ -77,6 +77,11 @@ import {
 	listPendingEvents,
 	reviewEvent,
 } from "../app/models/events.server";
+import {
+	importScraperRecords,
+	listScraperPartners,
+	updateOrganizationScraperSettings,
+} from "../app/models/scraper.server";
 
 declare global {
 	namespace Cloudflare {
@@ -225,6 +230,8 @@ beforeAll(async () => {
 beforeEach(async () => {
 	await env.DB.batch([
 		env.DB.prepare("DELETE FROM audit_log"),
+		env.DB.prepare("DELETE FROM scraper_imports"),
+		env.DB.prepare("DELETE FROM scraper_runs"),
 		env.DB.prepare("DELETE FROM notifications"),
 		env.DB.prepare("DELETE FROM post_mentions"),
 		env.DB.prepare("DELETE FROM attachments"),
@@ -245,6 +252,81 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM organizations"),
 		env.DB.prepare("DELETE FROM affiliations"),
 	]);
+});
+
+describe("partner event scraper imports", () => {
+	const scrapedEvent = {
+		partner: "Community Center",
+		title: "Queer Community Picnic",
+		start_date: "2026-09-12",
+		end_date: "",
+		start_time: "13:30",
+		end_time: "",
+		location: "Concord, NH",
+		description: "An afternoon together.",
+		image_url: "https://example.org/picnic.jpg",
+		url: "https://example.org/events/picnic",
+		source_url: "https://example.org/events",
+		kind: "event",
+		scraped_at: "2026-08-13T18:00:00Z",
+	};
+
+	it("publishes only enabled active organizations to the scraper", async () => {
+		await seedSiteAdmin();
+		await seedOrganization();
+		await updateOrganizationScraperSettings(env, siteAdmin, {
+			organizationId: "org-one",
+			eventSourceUrl: "https://example.org/events",
+			eventParser: "generic_links",
+			eventScrapingEnabled: true,
+		});
+
+		await expect(listScraperPartners(env)).resolves.toEqual([
+			{ name: "Community Center", url: "https://example.org/events", parser: "generic_links" },
+		]);
+	});
+
+	it("imports new events into moderation and updates a pending repeat", async () => {
+		await seedOrganization();
+		const first = await importScraperRecords(env, [scrapedEvent], null);
+		expect(first).toMatchObject({ imported: 1, new: 1, updated: 0, skipped: 0 });
+
+		const imported = await env.DB.prepare(
+			`SELECT p.title, p.body, p.status, e.starts_at AS startsAt,
+			 e.moderation_status AS moderationStatus
+			 FROM posts AS p JOIN events AS e ON e.post_id = p.id
+			 WHERE p.author_user_id = 'system:event-scraper'`,
+		).first<{ title: string; body: string; status: string; startsAt: string; moderationStatus: string }>();
+		expect(imported).toMatchObject({
+			title: "Queer Community Picnic",
+			status: "draft",
+			startsAt: "2026-09-12T13:30",
+			moderationStatus: "pending",
+		});
+
+		const repeat = await importScraperRecords(env, [{ ...scrapedEvent, description: "Updated details." }], null);
+		expect(repeat).toMatchObject({ imported: 1, new: 0, updated: 1, skipped: 0 });
+		await expect(env.DB.prepare(
+			"SELECT body FROM posts WHERE author_user_id = 'system:event-scraper'",
+		).first<string>("body")).resolves.toBe("Updated details.");
+	});
+
+	it("does not overwrite an approved scraper event", async () => {
+		await seedOrganization();
+		await importScraperRecords(env, [scrapedEvent], null);
+		const postId = await env.DB.prepare(
+			"SELECT post_id AS postId FROM events LIMIT 1",
+		).first<string>("postId");
+		await env.DB.batch([
+			env.DB.prepare("UPDATE events SET moderation_status = 'approved' WHERE post_id = ?1").bind(postId),
+			env.DB.prepare("UPDATE posts SET status = 'published' WHERE id = ?1").bind(postId),
+		]);
+
+		const result = await importScraperRecords(env, [{ ...scrapedEvent, title: "Changed title" }], null);
+		expect(result).toMatchObject({ imported: 0, new: 0, updated: 0, skipped: 1, duplicates: 1 });
+		await expect(env.DB.prepare("SELECT title FROM posts WHERE id = ?1").bind(postId).first<string>("title"))
+			.resolves.toBe("Queer Community Picnic");
+	});
 });
 
 describe("authentication primitives", () => {
