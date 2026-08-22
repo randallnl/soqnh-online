@@ -19,8 +19,10 @@ export type PostRecord = {
 	organizationId: string | null;
 	organizationName: string | null;
 	organizationSlug: string | null;
+	organizationLogoObjectKey: string | null;
 	authorUserId: string;
 	authorName: string | null;
+	authorAvatarObjectKey: string | null;
 	section: DatabaseSection;
 	title: string;
 	body: string;
@@ -199,7 +201,9 @@ export async function listSectionPosts(
 			 )
 			 SELECT p.id, p.organization_id AS organizationId,
 			        o.name AS organizationName, o.slug AS organizationSlug,
+			        o.logo_object_key AS organizationLogoObjectKey,
 			        p.author_user_id AS authorUserId, u.name AS authorName,
+			        u.avatar_object_key AS authorAvatarObjectKey,
 			        p.section, p.title, p.body, p.visibility, p.status,
 			        p.created_at AS createdAt, p.updated_at AS updatedAt,
 			        e.starts_at AS eventStartsAt, e.ends_at AS eventEndsAt,
@@ -277,7 +281,9 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		 )
 		 SELECT p.id, p.organization_id AS organizationId,
 		        o.name AS organizationName, o.slug AS organizationSlug,
+		        o.logo_object_key AS organizationLogoObjectKey,
 		        p.author_user_id AS authorUserId, u.name AS authorName,
+		        u.avatar_object_key AS authorAvatarObjectKey,
 		        p.section, p.title, p.body, p.visibility, p.status,
 		        p.created_at AS createdAt, p.updated_at AS updatedAt,
 		        e.starts_at AS eventStartsAt, e.ends_at AS eventEndsAt,

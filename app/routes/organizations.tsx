@@ -2,6 +2,7 @@ import { Link } from "react-router";
 
 import type { Route } from "./+types/organizations";
 import { Icon } from "~/components/icon";
+import { OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 
@@ -15,10 +16,6 @@ export function meta(_args: Route.MetaArgs) {
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	return { organizations: await listVisibleOrganizations(context.cloudflare.env, user) };
-}
-
-function initials(name: string) {
-	return name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
 }
 
 export default function Organizations({ loaderData }: Route.ComponentProps) {
@@ -42,7 +39,7 @@ export default function Organizations({ loaderData }: Route.ComponentProps) {
 				<section className="organization-card-grid">
 					{loaderData.organizations.map((organization) => (
 						<Link className="organization-card" key={organization.id} to={`/organizations/${organization.slug}`}>
-							<span className="organization-monogram">{initials(organization.name)}</span>
+							<OrganizationIdentity logoObjectKey={organization.logoObjectKey} name={organization.name} />
 							<div>
 								<h2>{organization.name}</h2>
 								<p>{organization.summary || "A member organization in the State of Queer NH ecosystem."}</p>

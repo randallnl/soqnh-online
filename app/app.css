@@ -3678,3 +3678,115 @@ p {
 		animation-iteration-count: 1 !important;
 	}
 }
+
+/* Phase 7: people and organization identity */
+.identity-avatar,
+.organization-logo {
+	overflow: hidden;
+	flex: 0 0 auto;
+}
+
+.identity-avatar img,
+.organization-logo img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.identity-avatar--large {
+	width: 76px;
+	height: 76px;
+	font-size: 1.25rem;
+}
+
+.organization-logo img { object-fit: contain; background: #fff; }
+.identity-name-link { color: inherit; text-decoration: none; }
+.identity-name-link:hover { color: var(--purple-700); }
+.content-card-meta p a { color: inherit; text-decoration: none; }
+.content-card-meta p a:hover { text-decoration: underline; }
+
+.member-card-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 18px;
+}
+
+.member-profile-card {
+	position: relative;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	gap: 18px;
+	align-items: start;
+	padding: 24px;
+	color: inherit;
+	text-decoration: none;
+}
+
+.member-profile-card:hover { border-color: var(--green-600); transform: translateY(-1px); }
+.member-profile-card h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.member-profile-title,
+.member-affiliation-line,
+.member-card-bio { margin: 0; color: var(--ink-500); }
+.member-affiliation-line { margin-top: 10px; font-size: .82rem; font-weight: 650; }
+.member-card-bio { margin-top: 12px; line-height: 1.55; }
+.member-profile-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.member-profile-meta span { border-radius: 999px; padding: 4px 8px; background: var(--ink-50); color: var(--ink-500); font-size: .75rem; }
+.member-card-arrow { align-self: center; color: var(--ink-300); }
+
+.member-profile-hero,
+.member-organizations-panel,
+.profile-editor-panel { padding: 28px; }
+.member-profile-identity { display: flex; gap: 20px; align-items: center; }
+.member-profile-identity h1 { margin: 2px 0 4px; }
+.member-profile-identity p { margin: 0; color: var(--ink-500); }
+.member-profile-affiliations { margin-top: 24px; }
+.member-profile-bio { max-width: 72ch; margin: 24px 0 0; line-height: 1.7; }
+.member-website-link { margin-top: 20px; }
+.member-organizations-panel { margin-top: 20px; }
+.member-organization-list { display: grid; gap: 10px; }
+.member-organization-list > a,
+.organization-member-link { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px; border-radius: 12px; color: inherit; text-decoration: none; }
+.member-organization-list > a:hover,
+.organization-member-link:hover { background: var(--ink-50); }
+.member-organization-list p { margin: 2px 0 0; color: var(--ink-500); font-size: .82rem; }
+.organization-member-list .organization-member-link {
+	grid-template-columns: auto minmax(0, 1fr);
+	border-right: 1px solid var(--ink-100);
+	border-bottom: 1px solid var(--ink-100);
+	border-radius: 0;
+	padding: 18px 22px;
+}
+.organization-member-list .organization-member-link strong { font-size: .7rem; }
+.organization-member-list .organization-member-link p { margin-top: 3px; color: var(--ink-500); font-size: .6rem; }
+
+.profile-photo-editor,
+.organization-logo-editor { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; padding-bottom: 24px; border-bottom: 1px solid var(--ink-100); }
+.profile-photo-editor p,
+.organization-logo-editor p { margin: 4px 0 8px; color: var(--ink-500); font-size: .84rem; }
+.profile-editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.profile-editor-form label,
+.profile-affiliation-picker { display: grid; gap: 7px; font-size: .78rem; font-weight: 700; }
+.profile-editor-form input,
+.profile-editor-form select,
+.profile-editor-form textarea { width: 100%; }
+.profile-affiliation-picker { padding: 18px; border: 1px solid var(--ink-200); border-radius: 14px; }
+.profile-affiliation-picker > p { margin: 0 0 12px; color: var(--ink-500); font-weight: 400; }
+.profile-affiliation-picker > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.profile-affiliation-picker > div label { display: flex; align-items: center; gap: 8px; font-weight: 550; }
+.profile-affiliation-picker input { width: auto; }
+
+@media (max-width: 820px) {
+	.member-card-grid,
+	.profile-editor-form { grid-template-columns: 1fr; }
+	.profile-affiliation-picker > div { grid-template-columns: 1fr; }
+	.member-profile-card { grid-template-columns: auto minmax(0, 1fr); }
+	.member-card-arrow { display: none; }
+}
+
+@media (max-width: 520px) {
+	.member-profile-identity,
+	.profile-photo-editor,
+	.organization-logo-editor { align-items: flex-start; flex-direction: column; }
+	.member-profile-card { grid-template-columns: 1fr; }
+}

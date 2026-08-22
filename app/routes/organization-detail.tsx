@@ -2,6 +2,7 @@ import { Link } from "react-router";
 
 import type { Route } from "./+types/organization-detail";
 import { Icon } from "~/components/icon";
+import { IdentityAvatar, OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { getOrganizationBySlug } from "~/models/organizations.server";
 
@@ -25,10 +26,6 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	};
 }
 
-function initials(value: string) {
-	return value.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
-}
-
 export default function OrganizationDetail({ loaderData }: Route.ComponentProps) {
 	const { organization, members } = loaderData;
 	return (
@@ -39,7 +36,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 			</div>
 			<section className="organization-profile panel">
 				<div className="organization-profile-header">
-					<span className="organization-monogram organization-monogram--large">{initials(organization.name)}</span>
+					<OrganizationIdentity large logoObjectKey={organization.logoObjectKey} name={organization.name} />
 					<div>
 						<p className="eyebrow">Ecosystem organization</p>
 						<h1>{organization.name}</h1>
@@ -64,10 +61,10 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 				{members.length === 0 ? <div className="empty-state empty-state--compact"><strong>No active members listed</strong></div> : (
 					<div className="organization-member-list">
 						{members.map((member) => (
-							<article key={member.userId}>
-								<span className="avatar">{initials(member.name || "Member")}</span>
+							<Link className="organization-member-link" key={member.userId} to={`/members/${member.userId}`}>
+								<IdentityAvatar name={member.name || "Member"} objectKey={member.avatarObjectKey} />
 								<div><strong>{member.name || "Member"}</strong><p>{roleLabels[member.role]}</p></div>
-							</article>
+							</Link>
 						))}
 					</div>
 				)}

@@ -3,8 +3,10 @@ import { z } from "zod";
 
 import type { Route } from "./+types/organization-manage";
 import { Icon } from "~/components/icon";
+import { OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
+import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
 import { organizationRoles } from "~/lib/organizations";
 import {
 	getOrganizationManagementData,
@@ -12,6 +14,7 @@ import {
 	removeOrganizationMembership,
 	setOrganizationMembership,
 	updateManagedOrganizationProfile,
+	updateOrganizationLogo,
 } from "~/models/organizations.server";
 
 const optionalText = (maximum: number) => z.preprocess(
@@ -39,6 +42,7 @@ const actionSchema = z.discriminatedUnion("intent", [
 	}),
 	z.object({ intent: z.literal("set-membership"), organizationId: identifier, userId: identifier, role: z.enum(organizationRoles) }),
 	z.object({ intent: z.literal("remove-membership"), organizationId: identifier, userId: identifier }),
+	z.object({ intent: z.literal("remove-logo"), organizationId: identifier }),
 ]);
 
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
@@ -66,15 +70,37 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const result = actionSchema.safeParse(Object.fromEntries(await request.formData()));
+	try {
+		requireUploadRequestSize(request);
+	} catch (error) {
+		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
+		throw error;
+	}
+	const formData = await request.formData();
+	const result = actionSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) {
 		return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the organization details" };
 	}
 
 	try {
 		if (result.data.intent === "update-profile") {
-			await updateManagedOrganizationProfile(context.cloudflare.env, user, result.data);
+			const newLogoKey = await uploadIdentityImage(context.cloudflare.env, formData.get("logo"), "org-logos", result.data.organizationId);
+			try {
+				await updateManagedOrganizationProfile(context.cloudflare.env, user, result.data);
+				if (newLogoKey) {
+					const oldLogoKey = await updateOrganizationLogo(context.cloudflare.env, user, { organizationId: result.data.organizationId, logoObjectKey: newLogoKey });
+					if (oldLogoKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, oldLogoKey));
+				}
+			} catch (error) {
+				if (newLogoKey) await deleteIdentityImage(context.cloudflare.env, newLogoKey);
+				throw error;
+			}
 			return { ok: true as const, message: "Organization profile updated." };
+		}
+		if (result.data.intent === "remove-logo") {
+			const oldLogoKey = await updateOrganizationLogo(context.cloudflare.env, user, { organizationId: result.data.organizationId, logoObjectKey: null });
+			if (oldLogoKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, oldLogoKey));
+			return { ok: true as const, message: "Organization logo removed." };
 		}
 		if (result.data.intent === "set-membership") {
 			await setOrganizationMembership(context.cloudflare.env, user, result.data);
@@ -83,6 +109,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 		await removeOrganizationMembership(context.cloudflare.env, user, result.data);
 		return { ok: true as const, message: "Member removed from the organization." };
 	} catch (error) {
+		if (error instanceof ImageUploadError) {
+			const message = error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image.";
+			return { ok: false as const, error: message };
+		}
 		if (error instanceof OrganizationMutationError) {
 			const messages = {
 				"not-found": "That organization is no longer available.",
@@ -115,8 +145,10 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 
 			<section className="panel managed-profile-panel">
 				<div className="panel-heading"><div><p className="eyebrow">Public information</p><h2>Organization profile</h2></div><span className={`status-pill status-pill--${organization.status}`}>{organization.status}</span></div>
-				<Form className="organization-edit-form" method="post">
+				<div className="organization-logo-editor"><OrganizationIdentity large logoObjectKey={organization.logoObjectKey} name={organization.name} /><div><strong>Organization logo</strong><p>PNG, JPG, WebP, or GIF. Maximum 2 MB.</p>{organization.logoObjectKey && <Form method="post"><input name="intent" type="hidden" value="remove-logo" /><input name="organizationId" type="hidden" value={organization.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Remove logo</button></Form>}</div></div>
+				<Form className="organization-edit-form" encType="multipart/form-data" method="post">
 					<input name="intent" type="hidden" value="update-profile" /><input name="organizationId" type="hidden" value={organization.id} />
+					<label>Organization logo<input accept="image/png,image/jpeg,image/webp,image/gif" name="logo" type="file" /></label>
 					<label>Name<input defaultValue={organization.name} name="name" required /></label>
 					<label>Website<input defaultValue={organization.websiteUrl ?? ""} name="websiteUrl" type="url" /></label>
 					<label className="wide-field">Short summary<input defaultValue={organization.summary ?? ""} maxLength={240} name="summary" /></label>

@@ -13,8 +13,12 @@ export default [
 	route("api/scraper/events", "routes/api-scraper-events.ts"),
 	route("invite/accept", "routes/invite-accept.tsx"),
 	route("logout", "routes/logout.ts"),
+	route("media/*", "routes/media.ts"),
 	layout("routes/dashboard-layout.tsx", [
 		index("routes/home.tsx"),
+		route("members", "routes/members.tsx"),
+		route("members/:memberId", "routes/member-detail.tsx"),
+		route("profile", "routes/profile.tsx"),
 		route("notifications", "routes/notifications.tsx"),
 		route("events/moderation", "routes/event-moderation.tsx"),
 		route("posts/new", "routes/post-new.tsx"),

@@ -1,7 +1,12 @@
 import type { AuthenticatedUser } from "../lib/auth.server";
 import { getPostById } from "./posts.server";
 
-export type MentionableMember = { id: string; name: string | null };
+export type MentionableMember = {
+	id: string;
+	name: string | null;
+	profileTitle: string | null;
+	organizationNames: string | null;
+};
 
 export class InteractionMutationError extends Error {
 	constructor(public readonly reason: "post-unavailable" | "member-unavailable") {
@@ -39,7 +44,13 @@ export async function togglePostSupport(env: Env, actor: AuthenticatedUser, post
 export async function listMentionableMembers(env: Env, actor: AuthenticatedUser, postId: string) {
 	const post = await requirePublishedPost(env, actor, postId);
 	const result = await env.DB.prepare(
-		`SELECT u.id, u.name
+		`SELECT u.id, u.name, u.profile_title AS profileTitle,
+		        (SELECT group_concat(name, ', ') FROM (
+		          SELECT o.name FROM organization_memberships AS om
+		          JOIN organizations AS o ON o.id = om.organization_id
+		          WHERE om.user_id = u.id AND o.status != 'archived'
+		          ORDER BY o.name COLLATE NOCASE
+		        )) AS organizationNames
 		 FROM users AS u
 		 WHERE u.status = 'active' AND u.id != ?1
 		   AND (?4 = 1 OR u.profile_visibility != 'hidden')

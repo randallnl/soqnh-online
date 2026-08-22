@@ -8,6 +8,7 @@ export type CommentRecord = {
 	parentCommentId: string | null;
 	authorUserId: string;
 	authorName: string | null;
+	authorAvatarObjectKey: string | null;
 	body: string | null;
 	status: "published" | "archived";
 	createdAt: string;
@@ -43,6 +44,7 @@ export async function listPostComments(env: Env, viewer: AuthenticatedUser, post
 	const result = await env.DB.prepare(
 		`SELECT c.id, c.post_id AS postId, c.parent_comment_id AS parentCommentId,
 		        c.author_user_id AS authorUserId, u.name AS authorName,
+		        u.avatar_object_key AS authorAvatarObjectKey,
 		        CASE WHEN c.status = 'archived' THEN NULL ELSE c.body END AS body, c.status,
 		        c.created_at AS createdAt, c.updated_at AS updatedAt,
 		        CASE WHEN c.status = 'published' THEN (SELECT mentioned.id FROM post_mentions JOIN users AS mentioned ON mentioned.id = post_mentions.mentioned_user_id WHERE post_mentions.comment_id = c.id AND (?3 = 1 OR mentioned.id = ?1 OR mentioned.profile_visibility != 'hidden') LIMIT 1) END AS mentionedUserId,

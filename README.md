@@ -105,3 +105,5 @@ Phase 4 is complete. The four workspaces now have D1-backed feeds, affiliation a
 Post detail pages now support comments, one-level threaded replies, support reactions, visibility-safe member mentions, author editing, soft deletion, organization moderation, and interaction audit events. Members have an in-app notification inbox with unread badges and individual or bulk read controls.
 
 Phase 6 is underway. The existing Partner Event Scraper can now load enabled organization sources and submit event batches through authenticated callback routes. Imports use stable identities plus likely-match checks, preserve approved events, enter the Phase 5 moderation queue, and leave a durable decision trail. Site administrators can configure sources, run the scraper manually, and inspect run/import history. See [docs/scraper.md](docs/scraper.md).
+
+Phase 7 adds the people layer: an affiliation-aware member directory, member profile pages, self-service profile editing, private R2-backed profile photos and organization logos, and linked identity across organizations, posts, comments, and mentions. See [docs/profiles.md](docs/profiles.md).

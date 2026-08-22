@@ -78,6 +78,12 @@ import {
 	reviewEvent,
 } from "../app/models/events.server";
 import {
+	canReadIdentityObject,
+	getVisibleMemberProfile,
+	listVisibleMembers,
+	updateOwnProfile,
+} from "../app/models/profiles.server";
+import {
 	importScraperRecords,
 	listScraperPartners,
 	updateOrganizationScraperSettings,
@@ -252,6 +258,52 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM organizations"),
 		env.DB.prepare("DELETE FROM affiliations"),
 	]);
+});
+
+describe("member profiles", () => {
+	it("limits the directory and profile assets to shared affiliations", async () => {
+		await Promise.all([seedUser(), seedSecondMember(), seedThirdMember()]);
+		await seedAffiliation();
+		await seedAffiliation("aff-other", "Other Coalition", "other-coalition");
+		const now = new Date().toISOString();
+		await env.DB.batch([
+			env.DB.prepare("INSERT INTO user_affiliations (user_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)").bind(activeUser.id, "aff-shared", now),
+			env.DB.prepare("INSERT INTO user_affiliations (user_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)").bind(secondMember.id, "aff-shared", now),
+			env.DB.prepare("INSERT INTO user_affiliations (user_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)").bind(thirdMember.id, "aff-other", now),
+			env.DB.prepare("UPDATE users SET avatar_object_key = 'profile-photos/second.jpg' WHERE id = ?1").bind(secondMember.id),
+		]);
+
+		await expect(listVisibleMembers(env, activeUser)).resolves.toSatisfy((members: Awaited<ReturnType<typeof listVisibleMembers>>) =>
+			members.map((member) => member.id).sort().join(",") === "user-active,user-second",
+		);
+		await expect(getVisibleMemberProfile(env, activeUser, thirdMember.id)).resolves.toBeNull();
+		await expect(canReadIdentityObject(env, activeUser, "profile-photos/second.jpg")).resolves.toBe(true);
+		await expect(canReadIdentityObject(env, thirdMember, "profile-photos/second.jpg")).resolves.toBe(false);
+	});
+
+	it("updates a member's own directory profile and direct affiliations", async () => {
+		await seedUser();
+		await seedAffiliation();
+		await updateOwnProfile(env, activeUser, {
+			name: "Updated Member",
+			profileTitle: "Community organizer",
+			pronouns: "they/them",
+			bio: "Building durable community connections.",
+			location: "Concord, NH",
+			websiteUrl: "https://example.org",
+			profileVisibility: "hidden",
+			affiliationIds: ["aff-shared"],
+			avatarObjectKey: "profile-photos/user-active.jpg",
+		});
+
+		await expect(getVisibleMemberProfile(env, activeUser, activeUser.id)).resolves.toMatchObject({
+			name: "Updated Member",
+			profileTitle: "Community organizer",
+			profileVisibility: "hidden",
+			avatarObjectKey: "profile-photos/user-active.jpg",
+		});
+		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first<string>("affiliation_id")).resolves.toBe("aff-shared");
+	});
 });
 
 describe("partner event scraper imports", () => {

@@ -2,11 +2,13 @@ import { Form, Link } from "react-router";
 
 import type { Route } from "./+types/section";
 import { Icon } from "~/components/icon";
+import { IdentityAvatar } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { isContentSection, sectionDefinitions } from "~/lib/content";
 import { formatEventDateTime } from "~/lib/events";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 import { listPostOrganizations, listSectionPosts } from "~/models/posts.server";
+import { listVisibleMembers } from "~/models/profiles.server";
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
@@ -17,10 +19,11 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const tag = url.searchParams.get("tag")?.trim().toLowerCase() || null;
 	const organizationId = url.searchParams.get("organization")?.trim() || null;
 	const section = sectionDefinitions[params.section];
-	const [feed, visibleOrganizations, authoringOrganizations] = await Promise.all([
+	const [feed, visibleOrganizations, authoringOrganizations, visibleMembers] = await Promise.all([
 		listSectionPosts(context.cloudflare.env, user, { section: section.databaseValue, tag, organizationId, page }),
 		listVisibleOrganizations(context.cloudflare.env, user),
 		listPostOrganizations(context.cloudflare.env, user),
+		listVisibleMembers(context.cloudflare.env, user),
 	]);
 	return {
 		sectionKey: params.section,
@@ -30,6 +33,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		canCreate: user.siteRole === "site_admin" || authoringOrganizations.length > 0,
 		canModerateEvents: user.siteRole === "site_admin" || authoringOrganizations.some((organization) => organization.role === "org_admin"),
 		filters: { tag, organizationId },
+		visibleMemberIds: visibleMembers.map((member) => member.id),
 	};
 }
 
@@ -80,8 +84,8 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 							{post.eventImageUrl && <img alt="" className="event-card-image" loading="lazy" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
 							{post.eventStartsAt && <div className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(post.eventStartsAt)}</strong>{post.eventEndsAt && <span>to {formatEventDateTime(post.eventEndsAt)}</span>}{post.eventLocationName && <span>· {post.eventLocationName}</span>}</div>}
 							<div className="content-card-meta">
-								<span className="avatar">{(post.authorName || "Member").split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}</span>
-								<div><strong>{post.authorName || "Member"}</strong><p>{post.organizationName || "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div>
+								<IdentityAvatar name={post.authorName || "Member"} objectKey={post.authorAvatarObjectKey} />
+								<div>{loaderData.visibleMemberIds.includes(post.authorUserId) ? <Link className="identity-name-link" to={`/members/${post.authorUserId}`}><strong>{post.authorName || "Member"}</strong></Link> : <strong>{post.authorName || "Member"}</strong>}<p>{post.organizationName ? <Link to={`/organizations/${post.organizationSlug}`}>{post.organizationName}</Link> : "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div>
 								<span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>
 							</div>
 							<Link className="content-card-link" to={`/posts/${post.id}`}><h2>{post.title}</h2><p>{post.body}</p></Link>

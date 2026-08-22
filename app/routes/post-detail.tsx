@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Route } from "./+types/post-detail";
 import { Icon } from "~/components/icon";
 import { CommentThread } from "~/components/comment-thread";
+import { IdentityAvatar } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { routeSectionForDatabase, sectionDefinitions } from "~/lib/content";
@@ -11,6 +12,7 @@ import { formatEventDateTime } from "~/lib/events";
 import { archivePost, getPostById, PostMutationError } from "~/models/posts.server";
 import { archiveComment, CommentMutationError, createComment, listPostComments, updateComment } from "~/models/comments.server";
 import { InteractionMutationError, listMentionableMembers, togglePostSupport } from "~/models/interactions.server";
+import { listVisibleMembers } from "~/models/profiles.server";
 
 const actionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("archive-post"), postId: z.string().uuid() }),
@@ -24,11 +26,12 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	const post = await getPostById(context.cloudflare.env, user, params.postId);
 	if (!post) throw new Response("Post not found", { status: 404 });
-	const [comments, mentionableMembers] = await Promise.all([
+	const [comments, mentionableMembers, visibleMembers] = await Promise.all([
 		listPostComments(context.cloudflare.env, user, post.id),
 		post.status === "published" ? listMentionableMembers(context.cloudflare.env, user, post.id) : Promise.resolve([]),
+		listVisibleMembers(context.cloudflare.env, user),
 	]);
-	return { post, comments, mentionableMembers, section: routeSectionForDatabase(post.section) };
+	return { post, comments, mentionableMembers, visibleMemberIds: visibleMembers.map((member) => member.id), section: routeSectionForDatabase(post.section) };
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -87,7 +90,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 			{post.section === "event" && post.eventModerationStatus !== "approved" && <div className={`event-review-banner event-review-banner--${post.eventModerationStatus}`}><strong>{post.eventModerationStatus === "rejected" ? "Changes requested" : "Pending approval"}</strong><span>{post.eventModerationStatus === "rejected" ? post.eventRejectionReason || "Edit the event and resubmit it for review." : "This event is visible only to its author and moderators until approved."}</span></div>}
 			<article className="panel post-detail-card">
 				{post.eventImageUrl && <img alt="" className="event-detail-image" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
-				<header><div className="content-card-meta"><span className="avatar">{(post.authorName || "Member").split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}</span><div><strong>{post.authorName || "Member"}</strong><p>{post.organizationName || "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div></div><div className="post-detail-pills"><span className={`status-pill status-pill--${post.status}`}>{post.status}</span><span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span></div></header>
+				<header><div className="content-card-meta"><IdentityAvatar name={post.authorName || "Member"} objectKey={post.authorAvatarObjectKey} /><div>{loaderData.visibleMemberIds.includes(post.authorUserId) ? <Link className="identity-name-link" to={`/members/${post.authorUserId}`}><strong>{post.authorName || "Member"}</strong></Link> : <strong>{post.authorName || "Member"}</strong>}<p>{post.organizationName ? <Link to={`/organizations/${post.organizationSlug}`}>{post.organizationName}</Link> : "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div></div><div className="post-detail-pills"><span className={`status-pill status-pill--${post.status}`}>{post.status}</span><span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span></div></header>
 				<h1>{post.title}</h1>
 				{post.eventStartsAt && <section className="event-detail-facts" aria-label="Event details"><div><Icon name="calendar" size={19} /><span><strong>{formatEventDateTime(post.eventStartsAt)}</strong>{post.eventEndsAt && <small>Ends {formatEventDateTime(post.eventEndsAt)}</small>}</span></div>{post.eventLocationName && <div><Icon name="building" size={19} /><span><strong>{post.eventLocationName}</strong>{post.eventLocationUrl && <a href={post.eventLocationUrl} rel="noreferrer" target="_blank">View location</a>}</span></div>}<div className="event-detail-links">{post.eventRegistrationUrl && <a className="button button--primary button--compact" href={post.eventRegistrationUrl} rel="noreferrer" target="_blank">Register</a>}{post.eventSourceUrl && <a className="button button--secondary button--compact" href={post.eventSourceUrl} rel="noreferrer" target="_blank">Original event</a>}</div></section>}
 				<div className="post-body">{post.body.split(/\n{2,}/).map((paragraph, index) => <p key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>)}</div>
@@ -96,8 +99,8 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 			</article>
 			<section className="panel conversation-panel" id="conversation">
 				<div className="conversation-heading"><div><p className="eyebrow">Conversation</p><h2>{post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</h2></div><Icon name="message" size={22} /></div>
-				{post.status === "published" && <Form className="comment-compose-form" method="post"><input name="intent" type="hidden" value="create-comment" /><input name="postId" type="hidden" value={post.id} /><label htmlFor="new-comment">Add to the conversation</label><textarea id="new-comment" maxLength={4000} minLength={2} name="body" placeholder="Share context, a question, or a next step…" required rows={4} />{mentionableMembers.length > 0 && <label className="comment-mention-field">Notify a member<select name="mentionUserId"><option value="">No mention</option>{mentionableMembers.map((member) => <option key={member.id} value={member.id}>{member.name || "Member"}</option>)}</select></label>}<div><span>Keep comments constructive and relevant to this post.</span><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Post comment</button></div></Form>}
-				{comments.length > 0 ? <CommentThread comments={comments} interactive={post.status === "published"} mentionableMembers={mentionableMembers} postId={post.id} submitting={navigation.state === "submitting"} /> : <div className="conversation-empty"><strong>No comments yet</strong><p>Start the conversation with a question, resource, or next step.</p></div>}
+				{post.status === "published" && <Form className="comment-compose-form" method="post"><input name="intent" type="hidden" value="create-comment" /><input name="postId" type="hidden" value={post.id} /><label htmlFor="new-comment">Add to the conversation</label><textarea id="new-comment" maxLength={4000} minLength={2} name="body" placeholder="Share context, a question, or a next step…" required rows={4} />{mentionableMembers.length > 0 && <label className="comment-mention-field">Notify a member<select name="mentionUserId"><option value="">No mention</option>{mentionableMembers.map((member) => <option key={member.id} value={member.id}>{member.name || "Member"}{member.profileTitle ? ` · ${member.profileTitle}` : member.organizationNames ? ` · ${member.organizationNames}` : ""}</option>)}</select></label>}<div><span>Keep comments constructive and relevant to this post.</span><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Post comment</button></div></Form>}
+				{comments.length > 0 ? <CommentThread comments={comments} interactive={post.status === "published"} mentionableMembers={mentionableMembers} postId={post.id} submitting={navigation.state === "submitting"} visibleMemberIds={loaderData.visibleMemberIds} /> : <div className="conversation-empty"><strong>No comments yet</strong><p>Start the conversation with a question, resource, or next step.</p></div>}
 			</section>
 			{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}
 			{post.canEdit && post.status !== "archived" && <Form className="post-archive-form" method="post" onSubmit={(event) => { if (!window.confirm("Archive this post? It will leave the section feed.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-post" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Archive post</button></Form>}

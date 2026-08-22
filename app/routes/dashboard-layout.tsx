@@ -3,6 +3,7 @@ import { Form, Link, NavLink, Outlet, useLocation } from "react-router";
 
 import type { Route } from "./+types/dashboard-layout";
 import { Icon, type IconName } from "~/components/icon";
+import { IdentityAvatar } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { listManagedOrganizations } from "~/models/organizations.server";
 import { countUnreadNotifications } from "~/models/notifications.server";
@@ -72,17 +73,12 @@ function NavigationGroup({
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const [managedOrganizations, unreadCount] = await Promise.all([listManagedOrganizations(context.cloudflare.env, user), countUnreadNotifications(context.cloudflare.env, user)]);
-	return { user, managedOrganizations, unreadCount };
-}
-
-function getInitials(name: string | null, email: string) {
-	const source = name?.trim() || email.split("@")[0] || "Member";
-	return source
-		.split(/\s+/)
-		.slice(0, 2)
-		.map((part) => part[0]?.toUpperCase())
-		.join("");
+	const [managedOrganizations, unreadCount, identity] = await Promise.all([
+		listManagedOrganizations(context.cloudflare.env, user),
+		countUnreadNotifications(context.cloudflare.env, user),
+		context.cloudflare.env.DB.prepare("SELECT avatar_object_key AS avatarObjectKey FROM users WHERE id = ?1").bind(user.id).first<{ avatarObjectKey: string | null }>(),
+	]);
+	return { user: { ...user, avatarObjectKey: identity?.avatarObjectKey ?? null }, managedOrganizations, unreadCount };
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
@@ -171,13 +167,13 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 					</span>
 					<div>
 						<strong>Private workspace</strong>
-						<p>Affiliation-aware · Phase 3</p>
+						<p>Private · Affiliation-aware</p>
 					</div>
 				</div>
 
 				<div className="sidebar-account">
 					<NavLink className="profile-card" to="/profile" onClick={() => setMenuOpen(false)}>
-						<span className="avatar">{getInitials(user.name, user.email)}</span>
+						<IdentityAvatar className="avatar" name={user.name || user.email} objectKey={user.avatarObjectKey} />
 						<span className="profile-copy">
 							<strong>{user.name || user.email}</strong>
 							<small>{user.siteRole === "site_admin" ? "Site administrator" : "Member"}</small>

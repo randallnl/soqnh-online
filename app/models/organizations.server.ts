@@ -12,6 +12,7 @@ export type OrganizationRecord = {
 	description: string | null;
 	websiteUrl: string | null;
 	contactEmail: string | null;
+	logoObjectKey: string | null;
 	status: OrganizationStatus;
 	createdAt: string;
 	updatedAt: string;
@@ -38,6 +39,7 @@ export type VisibleOrganizationMember = {
 	organizationId: string;
 	userId: string;
 	name: string | null;
+	avatarObjectKey: string | null;
 	role: OrganizationRole;
 	createdAt: string;
 };
@@ -120,6 +122,7 @@ export async function listOrganizations(env: Env, includeInactive = false) {
 		        o.description,
 		        o.website_url AS websiteUrl,
 		        o.contact_email AS contactEmail,
+		        o.logo_object_key AS logoObjectKey,
 		        o.status,
 		        o.created_at AS createdAt,
 		        o.updated_at AS updatedAt,
@@ -158,6 +161,7 @@ export async function listVisibleOrganizations(
 		 SELECT o.id, o.name, o.slug, o.summary, o.description,
 		        o.website_url AS websiteUrl,
 		        o.contact_email AS contactEmail,
+		        o.logo_object_key AS logoObjectKey,
 		        o.status, o.created_at AS createdAt, o.updated_at AS updatedAt,
 		        (SELECT count(*) FROM organization_memberships WHERE organization_id = o.id) AS memberCount
 		 FROM organizations AS o
@@ -214,6 +218,7 @@ export async function getOrganizationBySlug(
 		        o.description,
 		        o.website_url AS websiteUrl,
 		        o.contact_email AS contactEmail,
+		        o.logo_object_key AS logoObjectKey,
 		        o.status,
 		        o.created_at AS createdAt,
 		        o.updated_at AS updatedAt,
@@ -269,7 +274,7 @@ export async function getOrganizationBySlug(
 	const memberResult = await env.DB.prepare(
 		`SELECT om.organization_id AS organizationId,
 		        u.id AS userId,
-		        u.name,
+		        u.name, u.avatar_object_key AS avatarObjectKey,
 		        om.role,
 		        om.created_at AS createdAt
 		 FROM organization_memberships AS om
@@ -541,6 +546,42 @@ export async function updateManagedOrganizationProfile(
 	if (results[0]?.meta.changes !== 1) {
 		throw new OrganizationMutationError("not-found");
 	}
+}
+
+export async function updateOrganizationLogo(
+	env: Env,
+	actor: AuthenticatedUser,
+	input: { organizationId: string; logoObjectKey: string | null },
+) {
+	await requireOrganizationManager(env, actor, input.organizationId);
+	const existing = await env.DB.prepare(
+		"SELECT logo_object_key AS logoObjectKey FROM organizations WHERE id = ?1",
+	).bind(input.organizationId).first<{ logoObjectKey: string | null }>();
+	if (!existing) throw new OrganizationMutationError("not-found");
+	const now = new Date().toISOString();
+	const results = await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE organizations
+			 SET logo_object_key = ?1, updated_at = ?2
+			 WHERE id = ?3 AND status != 'archived'`,
+		).bind(input.logoObjectKey, now, input.organizationId),
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'organization.logo_updated', 'organization', ?3, ?4, ?5
+			 WHERE EXISTS (SELECT 1 FROM organizations WHERE id = ?3 AND updated_at = ?5)`,
+		).bind(
+			crypto.randomUUID(),
+			actor.id,
+			input.organizationId,
+			JSON.stringify({ hasLogo: input.logoObjectKey !== null }),
+			now,
+		),
+	]);
+	if (results[0]?.meta.changes !== 1) {
+		throw new OrganizationMutationError("not-found");
+	}
+	return existing.logoObjectKey;
 }
 
 export async function setOrganizationMembership(
