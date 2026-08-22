@@ -28,6 +28,8 @@ export default [
 		route("organizations/:slug/manage", "routes/organization-manage.tsx"),
 		route("organizations/:slug", "routes/organization-detail.tsx"),
 		route("admin/affiliations", "routes/admin-affiliations.tsx"),
+		route("admin", "routes/admin.tsx"),
+		route("admin/audit", "routes/admin-audit.tsx"),
 		route("admin/organizations", "routes/admin-organizations.tsx"),
 		route("admin/scraper", "routes/admin-scraper.tsx"),
 		route("admin/invitations", "routes/admin-invitations.tsx"),

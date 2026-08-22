@@ -107,3 +107,5 @@ Post detail pages now support comments, one-level threaded replies, support reac
 Phase 6 is underway. The existing Partner Event Scraper can now load enabled organization sources and submit event batches through authenticated callback routes. Imports use stable identities plus likely-match checks, preserve approved events, enter the Phase 5 moderation queue, and leave a durable decision trail. Site administrators can configure sources, run the scraper manually, and inspect run/import history. See [docs/scraper.md](docs/scraper.md).
 
 Phase 7 adds the people layer: an affiliation-aware member directory, member profile pages, self-service profile editing, private R2-backed profile photos and organization logos, and linked identity across organizations, posts, comments, and mentions. See [docs/profiles.md](docs/profiles.md).
+
+Phase 8 adds the operations layer: a site-admin control center, live D1 metrics, pending-work indicators, scraper health, and a filterable audit-log viewer that links the existing management workspaces into one operating surface. See [docs/admin-operations.md](docs/admin-operations.md).

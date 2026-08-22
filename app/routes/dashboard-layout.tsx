@@ -29,11 +29,13 @@ const communityNavigation: NavigationItem[] = [
 ];
 
 const adminNavigation: NavigationItem[] = [
+	{ label: "Admin overview", to: "/admin", icon: "dashboard" },
 	{ label: "Event scraper", to: "/admin/scraper", icon: "sparkles" },
 	{ label: "Organization admin", to: "/admin/organizations", icon: "building" },
 	{ label: "Affiliations", to: "/admin/affiliations", icon: "people" },
 	{ label: "Member access", to: "/admin/members", icon: "people" },
 	{ label: "Invitations", to: "/admin/invitations", icon: "user" },
+	{ label: "Audit log", to: "/admin/audit", icon: "activity" },
 ];
 
 function NavigationGroup({

@@ -84,6 +84,10 @@ import {
 	updateOwnProfile,
 } from "../app/models/profiles.server";
 import {
+	getAdminOperationsData,
+	listAuditEvents,
+} from "../app/models/admin.server";
+import {
 	importScraperRecords,
 	listScraperPartners,
 	updateOrganizationScraperSettings,
@@ -303,6 +307,75 @@ describe("member profiles", () => {
 			avatarObjectKey: "profile-photos/user-active.jpg",
 		});
 		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first<string>("affiliation_id")).resolves.toBe("aff-shared");
+	});
+});
+
+describe("admin operations", () => {
+	it("summarizes pending work and recent system activity", async () => {
+		await Promise.all([seedUser(), seedSiteAdmin(), seedSecondMember()]);
+		await seedOrganization();
+		await seedAffiliation();
+		const now = new Date().toISOString();
+		const future = new Date(Date.now() + 86_400_000).toISOString();
+		await env.DB.batch([
+			env.DB.prepare(
+				`INSERT INTO invitations
+				 (id, email, invited_role, token_hash, invited_by_user_id, expires_at, created_at)
+				 VALUES ('invite-ops', 'pending@example.org', 'viewer', 'ops-token', ?1, ?2, ?3)`,
+			).bind(siteAdmin.id, future, now),
+			env.DB.prepare(
+				`INSERT INTO posts
+				 (id, organization_id, author_user_id, section, title, body, visibility, status, created_at, updated_at)
+				 VALUES ('00000000-0000-4000-8000-000000000099', 'org-one', ?1, 'event', 'Pending event', 'Review me', 'members', 'draft', ?2, ?2)`,
+			).bind(activeUser.id, now),
+			env.DB.prepare(
+				`INSERT INTO events (post_id, starts_at, moderation_status)
+				 VALUES ('00000000-0000-4000-8000-000000000099', ?1, 'pending')`,
+			).bind(future),
+			env.DB.prepare(
+				`INSERT INTO scraper_runs
+				 (id, trigger_type, status, failure_count, error_message, started_at, created_at, updated_at)
+				 VALUES ('run-ops', 'manual', 'failed', 1, 'Partner timeout', ?1, ?1, ?1)`,
+			).bind(now),
+			env.DB.prepare(
+				`INSERT INTO audit_log
+				 (id, actor_user_id, action, entity_type, entity_id, created_at)
+				 VALUES ('audit-ops', ?1, 'organization.updated', 'organization', 'org-one', ?2)`,
+			).bind(siteAdmin.id, now),
+		]);
+
+		const data = await getAdminOperationsData(env);
+		expect(data.metrics).toMatchObject({
+			activeMembers: 3,
+			activeOrganizations: 1,
+			organizationsWithoutAffiliations: 1,
+			affiliations: 1,
+			draftPosts: 1,
+			pendingEvents: 1,
+			activeInvitations: 1,
+		});
+		expect(data.latestScraperRun).toMatchObject({ status: "failed", errorMessage: "Partner timeout" });
+		expect(data.recentAuditEvents[0]).toMatchObject({ action: "organization.updated", entityLabel: "Community Center" });
+	});
+
+	it("filters the audit viewer by entity type", async () => {
+		await Promise.all([seedUser(), seedSiteAdmin()]);
+		const now = new Date().toISOString();
+		await env.DB.batch([
+			env.DB.prepare(
+				`INSERT INTO audit_log (id, actor_user_id, action, entity_type, entity_id, created_at)
+				 VALUES ('audit-user-ops', ?1, 'member.restored', 'user', ?2, ?3)`,
+			).bind(siteAdmin.id, activeUser.id, now),
+			env.DB.prepare(
+				`INSERT INTO audit_log (id, actor_user_id, action, entity_type, entity_id, created_at)
+				 VALUES ('audit-session-ops', ?1, 'auth.login_succeeded', 'session', 'session-1', ?2)`,
+			).bind(activeUser.id, now),
+		]);
+
+		const result = await listAuditEvents(env, { entityType: "user", page: 1 });
+		expect(result.total).toBe(1);
+		expect(result.events).toHaveLength(1);
+		expect(result.events[0]).toMatchObject({ entityType: "user", entityLabel: "Test Member" });
 	});
 });
 

@@ -3702,7 +3702,7 @@ p {
 
 .organization-logo img { object-fit: contain; background: #fff; }
 .identity-name-link { color: inherit; text-decoration: none; }
-.identity-name-link:hover { color: var(--purple-700); }
+.identity-name-link:hover { color: var(--plum-700); }
 .content-card-meta p a { color: inherit; text-decoration: none; }
 .content-card-meta p a:hover { text-decoration: underline; }
 
@@ -3789,4 +3789,159 @@ p {
 	.profile-photo-editor,
 	.organization-logo-editor { align-items: flex-start; flex-direction: column; }
 	.member-profile-card { grid-template-columns: 1fr; }
+}
+
+/* Phase 8: administration operations */
+.admin-operations-summary {
+	display: grid;
+	grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(190px, .7fr));
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+.admin-health-card {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	padding: 24px;
+}
+
+.admin-health-card strong { display: block; margin: 3px 0 4px; font-size: 1.15rem; }
+.admin-health-card p { margin: 0; color: var(--ink-500); line-height: 1.5; }
+.admin-health-card .eyebrow { color: var(--green-700); }
+.admin-health-indicator {
+	display: grid;
+	place-items: center;
+	width: 52px;
+	height: 52px;
+	flex: 0 0 auto;
+	border-radius: 16px;
+	background: var(--green-50);
+	color: var(--green-700);
+}
+.admin-health-indicator--attention { background: var(--gold-50); color: var(--gold-600); }
+
+.admin-content-card,
+.admin-scraper-health {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 22px;
+}
+.admin-content-card p,
+.admin-scraper-health p { margin: 0 0 7px; }
+.admin-content-card strong { font-size: 2rem; line-height: 1; }
+.admin-content-card span,
+.admin-scraper-health span,
+.admin-scraper-health small { margin-top: 7px; color: var(--ink-500); font-size: .75rem; line-height: 1.4; }
+.scraper-health { text-transform: capitalize; }
+.scraper-health--succeeded { color: var(--green-700); }
+.scraper-health--failed { color: var(--danger); }
+.scraper-health--running { color: var(--gold-600); }
+
+.admin-tool-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	margin-bottom: 20px;
+}
+.admin-tool-card {
+	position: relative;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 15px;
+	padding: 20px;
+	color: inherit;
+	text-decoration: none;
+}
+.admin-tool-card:hover { border-color: var(--green-600); transform: translateY(-1px); }
+.admin-tool-card h2 { margin: 0 0 4px; font-size: .95rem; }
+.admin-tool-card p { margin: 0; color: var(--ink-500); font-size: .75rem; line-height: 1.4; }
+.admin-tool-arrow { color: var(--ink-300); }
+.admin-tool-count {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	display: grid;
+	place-items: center;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--danger-bg);
+	color: var(--danger);
+	font-size: .67rem;
+	font-weight: 800;
+}
+.section-hero-icon--green { background: var(--green-50); color: var(--green-700); }
+.section-hero-icon--blue { background: var(--blue-50); color: var(--blue-700); }
+.section-hero-icon--gold { background: var(--gold-50); color: var(--gold-600); }
+.section-hero-icon--plum { background: var(--plum-50); color: var(--plum-700); }
+
+.admin-audit-preview { overflow: hidden; }
+.admin-audit-list article {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 13px;
+	padding: 14px 22px;
+	border-top: 1px solid var(--ink-100);
+}
+.admin-audit-list strong { font-size: .75rem; }
+.admin-audit-list p { margin: 3px 0 0; color: var(--ink-500); font-size: .68rem; text-transform: capitalize; }
+.admin-audit-list time { color: var(--ink-500); font-size: .65rem; }
+.admin-audit-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-600); box-shadow: 0 0 0 4px var(--green-50); }
+.admin-audit-empty { padding: 22px; }
+
+.audit-filter-panel {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 18px;
+	padding: 18px 22px;
+	margin-bottom: 18px;
+}
+.audit-filter-panel form { display: flex; align-items: end; gap: 10px; }
+.audit-filter-panel label { display: grid; gap: 6px; color: var(--ink-600); font-size: .68rem; font-weight: 700; }
+.audit-filter-panel select { min-width: 180px; }
+.audit-filter-panel form > a,
+.audit-filter-panel > p { margin: 0; color: var(--ink-500); font-size: .7rem; }
+.audit-log-panel { overflow: hidden; }
+.audit-log-header,
+.audit-log-table article {
+	display: grid;
+	grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 1fr) minmax(150px, .9fr) minmax(130px, .7fr);
+	gap: 16px;
+	align-items: center;
+	padding: 14px 22px;
+}
+.audit-log-header { background: var(--ink-50); color: var(--ink-500); font-size: .58rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.audit-log-table article { border-top: 1px solid var(--ink-100); }
+.audit-log-table article strong { display: block; font-size: .73rem; text-transform: capitalize; }
+.audit-log-table article p,
+.audit-log-table article small { display: block; overflow: hidden; margin: 3px 0 0; color: var(--ink-500); font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
+.audit-log-table article time { color: var(--ink-500); font-size: .65rem; }
+.audit-entity-pill { display: inline-flex; border-radius: 999px; padding: 3px 7px; background: var(--blue-50); color: var(--blue-700); font-size: .57rem; font-weight: 800; text-transform: uppercase; }
+
+@media (max-width: 1050px) {
+	.admin-operations-summary { grid-template-columns: 1fr 1fr; }
+	.admin-health-card { grid-column: 1 / -1; }
+	.admin-tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+	.admin-operations-summary,
+	.admin-tool-grid { grid-template-columns: 1fr; }
+	.admin-health-card { grid-column: auto; }
+	.audit-filter-panel { align-items: stretch; flex-direction: column; }
+	.audit-filter-panel form { align-items: stretch; flex-direction: column; }
+	.audit-log-header { display: none; }
+	.audit-log-table article { grid-template-columns: 1fr 1fr; }
+	.admin-audit-list article { grid-template-columns: auto minmax(0, 1fr); }
+	.admin-audit-list time { grid-column: 2; }
+}
+
+@media (max-width: 480px) {
+	.audit-log-table article { grid-template-columns: 1fr; }
 }
