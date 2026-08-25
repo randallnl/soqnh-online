@@ -1,9 +1,11 @@
 export const contentSections = ["legislation", "events", "projects", "updates"] as const;
+export const eventTimings = ["upcoming", "past", "all"] as const;
 export const postVisibilities = ["members", "organization"] as const;
 export const postStatuses = ["draft", "published"] as const;
 
 export type ContentSection = (typeof contentSections)[number];
 export type DatabaseSection = "legislation" | "event" | "project" | "update";
+export type EventTiming = (typeof eventTimings)[number];
 export type PostVisibility = (typeof postVisibilities)[number];
 export type EditablePostStatus = (typeof postStatuses)[number];
 
@@ -51,6 +53,10 @@ export const sectionDefinitions = {
 
 export function isContentSection(value: string | undefined): value is ContentSection {
 	return contentSections.includes(value as ContentSection);
+}
+
+export function isEventTiming(value: string | null): value is EventTiming {
+	return eventTimings.includes(value as EventTiming);
 }
 
 export function routeSectionForDatabase(value: DatabaseSection): ContentSection {

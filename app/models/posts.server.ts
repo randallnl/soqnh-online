@@ -2,10 +2,22 @@ import type { AuthenticatedUser } from "../lib/auth.server";
 import type {
 	DatabaseSection,
 	EditablePostStatus,
+	EventTiming,
 	PostVisibility,
 } from "../lib/content";
 
 const PAGE_SIZE = 10;
+
+function todayInNewHampshire() {
+	const parts = new Intl.DateTimeFormat("en-US", {
+		timeZone: "America/New_York",
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(new Date());
+	const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+	return `${value("year")}-${value("month")}-${value("day")}`;
+}
 
 export type PostOrganizationOption = {
 	id: string;
@@ -135,10 +147,13 @@ export async function listSectionPosts(
 		section: DatabaseSection;
 		tag: string | null;
 		organizationId: string | null;
+		eventTiming?: EventTiming;
 		page: number;
 	},
 ) {
 	const offset = (input.page - 1) * PAGE_SIZE;
+	const eventTiming = input.section === "event" ? input.eventTiming ?? "upcoming" : "all";
+	const today = todayInNewHampshire();
 	const viewerCte = `viewer_affiliations AS (
 		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
 		   UNION
@@ -160,6 +175,9 @@ export async function listSectionPosts(
 		   AND (?4 IS NULL OR EXISTS (
 		     SELECT 1 FROM post_tags WHERE post_id = p.id AND tag = ?4
 		   ))
+		   AND (p.section != 'event' OR ?6 = 'all'
+		     OR (?6 = 'upcoming' AND substr(e.starts_at, 1, 10) >= ?7)
+		     OR (?6 = 'past' AND substr(e.starts_at, 1, 10) < ?7))
 		   AND (
 		     ?5 = 1
 		     OR p.organization_id IS NULL
@@ -185,6 +203,8 @@ export async function listSectionPosts(
 		input.organizationId,
 		input.tag,
 		viewer.siteRole === "site_admin" ? 1 : 0,
+		eventTiming,
+		today,
 	] as const;
 	const [postResult, countResult, tagResult] = await Promise.all([
 		env.DB.prepare(
@@ -234,6 +254,9 @@ export async function listSectionPosts(
 			   AND (p.section != 'event' OR e.moderation_status = 'approved')
 			   AND (?3 IS NULL OR p.organization_id = ?3)
 			   AND (?4 IS NULL OR EXISTS (SELECT 1 FROM post_tags WHERE post_id = p.id AND tag = ?4))
+			   AND (p.section != 'event' OR ?6 = 'all'
+			     OR (?6 = 'upcoming' AND substr(e.starts_at, 1, 10) >= ?7)
+			     OR (?6 = 'past' AND substr(e.starts_at, 1, 10) < ?7))
 			   AND (
 			     ?5 = 1 OR p.organization_id IS NULL
 			     OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
@@ -245,7 +268,7 @@ export async function listSectionPosts(
 			   )
 			 ORDER BY CASE WHEN p.section = 'event' THEN e.starts_at END ASC,
 			          p.created_at DESC, p.id DESC
-			 LIMIT ?6 OFFSET ?7`,
+			 LIMIT ?8 OFFSET ?9`,
 		)
 			.bind(...bindings, PAGE_SIZE, offset)
 			.all<PostRow>(),

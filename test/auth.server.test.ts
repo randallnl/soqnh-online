@@ -1207,6 +1207,39 @@ describe("event moderation", () => {
 		}
 	});
 
+	it("defaults the event feed to upcoming events and applies the date filter", async () => {
+		await seedSiteAdmin();
+		const createApprovedEvent = async (title: string, startsAt: string) => {
+			const event = await createPost(env, siteAdmin, {
+				organizationId: null,
+				section: "event",
+				title,
+				body: `${title} details for the community calendar.`,
+				visibility: "members",
+				status: "published",
+				tags: [],
+				event: {
+					startsAt,
+					endsAt: null,
+					locationName: null,
+					locationUrl: null,
+					registrationUrl: null,
+					sourceUrl: null,
+					imageUrl: null,
+				},
+			});
+			await reviewEvent(env, siteAdmin, { postId: event.id, decision: "approve", reason: null });
+			return event.id;
+		};
+		const pastId = await createApprovedEvent("Past gathering", "2020-01-15T18:00");
+		const upcomingId = await createApprovedEvent("Upcoming gathering", "2099-01-15T18:00");
+		const baseInput = { section: "event" as const, tag: null, organizationId: null, page: 1 };
+
+		expect((await listSectionPosts(env, siteAdmin, baseInput)).posts.map((post) => post.id)).toEqual([upcomingId]);
+		expect((await listSectionPosts(env, siteAdmin, { ...baseInput, eventTiming: "past" })).posts.map((post) => post.id)).toEqual([pastId]);
+		expect((await listSectionPosts(env, siteAdmin, { ...baseInput, eventTiming: "all" })).posts.map((post) => post.id)).toEqual([pastId, upcomingId]);
+	});
+
 	it("keeps submitted events private until an organization admin approves them", async () => {
 		await seedSiteAdmin();
 		await seedUser();
