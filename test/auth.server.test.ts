@@ -48,6 +48,7 @@ import {
 	updateManagedOrganizationProfile,
 } from "../app/models/organizations.server";
 import { normalizeTags } from "../app/lib/content";
+import { eventReviewSchema } from "../app/lib/event-review";
 import {
 	archivePost,
 	createPost,
@@ -1181,6 +1182,30 @@ describe("event moderation", () => {
 		sourceUrl: "https://example.org/event",
 		imageUrl: "https://example.org/event.jpg",
 	};
+
+	it("accepts UUID and scraper event review forms", () => {
+		expect(eventReviewSchema.safeParse({
+			postId: "123e4567-e89b-42d3-a456-426614174000",
+			decision: "approve",
+		}).success).toBe(true);
+		expect(eventReviewSchema.safeParse({
+			postId: `scraped:${"a".repeat(64)}`,
+			decision: "reject",
+			reason: "Add a specific location.",
+		}).success).toBe(true);
+	});
+
+	it("requires a reason only when rejecting an event", () => {
+		const result = eventReviewSchema.safeParse({
+			postId: `scraped:${"b".repeat(64)}`,
+			decision: "reject",
+			reason: "   ",
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues[0]?.message).toBe("Explain what needs to change before rejecting the event");
+		}
+	});
 
 	it("keeps submitted events private until an organization admin approves them", async () => {
 		await seedSiteAdmin();

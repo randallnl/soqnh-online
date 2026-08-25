@@ -1,24 +1,12 @@
 import { Form, Link, redirect, useActionData, useNavigation } from "react-router";
-import { z } from "zod";
 
 import type { Route } from "./+types/event-moderation";
 import { Icon } from "~/components/icon";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
+import { eventReviewSchema } from "~/lib/event-review";
 import { formatEventDateTime } from "~/lib/events";
 import { requireSameOrigin } from "~/lib/http.server";
 import { canModerateEvents, EventMutationError, listPendingEvents, reviewEvent } from "~/models/events.server";
-
-const reviewSchema = z.object({
-	postId: z.string().uuid(),
-	decision: z.enum(["approve", "reject"]),
-	reason: z.preprocess(
-		(value) => typeof value === "string" && value.trim() ? value.trim() : null,
-		z.string().max(500).nullable(),
-	),
-}).refine((value) => value.decision !== "reject" || Boolean(value.reason), {
-	message: "Explain what needs to change before rejecting the event",
-	path: ["reason"],
-});
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
@@ -29,7 +17,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const result = reviewSchema.safeParse(Object.fromEntries(await request.formData()));
+	const result = eventReviewSchema.safeParse(Object.fromEntries(await request.formData()));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the review decision" };
 	try {
 		await reviewEvent(context.cloudflare.env, user, result.data);
