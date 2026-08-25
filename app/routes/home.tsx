@@ -3,7 +3,11 @@ import { Link } from "react-router";
 
 import { Icon, type IconName } from "~/components/icon";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
-import { getDashboardCounts } from "~/models/dashboard.server";
+import {
+	routeSectionForDatabase,
+	sectionDefinitions,
+} from "~/lib/content";
+import { getDashboardData } from "~/models/dashboard.server";
 
 export function meta(_args: Route.MetaArgs) {
 	return [
@@ -17,99 +21,9 @@ export function meta(_args: Route.MetaArgs) {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const counts = await getDashboardCounts(context.cloudflare.env.DB);
-	return {
-		user,
-		counts:
-			counts ??
-			{
-				activeMembers: 248,
-				organizations: 36,
-				pendingEvents: 7,
-				upcomingEvents: 12,
-			},
-		dataMode: counts ? ("live" as const) : ("preview" as const),
-	};
+	const dashboard = await getDashboardData(context.cloudflare.env, user);
+	return { user, dashboard, generatedAt: new Date().toISOString() };
 }
-
-const updates: Array<{
-	type: string;
-	title: string;
-	copy: string;
-	meta: string;
-	icon: IconName;
-	color: string;
-}> = [
-	{
-		type: "Legislation",
-		title: "Policy working group shared a new briefing",
-		copy: "A plain-language summary is ready for member review before the next coordination call.",
-		meta: "2 hours ago · 6 comments",
-		icon: "gavel",
-		color: "plum",
-	},
-	{
-		type: "Community event",
-		title: "Regional organizer meetup",
-		copy: "An evening for introductions, shared learning, and making the next round of connections.",
-		meta: "Tomorrow at 6:00 PM · Concord",
-		icon: "calendar",
-		color: "gold",
-	},
-	{
-		type: "Project",
-		title: "Resource guide refresh is underway",
-		copy: "Three partner organizations joined the working group and divided up the first review pass.",
-		meta: "Yesterday · 9 collaborators",
-		icon: "clipboard",
-		color: "green",
-	},
-];
-
-const upcomingEvents = [
-	{
-		month: "AUG",
-		day: "14",
-		title: "Community care training",
-		detail: "5:30 PM · Manchester",
-	},
-	{
-		month: "AUG",
-		day: "19",
-		title: "Policy roundtable",
-		detail: "12:00 PM · Virtual",
-	},
-	{
-		month: "AUG",
-		day: "24",
-		title: "Queer makers meetup",
-		detail: "3:00 PM · Keene",
-	},
-];
-
-const recentActivity = [
-	{
-		initials: "MK",
-		name: "Morgan K.",
-		copy: "commented on a policy briefing",
-		time: "18m",
-		color: "violet",
-	},
-	{
-		initials: "OR",
-		name: "Outright NH",
-		copy: "published a community update",
-		time: "1h",
-		color: "blue",
-	},
-	{
-		initials: "JL",
-		name: "Jordan L.",
-		copy: "joined the resource guide project",
-		time: "3h",
-		color: "rose",
-	},
-];
 
 const services: Array<{
 	label: string;
@@ -121,7 +35,103 @@ const services: Array<{
 	{ label: "Email sending", status: "Configured", icon: "message" },
 ];
 
+const feedColors = {
+	legislation: "plum",
+	event: "gold",
+	project: "green",
+	update: "blue",
+} as const;
+
+function parseStoredTimestamp(value: string) {
+	return new Date(
+		/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+			? `${value.replace(" ", "T")}Z`
+			: value,
+	);
+}
+
+function formatDashboardDate(value: string) {
+	return new Intl.DateTimeFormat("en-US", {
+		weekday: "long",
+		month: "long",
+		day: "numeric",
+		timeZone: "America/New_York",
+	}).format(new Date(value));
+}
+
+function formatPostDate(value: string) {
+	return new Intl.DateTimeFormat("en-US", {
+		month: "short",
+		day: "numeric",
+		timeZone: "America/New_York",
+	}).format(parseStoredTimestamp(value));
+}
+
+function formatRelativeTime(value: string, relativeTo: string) {
+	const elapsedMinutes = Math.max(
+		0,
+		Math.floor(
+			(new Date(relativeTo).getTime() - parseStoredTimestamp(value).getTime()) /
+				60_000,
+		),
+	);
+	if (elapsedMinutes < 1) return "now";
+	if (elapsedMinutes < 60) return `${elapsedMinutes}m`;
+	const hours = Math.floor(elapsedMinutes / 60);
+	if (hours < 24) return `${hours}h`;
+	const days = Math.floor(hours / 24);
+	return days < 7 ? `${days}d` : formatPostDate(value);
+}
+
+function getEventDateParts(value: string) {
+	const local = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+	const date = local
+		? new Date(
+				Date.UTC(
+					Number(local[1]),
+					Number(local[2]) - 1,
+					Number(local[3]),
+					Number(local[4]),
+					Number(local[5]),
+				),
+			)
+		: new Date(value);
+	const timeZone = local ? "UTC" : "America/New_York";
+	return {
+		month: new Intl.DateTimeFormat("en-US", {
+			month: "short",
+			timeZone,
+		}).format(date).toUpperCase(),
+		day: new Intl.DateTimeFormat("en-US", {
+			day: "numeric",
+			timeZone,
+		}).format(date),
+		time: new Intl.DateTimeFormat("en-US", {
+			hour: "numeric",
+			minute: "2-digit",
+			timeZone,
+		}).format(date),
+	};
+}
+
+function excerpt(value: string) {
+	const normalized = value.replace(/\s+/g, " ").trim();
+	return normalized.length > 150
+		? `${normalized.slice(0, 147).trimEnd()}…`
+		: normalized;
+}
+
+function initials(name: string | null) {
+	return (name || "Member")
+		.split(/\s+/)
+		.slice(0, 2)
+		.map((part) => part[0])
+		.join("")
+		.toUpperCase();
+}
+
 export default function Home({ loaderData }: Route.ComponentProps) {
+	const { dashboard } = loaderData;
 	const stats: Array<{
 		label: string;
 		value: number;
@@ -131,29 +141,29 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 	}> = [
 		{
 			label: "Active members",
-			value: loaderData.counts.activeMembers,
+			value: dashboard.counts.activeMembers,
 			note: "People in the network",
 			icon: "people",
 			color: "green",
 		},
 		{
 			label: "Organizations",
-			value: loaderData.counts.organizations,
+			value: dashboard.counts.organizations,
 			note: "Partners and coalitions",
 			icon: "building",
 			color: "blue",
 		},
 		{
 			label: "Upcoming events",
-			value: loaderData.counts.upcomingEvents,
-			note: "Across New Hampshire",
+			value: dashboard.counts.upcomingEvents,
+			note: "Visible to you",
 			icon: "calendar",
 			color: "gold",
 		},
 		{
 			label: "Pending review",
-			value: loaderData.counts.pendingEvents,
-			note: "Events need attention",
+			value: dashboard.counts.pendingEvents,
+			note: "Events you can moderate",
 			icon: "clipboard",
 			color: "plum",
 		},
@@ -164,14 +174,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			<section className="page-heading dashboard-heading">
 				<div>
 					<div className="heading-kicker">
-						<p className="eyebrow">Monday, August 10</p>
-						<span className={`data-mode data-mode--${loaderData.dataMode}`}>
+						<p className="eyebrow">{formatDashboardDate(loaderData.generatedAt)}</p>
+						<span className="data-mode data-mode--live">
 							<span />
-							{loaderData.dataMode === "live" ? "Live D1 data" : "Preview data"}
+							Live network data
 						</span>
 					</div>
-					<h1>Good afternoon, {loaderData.user.name?.split(/\s+/)[0] || "friend"}.</h1>
-					<p>Here’s what’s happening across the ecosystem today.</p>
+					<h1>Welcome back, {loaderData.user.name?.split(/\s+/)[0] || "friend"}.</h1>
+					<p>Here’s what’s happening across the ecosystem.</p>
 				</div>
 				<Link className="button button--secondary heading-action" to="/events">
 					<Icon name="calendar" size={17} />
@@ -200,28 +210,42 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						<div className="panel-heading">
 							<div>
 								<p className="eyebrow">Community pulse</p>
-								<h2>This week in the ecosystem</h2>
+								<h2>Latest across the ecosystem</h2>
 							</div>
 							<Link to="/updates">See all updates</Link>
 						</div>
-						<div className="feed-list">
-							{updates.map((update) => (
-								<article className="feed-item" key={update.title}>
-									<span className={`feed-icon feed-icon--${update.color}`}>
-										<Icon name={update.icon} size={20} />
-									</span>
-									<div>
-										<p className="feed-type">{update.type}</p>
-										<h3>{update.title}</h3>
-										<p>{update.copy}</p>
-										<small>{update.meta}</small>
-									</div>
-									<button aria-label={`Open ${update.title}`} className="icon-button subtle-button" type="button">
-										<Icon name="chevron-right" size={18} />
-									</button>
-								</article>
-							))}
-						</div>
+						{dashboard.recentPosts.length === 0 ? (
+							<div className="empty-state empty-state--compact dashboard-empty-state">
+								<Icon name="message" size={25} />
+								<strong>No published activity yet</strong>
+								<p>New posts visible to you will appear here.</p>
+							</div>
+						) : (
+							<div className="feed-list">
+								{dashboard.recentPosts.map((post) => {
+									const routeSection = routeSectionForDatabase(post.section);
+									const section = sectionDefinitions[routeSection];
+									return (
+										<article className="feed-item" key={post.id}>
+											<span className={`feed-icon feed-icon--${feedColors[post.section]}`}>
+												<Icon name={section.icon} size={20} />
+											</span>
+											<div>
+												<p className="feed-type">{section.title}</p>
+												<h3><Link to={`/posts/${post.id}`}>{post.title}</Link></h3>
+												<p>{excerpt(post.body)}</p>
+												<small>
+													{post.organizationName || "Ecosystem-wide"} · {formatPostDate(post.createdAt)} · {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}
+												</small>
+											</div>
+											<Link aria-label={`Open ${post.title}`} className="icon-button subtle-button" to={`/posts/${post.id}`}>
+												<Icon name="chevron-right" size={18} />
+											</Link>
+										</article>
+									);
+								})}
+							</div>
+						)}
 					</section>
 
 					<section className="panel service-panel">
@@ -250,20 +274,30 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<h2>Upcoming events</h2>
 							<Link to="/events">View all</Link>
 						</div>
-						<div className="event-list">
-							{upcomingEvents.map((event) => (
-								<article className="event-row" key={event.title}>
-									<time>
-										<span>{event.month}</span>
-										<strong>{event.day}</strong>
-									</time>
-									<div>
-										<h3>{event.title}</h3>
-										<p>{event.detail}</p>
-									</div>
-								</article>
-							))}
-						</div>
+						{dashboard.upcomingEvents.length === 0 ? (
+							<div className="empty-state empty-state--compact dashboard-empty-state">
+								<Icon name="calendar" size={24} />
+								<strong>No upcoming events</strong>
+							</div>
+						) : (
+							<div className="event-list">
+								{dashboard.upcomingEvents.map((event) => {
+									const date = getEventDateParts(event.startsAt);
+									return (
+										<article className="event-row" key={event.postId}>
+											<time dateTime={event.startsAt}>
+												<span>{date.month}</span>
+												<strong>{date.day}</strong>
+											</time>
+											<div>
+												<h3><Link to={`/posts/${event.postId}`}>{event.title}</Link></h3>
+												<p>{date.time}{event.locationName ? ` · ${event.locationName}` : ""}</p>
+											</div>
+										</article>
+									);
+								})}
+							</div>
+						)}
 					</section>
 
 					<section className="panel compact-panel">
@@ -271,15 +305,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<h2>Recent activity</h2>
 							<Link to="/notifications">See all</Link>
 						</div>
-						<div className="activity-list">
-							{recentActivity.map((item) => (
-								<article className="activity-row" key={`${item.name}-${item.time}`}>
-									<span className={`mini-avatar mini-avatar--${item.color}`}>{item.initials}</span>
-									<p><strong>{item.name}</strong> {item.copy}</p>
-									<time>{item.time}</time>
-								</article>
-							))}
-						</div>
+						{dashboard.recentActivity.length === 0 ? (
+							<div className="empty-state empty-state--compact dashboard-empty-state">
+								<Icon name="activity" size={24} />
+								<strong>No recent comments</strong>
+							</div>
+						) : (
+							<div className="activity-list">
+								{dashboard.recentActivity.map((item, index) => (
+									<article className="activity-row" key={item.commentId}>
+										<span className={`mini-avatar mini-avatar--${["violet", "blue", "rose"][index % 3]}`}>{initials(item.authorName)}</span>
+										<p><strong>{item.authorName || "Member"}</strong> commented on <Link to={`/posts/${item.postId}#comment-${item.commentId}`}>{item.postTitle}</Link></p>
+										<time dateTime={item.createdAt}>{formatRelativeTime(item.createdAt, loaderData.generatedAt)}</time>
+									</article>
+								))}
+							</div>
+						)}
 					</section>
 				</aside>
 			</div>

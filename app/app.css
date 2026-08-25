@@ -826,6 +826,14 @@ p {
 	line-height: 1.35;
 }
 
+.feed-item h3 a:hover,
+.event-row h3 a:hover,
+.activity-row a:hover {
+	color: var(--green-700);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
 .feed-item h3 + p {
 	margin-top: 5px;
 	color: var(--ink-600);
@@ -1019,6 +1027,11 @@ p {
 .activity-row time {
 	color: var(--ink-500);
 	font-size: 0.58rem;
+}
+
+.dashboard-empty-state {
+	margin: 0 10px 10px;
+	border-top: 1px solid var(--ink-100);
 }
 
 .section-page {

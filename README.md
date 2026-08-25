@@ -10,7 +10,7 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - Drizzle schema aligned to the existing 20-table production database
 - Production baseline migration for fresh local databases and future schema changes
 - Permission primitives for site and organization roles
-- D1-backed dashboard counts with a safe preview fallback
+- Privacy-aware D1 dashboard counts, recent posts, events, and comment activity
 - `/health` resource route that checks D1 and reports binding readiness
 - Same-origin protection and Zod validation on the sign-in action
 - Hashed, single-use magic links delivered through Cloudflare Email Service
@@ -100,12 +100,14 @@ IDs are application-generated UUIDs. Timestamps are stored as ISO-compatible tex
 
 ## Current build slice
 
-Phase 4 is complete. The four workspaces now have D1-backed feeds, affiliation and organization visibility, post creation and editing, draft and archive states, tags, filters, pagination, conversations, reactions, mentions, notifications, detail pages, and content audit records. See [docs/content.md](docs/content.md) for the content access model. Phase 3 organization and affiliation controls are documented in [docs/affiliations.md](docs/affiliations.md).
+Phases 1 through 8 are complete. The four workspaces have D1-backed feeds, affiliation and organization visibility, post creation and editing, draft and archive states, tags, filters, pagination, conversations, reactions, mentions, notifications, detail pages, and content audit records. See [docs/content.md](docs/content.md) for the content access model. Organization and affiliation controls are documented in [docs/affiliations.md](docs/affiliations.md).
 
 Post detail pages now support comments, one-level threaded replies, support reactions, visibility-safe member mentions, author editing, soft deletion, organization moderation, and interaction audit events. Members have an in-app notification inbox with unread badges and individual or bulk read controls.
 
-Phase 6 is underway. The existing Partner Event Scraper can now load enabled organization sources and submit event batches through authenticated callback routes. Imports use stable identities plus likely-match checks, preserve approved events, enter the Phase 5 moderation queue, and leave a durable decision trail. Site administrators can configure sources, run the scraper manually, and inspect run/import history. See [docs/scraper.md](docs/scraper.md).
+The existing Partner Event Scraper can load enabled organization sources and submit event batches through authenticated callback routes. Imports use stable identities plus likely-match checks, preserve approved events, enter the moderation queue, and leave a durable decision trail. Site administrators can configure sources, run the scraper manually, and inspect run/import history. See [docs/scraper.md](docs/scraper.md).
 
 Phase 7 adds the people layer: an affiliation-aware member directory, member profile pages, self-service profile editing, private R2-backed profile photos and organization logos, and linked identity across organizations, posts, comments, and mentions. See [docs/profiles.md](docs/profiles.md).
 
 Phase 8 adds the operations layer: a site-admin control center, live D1 metrics, pending-work indicators, scraper health, and a filterable audit-log viewer that links the existing management workspaces into one operating surface. See [docs/admin-operations.md](docs/admin-operations.md).
+
+Phase 9 replaces the last dashboard fixtures with visibility-scoped production data and adds the final deployment, domain, smoke-test, and rollback runbook. The custom-domain change remains a separate, explicit operation after every readiness gate passes. See [docs/production-readiness.md](docs/production-readiness.md).

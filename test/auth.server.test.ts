@@ -92,6 +92,7 @@ import {
 	listScraperPartners,
 	updateOrganizationScraperSettings,
 } from "../app/models/scraper.server";
+import { getDashboardData } from "../app/models/dashboard.server";
 
 declare global {
 	namespace Cloudflare {
@@ -1237,6 +1238,113 @@ describe("event moderation", () => {
 		expect((await listPendingEvents(env, siteAdmin)).map((item) => item.postId)).toContain(event.id);
 		expect(await canModerateEvents(env, activeUser)).toBe(false);
 		expect(await canModerateEvents(env, siteAdmin)).toBe(true);
+	});
+});
+
+describe("dashboard data", () => {
+	it("returns live activity without exposing organization-only content", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "contributor",
+		});
+
+		const networkPost = await createPost(env, siteAdmin, {
+			organizationId: null,
+			section: "update",
+			title: "Network-wide update",
+			body: "A published update for every active member.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+		});
+		const privatePost = await createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "project",
+			title: "Organization planning",
+			body: "Private coordination for direct organization members.",
+			visibility: "organization",
+			status: "published",
+			tags: [],
+		});
+		await createComment(env, activeUser, {
+			postId: networkPost.id,
+			body: "Thanks for sharing this update.",
+			parentCommentId: null,
+		});
+
+		const memberDashboard = await getDashboardData(env, activeUser);
+		expect(memberDashboard.recentPosts.map((post) => post.id)).toEqual(
+			expect.arrayContaining([networkPost.id, privatePost.id]),
+		);
+		expect(memberDashboard.recentActivity).toEqual([
+			expect.objectContaining({ postId: networkPost.id }),
+		]);
+
+		const unrelatedDashboard = await getDashboardData(env, thirdMember);
+		expect(unrelatedDashboard.recentPosts.map((post) => post.id)).toContain(
+			networkPost.id,
+		);
+		expect(unrelatedDashboard.recentPosts.map((post) => post.id)).not.toContain(
+			privatePost.id,
+		);
+	});
+
+	it("scopes moderation counts and lists only approved future events", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "contributor",
+		});
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: secondMember.id,
+			role: "org_admin",
+		});
+		const nextYear = new Date().getUTCFullYear() + 1;
+		const event = await createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "event",
+			title: "Future community gathering",
+			body: "A future gathering that requires moderation.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			event: {
+				startsAt: `${nextYear}-06-15T18:00`,
+				endsAt: null,
+				locationName: "Concord",
+				locationUrl: null,
+				registrationUrl: null,
+				sourceUrl: null,
+				imageUrl: null,
+			},
+		});
+
+		expect((await getDashboardData(env, activeUser)).counts.pendingEvents).toBe(0);
+		expect((await getDashboardData(env, secondMember)).counts.pendingEvents).toBe(1);
+		expect((await getDashboardData(env, siteAdmin)).counts.pendingEvents).toBe(1);
+
+		await reviewEvent(env, secondMember, {
+			postId: event.id,
+			decision: "approve",
+			reason: null,
+		});
+		const dashboard = await getDashboardData(env, activeUser);
+		expect(dashboard.counts.pendingEvents).toBe(0);
+		expect(dashboard.counts.upcomingEvents).toBe(1);
+		expect(dashboard.upcomingEvents).toEqual([
+			expect.objectContaining({ postId: event.id, locationName: "Concord" }),
+		]);
 	});
 });
 
