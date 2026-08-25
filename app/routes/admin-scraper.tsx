@@ -82,7 +82,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			if (!context.cloudflare.env.SCRAPER_ADMIN_TOKEN) {
 				throw new Error("The SCRAPER_ADMIN_TOKEN production secret is not configured.");
 			}
-			const response = await fetch(context.cloudflare.env.SCRAPER_RUN_URL, {
+			const response = await context.cloudflare.env.EVENT_SCRAPER.fetch(
+				context.cloudflare.env.SCRAPER_RUN_URL,
+				{
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${context.cloudflare.env.SCRAPER_ADMIN_TOKEN}`,
@@ -90,7 +92,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					"X-Scraper-Run-Id": runId,
 				},
 				signal: AbortSignal.timeout(120_000),
-			});
+				},
+			);
 			const text = await readSmallResponse(response);
 			if (!response.ok) throw new Error(`Scraper returned ${response.status}${text ? `: ${text.slice(0, 500)}` : ""}`);
 			const result = JSON.parse(text) as unknown;

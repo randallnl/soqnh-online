@@ -61,7 +61,8 @@ npm run deploy             # Deploy the soqnh-online production Worker (requires
 | `DB` | `nh-solidarity-ecosystem` | Relational app data in D1 |
 | `ASSETS` | `nh-ecosystem-assets` | Logos, profile photos, event images, and uploads in R2 |
 | `EMAIL` | `no-reply@nhsolidarityecosystem.com` | Magic links and notifications |
-| `SCRAPER_RUN_URL` | Partner event scraper Worker URL | Existing scraper integration point |
+| `EVENT_SCRAPER` | `parter-event-scraper` Worker | Private service binding for manual scraper runs |
+| `SCRAPER_RUN_URL` | Partner event scraper Worker URL | Canonical request URL passed through the service binding |
 | `SCRAPER_API_TOKEN` | Worker secret | Shared bearer token for scraper callbacks |
 | `SCRAPER_ADMIN_TOKEN` | Worker secret | Bearer token used to start manual scraper runs |
 

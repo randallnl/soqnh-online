@@ -33,7 +33,8 @@ export async function loader({ context }: Route.LoaderArgs) {
 				email: context.cloudflare.env.EMAIL
 					? "configured"
 					: "unavailable",
-				scraper: context.cloudflare.env.SCRAPER_RUN_URL &&
+				scraper: context.cloudflare.env.EVENT_SCRAPER &&
+					context.cloudflare.env.SCRAPER_RUN_URL &&
 					context.cloudflare.env.SCRAPER_API_TOKEN &&
 					context.cloudflare.env.SCRAPER_ADMIN_TOKEN
 					? "configured"

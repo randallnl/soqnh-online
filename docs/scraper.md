@@ -9,7 +9,7 @@ The scraper uses a shared `SCRAPER_API_TOKEN` bearer secret for both callback ro
 - `GET /api/scraper/organizations` returns active, enabled organizations as `{ name, url, parser }` records.
 - `POST /api/scraper/events` accepts `{ records: [...] }`, with at most 500 records and a one-megabyte request body.
 
-Manual runs are started from `/admin/scraper`. The app sends `SCRAPER_ADMIN_TOKEN` to `SCRAPER_RUN_URL`, bounds the response to 64 KiB, records success metrics, and records a failure message when the scraper cannot complete. The current manual trigger waits for the existing Worker response; a future move to Cloudflare Workflows or Queues should preserve this callback contract.
+Manual runs are started from `/admin/scraper`. The app calls the `parter-event-scraper` Worker through the `EVENT_SCRAPER` service binding, sends `SCRAPER_ADMIN_TOKEN`, bounds the response to 64 KiB, records success metrics, and records a failure message when the scraper cannot complete. `SCRAPER_RUN_URL` supplies the canonical request URL, but does not route over the public Internet. The current manual trigger waits for the existing Worker response; a future move to Cloudflare Workflows or Queues should preserve this callback contract.
 
 Both tokens are secrets. `.dev.vars.example` documents local names, while `.dev.vars` and production secret values remain outside Git.
 
@@ -45,7 +45,8 @@ Activation is an explicit release operation:
 1. Apply the Phase 6 D1 migration before deploying code that writes run/import rows.
 2. Set matching `SCRAPER_API_TOKEN` secrets on both Workers.
 3. Set `SCRAPER_ADMIN_TOKEN` on `soqnh-online` to the Partner Event Scraper manual-run secret.
-4. Change the Partner Event Scraper `ECOSYSTEM_BASE_URL` to the production `soqnh-online` origin and deploy it.
-5. Deploy `soqnh-online`, verify `/health`, run one manual scrape, and review the import decisions and moderation queue.
+4. Bind `EVENT_SCRAPER` on `soqnh-online` to the `parter-event-scraper` Worker.
+5. Change the Partner Event Scraper `ECOSYSTEM_BASE_URL` to the production `soqnh-online` origin and deploy it.
+6. Deploy `soqnh-online`, verify `/health`, run one manual scrape, and review the import decisions and moderation queue.
 
 The existing scraper cron remains responsible for scheduled runs after its callback origin is changed.

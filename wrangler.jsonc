@@ -20,6 +20,12 @@
 	"secrets": {
 		"required": ["SCRAPER_API_TOKEN", "SCRAPER_ADMIN_TOKEN"]
 	},
+	"services": [
+		{
+			"binding": "EVENT_SCRAPER",
+			"service": "parter-event-scraper"
+		}
+	],
 	"d1_databases": [
 		{
 			"binding": "DB",
