@@ -23,6 +23,8 @@ New events are always stored as private draft posts with `pending` event moderat
 
 Authors can always open their own pending or rejected event by direct URL. The rejection reason is shown only within that visibility boundary. Published-feed visibility continues to use the same organization and affiliation predicates as other content.
 
+Event authors, organization administrators for the event's organization, and site administrators can remove an event from its detail page. Removal archives the event so it immediately leaves the event feed and moderation queue while preserving its record and an `event.removed` audit entry.
+
 ## Notifications and auditing
 
 Approval and rejection notify the event author in the existing inbox unless the reviewer is also the author. Notifications retain the normal visibility filtering, including author access to rejected drafts.

@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-const postIdSchema = z.string().trim().min(1).max(100).refine(
+export const eventPostIdSchema = z.string().trim().min(1).max(100).refine(
 	(value) => z.string().uuid().safeParse(value).success || /^scraped:[a-f0-9]{64}$/.test(value),
 	{ message: "That event is no longer available" },
 );
 
 export const eventReviewSchema = z.object({
-	postId: postIdSchema,
+	postId: eventPostIdSchema,
 	decision: z.enum(["approve", "reject"]),
 	reason: z.preprocess(
 		(value) => typeof value === "string" && value.trim() ? value.trim() : null,

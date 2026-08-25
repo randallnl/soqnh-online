@@ -76,6 +76,7 @@ import {
 import {
 	canModerateEvents,
 	listPendingEvents,
+	removeEvent,
 	reviewEvent,
 } from "../app/models/events.server";
 import {
@@ -1296,6 +1297,45 @@ describe("event moderation", () => {
 		expect((await listPendingEvents(env, siteAdmin)).map((item) => item.postId)).toContain(event.id);
 		expect(await canModerateEvents(env, activeUser)).toBe(false);
 		expect(await canModerateEvents(env, siteAdmin)).toBe(true);
+	});
+
+	it("lets event authors and administrators remove events", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "org_admin" });
+
+		const createOwnedEvent = (title: string) => createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "event",
+			title,
+			body: `${title} details for the community calendar.`,
+			visibility: "members",
+			status: "published",
+			tags: [],
+			event: eventDetails,
+		});
+
+		const authorEvent = await createOwnedEvent("Author-managed event");
+		await expect(removeEvent(env, thirdMember, authorEvent.id)).rejects.toMatchObject({ reason: "forbidden" });
+		await removeEvent(env, activeUser, authorEvent.id);
+		await expect(getPostById(env, activeUser, authorEvent.id)).resolves.toMatchObject({ status: "archived" });
+
+		const organizationEvent = await createOwnedEvent("Organization-managed event");
+		await removeEvent(env, secondMember, organizationEvent.id);
+		await expect(getPostById(env, secondMember, organizationEvent.id)).resolves.toMatchObject({ status: "archived" });
+
+		const administratorEvent = await createOwnedEvent("Administrator-managed event");
+		await removeEvent(env, siteAdmin, administratorEvent.id);
+		await expect(getPostById(env, siteAdmin, administratorEvent.id)).resolves.toMatchObject({ status: "archived" });
+
+		expect(await listPendingEvents(env, siteAdmin)).toEqual([]);
+		expect(await env.DB.prepare(
+			"SELECT count(*) AS count FROM audit_log WHERE action = 'event.removed'",
+		).first<number>("count")).toBe(3);
 	});
 });
 

@@ -118,3 +118,39 @@ export async function reviewEvent(
 	if (results[0]?.meta.changes !== 1) throw new EventMutationError("already-reviewed");
 	return moderationStatus;
 }
+
+export async function removeEvent(env: Env, actor: AuthenticatedUser, postId: string) {
+	const event = await env.DB.prepare(
+		`SELECT p.status,
+		        CASE WHEN ?3 = 1 OR p.author_user_id = ?1 OR EXISTS (
+		          SELECT 1 FROM organization_memberships
+		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
+		        ) THEN 1 ELSE 0 END AS canRemove
+		 FROM posts AS p
+		 JOIN events AS e ON e.post_id = p.id
+		 WHERE p.id = ?2 AND p.section = 'event'`,
+	)
+		.bind(actor.id, postId, actor.siteRole === "site_admin" ? 1 : 0)
+		.first<{ status: string; canRemove: number }>();
+	if (!event || event.status === "archived") throw new EventMutationError("not-found");
+	if (event.canRemove !== 1) throw new EventMutationError("forbidden");
+
+	const now = new Date().toISOString();
+	const results = await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE posts
+			 SET status = 'archived', archived_at = ?1, updated_at = ?1
+			 WHERE id = ?2 AND section = 'event' AND status != 'archived'`,
+		).bind(now, postId),
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'event.removed', 'event', ?3, ?4, ?5
+			 WHERE EXISTS (
+			   SELECT 1 FROM posts
+			   WHERE id = ?3 AND section = 'event' AND status = 'archived' AND archived_at = ?5
+			 )`,
+		).bind(crypto.randomUUID(), actor.id, postId, JSON.stringify({ previousStatus: event.status }), now),
+	]);
+	if (results[0]?.meta.changes !== 1) throw new EventMutationError("not-found");
+}

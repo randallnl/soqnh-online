@@ -8,14 +8,17 @@ import { IdentityAvatar } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { routeSectionForDatabase, sectionDefinitions } from "~/lib/content";
+import { eventPostIdSchema } from "~/lib/event-review";
 import { formatEventDateTime } from "~/lib/events";
 import { archivePost, getPostById, PostMutationError } from "~/models/posts.server";
+import { EventMutationError, removeEvent } from "~/models/events.server";
 import { archiveComment, CommentMutationError, createComment, listPostComments, updateComment } from "~/models/comments.server";
 import { InteractionMutationError, listMentionableMembers, togglePostSupport } from "~/models/interactions.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 
 const actionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("archive-post"), postId: z.string().uuid() }),
+	z.object({ intent: z.literal("remove-event"), postId: eventPostIdSchema }),
 	z.object({ intent: z.literal("toggle-support"), postId: z.string().uuid() }),
 	z.object({ intent: z.literal("create-comment"), postId: z.string().uuid(), parentCommentId: z.preprocess((value) => typeof value === "string" && value ? value : null, z.string().uuid().nullable()), mentionUserId: z.preprocess((value) => typeof value === "string" && value ? value : null, z.string().uuid().nullable()), body: z.string().trim().min(2).max(4000) }),
 	z.object({ intent: z.literal("update-comment"), postId: z.string().uuid(), commentId: z.string().uuid(), body: z.string().trim().min(2).max(4000) }),
@@ -31,7 +34,14 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		post.status === "published" ? listMentionableMembers(context.cloudflare.env, user, post.id) : Promise.resolve([]),
 		listVisibleMembers(context.cloudflare.env, user),
 	]);
-	return { post, comments, mentionableMembers, visibleMemberIds: visibleMembers.map((member) => member.id), section: routeSectionForDatabase(post.section) };
+	return {
+		post,
+		comments,
+		mentionableMembers,
+		visibleMemberIds: visibleMembers.map((member) => member.id),
+		section: routeSectionForDatabase(post.section),
+		canRemoveEvent: post.section === "event" && (post.authorUserId === user.id || post.canModerateEvent),
+	};
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -41,6 +51,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	if (!result.success) return { ok: false as const, error: "That request is invalid." };
 	if (result.data.postId !== params.postId) return { ok: false as const, error: "That request is invalid." };
 	try {
+		if (result.data.intent === "remove-event") {
+			await removeEvent(context.cloudflare.env, user, result.data.postId);
+			throw redirect("/events");
+		}
 		if (result.data.intent === "archive-post") {
 			await archivePost(context.cloudflare.env, user, result.data.postId);
 			const post = await getPostById(context.cloudflare.env, user, result.data.postId);
@@ -62,6 +76,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw redirect(`/posts/${result.data.postId}#conversation`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
+		if (error instanceof EventMutationError) return { ok: false as const, error: error.reason === "forbidden" ? "You cannot remove this event." : "That event is no longer available." };
 		if (error instanceof PostMutationError) return { ok: false as const, error: error.reason === "forbidden" ? "You cannot archive this post." : "That post is no longer available." };
 		if (error instanceof CommentMutationError) {
 			const messages = { "not-found": "That comment is no longer available.", forbidden: "You cannot change that comment.", "post-unavailable": "Comments are only available on published posts you can view.", "invalid-parent": "That conversation can no longer accept replies." };
@@ -86,7 +101,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 	const navigation = useNavigation();
 	return (
 		<div className="post-detail-page">
-			<div className="organization-detail-actions"><Link className="back-link" to={`/${section}`}>← {sectionDefinitions[section].title}</Link><div>{post.canModerateEvent && <Link className="button button--secondary button--compact" to="/events/moderation"><Icon name="settings" size={16} /> Moderation queue</Link>}{post.canEdit && <Link className="button button--secondary button--compact" to={`/posts/${post.id}/edit`}><Icon name="settings" size={16} /> Edit {post.section === "event" ? "event" : "post"}</Link>}</div></div>
+			<div className="organization-detail-actions"><Link className="back-link" to={`/${section}`}>← {sectionDefinitions[section].title}</Link><div>{post.canModerateEvent && <Link className="button button--secondary button--compact" to="/events/moderation"><Icon name="settings" size={16} /> Moderation queue</Link>}{post.canEdit && <Link className="button button--secondary button--compact" to={`/posts/${post.id}/edit`}><Icon name="settings" size={16} /> Edit {post.section === "event" ? "event" : "post"}</Link>}{loaderData.canRemoveEvent && post.status !== "archived" && <Form method="post" onSubmit={(event) => { if (!window.confirm("Remove this event? It will leave the event feed and moderation queue.")) event.preventDefault(); }}><input name="intent" type="hidden" value="remove-event" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Remove event</button></Form>}</div></div>
 			{post.section === "event" && post.eventModerationStatus !== "approved" && <div className={`event-review-banner event-review-banner--${post.eventModerationStatus}`}><strong>{post.eventModerationStatus === "rejected" ? "Changes requested" : "Pending approval"}</strong><span>{post.eventModerationStatus === "rejected" ? post.eventRejectionReason || "Edit the event and resubmit it for review." : "This event is visible only to its author and moderators until approved."}</span></div>}
 			<article className="panel post-detail-card">
 				{post.eventImageUrl && <img alt="" className="event-detail-image" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
@@ -103,7 +118,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 				{comments.length > 0 ? <CommentThread comments={comments} interactive={post.status === "published"} mentionableMembers={mentionableMembers} postId={post.id} submitting={navigation.state === "submitting"} visibleMemberIds={loaderData.visibleMemberIds} /> : <div className="conversation-empty"><strong>No comments yet</strong><p>Start the conversation with a question, resource, or next step.</p></div>}
 			</section>
 			{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}
-			{post.canEdit && post.status !== "archived" && <Form className="post-archive-form" method="post" onSubmit={(event) => { if (!window.confirm("Archive this post? It will leave the section feed.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-post" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Archive post</button></Form>}
+			{post.section !== "event" && post.canEdit && post.status !== "archived" && <Form className="post-archive-form" method="post" onSubmit={(event) => { if (!window.confirm("Archive this post? It will leave the section feed.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-post" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Archive post</button></Form>}
 		</div>
 	);
 }
