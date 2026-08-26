@@ -82,7 +82,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 			{feed.posts.length === 0 ? (
 				<section className="panel empty-state content-empty-state"><Icon name={section.icon} size={28} /><strong>No posts match this view</strong><p>{loaderData.canCreate ? "Start the conversation with the first post." : "Try another filter or check back later."}</p></section>
 			) : (
-				<section className="content-feed" aria-label={`${section.title} posts`}>
+				<section className={`content-feed${sectionKey === "events" ? " content-feed--events" : ""}`} aria-label={`${section.title} posts`}>
 					{feed.posts.map((post) => (
 						<article className={`panel content-card${post.section === "event" ? " event-content-card" : ""}`} key={post.id}>
 							{post.eventImageUrl && <img alt="" className="event-card-image" loading="lazy" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
