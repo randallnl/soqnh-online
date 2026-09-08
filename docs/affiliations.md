@@ -25,6 +25,8 @@ Visibility is fail-closed for ordinary members.
 
 Shared-network content is visible when one of its `post_affiliations` matches one of the viewer's effective affiliations. Content marked `organization` is narrower and requires direct membership in the owning organization. Feed filters never expose affiliation choices outside the viewer's effective affiliations.
 
+The overview summary uses the same boundaries as its destination pages. For ordinary members, active-member and organization totals count only records visible through their effective affiliations or direct organization memberships; upcoming-event and moderation totals remain scoped to visible or reviewable events. Site administrators receive ecosystem-wide totals.
+
 ## Administration boundaries
 
 `/admin/affiliations` is site-admin only. Site administrators can:

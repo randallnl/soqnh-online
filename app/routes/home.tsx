@@ -147,7 +147,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		{
 			label: "Active members",
 			value: dashboard.counts.activeMembers,
-			note: "People in the network",
+			note: "Visible in your network",
 			icon: "people",
 			color: "green",
 			to: "/members",
@@ -155,7 +155,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		{
 			label: "Organizations",
 			value: dashboard.counts.organizations,
-			note: "Partners and coalitions",
+			note: "Visible in your network",
 			icon: "building",
 			color: "blue",
 			to: "/organizations",

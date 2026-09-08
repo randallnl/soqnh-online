@@ -1460,6 +1460,35 @@ describe("event moderation", () => {
 });
 
 describe("dashboard data", () => {
+	it("scopes member and organization totals to the viewer's affiliation network", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await seedSecondOrganization();
+		await seedAffiliation();
+		await seedAffiliation("aff-other", "Other Coalition", "other-coalition");
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: secondMember.id });
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-other", userId: thirdMember.id });
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-other", organizationId: "org-two" });
+
+		expect((await getDashboardData(env, activeUser)).counts).toMatchObject({
+			activeMembers: 2,
+			organizations: 1,
+		});
+		expect((await getDashboardData(env, thirdMember)).counts).toMatchObject({
+			activeMembers: 1,
+			organizations: 1,
+		});
+		expect((await getDashboardData(env, siteAdmin)).counts).toMatchObject({
+			activeMembers: 4,
+			organizations: 2,
+		});
+	});
+
 	it("returns live activity without exposing organization-only content", async () => {
 		await seedSiteAdmin();
 		await seedUser();

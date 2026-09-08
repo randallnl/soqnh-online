@@ -41,17 +41,18 @@ export type DashboardData = {
 	recentActivity: DashboardActivity[];
 };
 
-const viewerAffiliations = `viewer_affiliations AS (
-	SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
+const viewerAffiliations = `effective_affiliations AS (
+	SELECT user_id, affiliation_id FROM user_affiliations
 	UNION
-	SELECT oa.affiliation_id
+	SELECT membership.user_id, oa.affiliation_id
 	FROM organization_memberships AS membership
 	JOIN organizations AS member_organization
 	  ON member_organization.id = membership.organization_id
 	 AND member_organization.status != 'archived'
 	JOIN organization_affiliations AS oa
 	  ON oa.organization_id = membership.organization_id
-	WHERE membership.user_id = ?1
+), viewer_affiliations AS (
+	SELECT affiliation_id FROM effective_affiliations WHERE user_id = ?1
 )`;
 
 const visiblePostPredicate = `(
@@ -96,8 +97,36 @@ export async function getDashboardData(
 		env.DB.prepare(
 			`WITH ${viewerAffiliations}
 			 SELECT
-			   (SELECT count(*) FROM users WHERE status = 'active') AS activeMembers,
-			   (SELECT count(*) FROM organizations WHERE status = 'active') AS organizations,
+			   (SELECT count(*)
+			    FROM users AS visible_member
+			    WHERE visible_member.status = 'active'
+			      AND visible_member.id != 'system:event-scraper'
+			      AND (?2 = 1 OR visible_member.id = ?1 OR (
+			        visible_member.profile_visibility = 'members'
+			        AND EXISTS (
+			          SELECT 1
+			          FROM effective_affiliations AS member_affiliation
+			          JOIN viewer_affiliations
+			            ON viewer_affiliations.affiliation_id = member_affiliation.affiliation_id
+			          WHERE member_affiliation.user_id = visible_member.id
+			        )
+			      ))) AS activeMembers,
+			   (SELECT count(*)
+			    FROM organizations AS visible_organization
+			    WHERE visible_organization.status = 'active'
+			      AND (?2 = 1
+			        OR EXISTS (
+			          SELECT 1 FROM organization_memberships
+			          WHERE organization_id = visible_organization.id AND user_id = ?1
+			        )
+			        OR EXISTS (
+			          SELECT 1
+			          FROM organization_affiliations AS organization_affiliation
+			          JOIN viewer_affiliations
+			            ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
+			          WHERE organization_affiliation.organization_id = visible_organization.id
+			        )
+			      )) AS organizations,
 			   (SELECT count(*)
 			    FROM posts AS pending_post
 			    JOIN events AS pending_event ON pending_event.post_id = pending_post.id
