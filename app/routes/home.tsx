@@ -222,7 +222,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								<p className="eyebrow">Community pulse</p>
 								<h2>Latest across the ecosystem</h2>
 							</div>
-							<Link to="/updates">See all updates</Link>
+							<Link to="/updates">See Community Feed</Link>
 						</div>
 						{dashboard.recentPosts.length === 0 ? (
 							<div className="empty-state empty-state--compact dashboard-empty-state">

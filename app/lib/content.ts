@@ -36,7 +36,7 @@ export const sectionDefinitions = {
 	},
 	updates: {
 		databaseValue: "update",
-		title: "Updates",
+		title: "Community Feed",
 		eyebrow: "Community feed",
 		description: "Share news, requests, resources, and wins with the people who should see them.",
 		action: "Write an update",
@@ -65,4 +65,9 @@ export function routeSectionForDatabase(value: DatabaseSection): ContentSection 
 
 export function normalizeTags(value: string) {
 	return [...new Set(value.split(",").map((tag) => tag.trim().toLowerCase().replace(/\s+/g, "-")).filter((tag) => /^[a-z0-9][a-z0-9-]{0,39}$/.test(tag)))].slice(0, 8);
+}
+
+export function communityUpdateTitle(body: string) {
+	const firstLine = body.split(/\r?\n/, 1)[0]?.replace(/\s+/g, " ").trim() || "Community update";
+	return firstLine.length <= 100 ? firstLine : `${firstLine.slice(0, 97).trimEnd()}…`;
 }

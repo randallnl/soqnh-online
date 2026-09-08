@@ -6,22 +6,22 @@ import type { Route } from "./+types/admin-members";
 import { Icon } from "~/components/icon";
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
+import { deleteIdentityImage } from "~/lib/media.server";
 import {
 	changeMemberStatus,
+	deleteMember,
 	getMemberStatusCounts,
 	listManagedMembers,
 	listMemberAccessAudit,
+	MemberDeletionError,
 	MemberStatusError,
 } from "~/models/members.server";
 
-const memberStatusSchema = z.object({
-	targetUserId: z
-		.string()
-		.trim()
-		.min(1, "That member could not be identified")
-		.max(100, "That member could not be identified"),
-	nextStatus: z.enum(["active", "suspended"]),
-});
+const targetUserId = z.string().trim().min(1, "That member could not be identified").max(100, "That member could not be identified");
+const memberActionSchema = z.discriminatedUnion("intent", [
+	z.object({ intent: z.literal("change-status"), targetUserId, nextStatus: z.enum(["active", "suspended"]) }),
+	z.object({ intent: z.literal("delete-member"), targetUserId }),
+]);
 
 const statusLabels = {
 	active: "Active",
@@ -53,10 +53,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const admin = await requireSiteAdmin(request, context.cloudflare.env);
 	const formData = await request.formData();
-	const result = memberStatusSchema.safeParse({
-		targetUserId: formData.get("targetUserId"),
-		nextStatus: formData.get("nextStatus"),
-	});
+	const result = memberActionSchema.safeParse(Object.fromEntries(formData));
 
 	if (!result.success) {
 		return {
@@ -66,6 +63,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
+		if (result.data.intent === "delete-member") {
+			const deleted = await deleteMember(context.cloudflare.env, admin, result.data.targetUserId);
+			const objectKeys = [deleted.avatarObjectKey, ...deleted.attachmentObjectKeys].filter((key): key is string => Boolean(key));
+			if (objectKeys.length > 0) {
+				context.cloudflare.ctx.waitUntil(Promise.all(objectKeys.map((key) => deleteIdentityImage(context.cloudflare.env, key))).then(() => undefined));
+			}
+			return { ok: true as const, message: "Member and their associated account data were permanently deleted." };
+		}
 		const change = await changeMemberStatus(
 			context.cloudflare.env,
 			admin,
@@ -79,6 +84,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 					: "Member access restored. They can sign in again.",
 		};
 	} catch (error) {
+		if (error instanceof MemberDeletionError) {
+			const messages = {
+				"not-found": "That member no longer exists.",
+				"forbidden": "You no longer have permission to delete members.",
+				"self-deletion": "You cannot delete your own administrator account.",
+				"last-site-admin": "The last active site administrator cannot be deleted.",
+				"protected-account": "The event scraper system account cannot be deleted.",
+			};
+			return { ok: false as const, error: messages[error.reason] };
+		}
 		if (error instanceof MemberStatusError) {
 			const messages = {
 				"not-found": "That member no longer exists.",
@@ -156,6 +171,7 @@ export default function AdminMembers({ loaderData }: Route.ComponentProps) {
 		navigation.state === "submitting"
 			? String(navigation.formData?.get("targetUserId") ?? "")
 			: null;
+	const submittingIntent = navigation.state === "submitting" ? String(navigation.formData?.get("intent") ?? "") : null;
 	const filters = [
 		{ value: "all" as const, label: "All", count: loaderData.counts.total },
 		{ value: "active" as const, label: "Active", count: loaderData.counts.active },
@@ -236,8 +252,10 @@ export default function AdminMembers({ loaderData }: Route.ComponentProps) {
 								member.siteRole === "site_admin" &&
 								member.status === "active" &&
 								loaderData.counts.activeSiteAdmins <= 1;
+							const isProtectedSystemAccount = member.id === "system:event-scraper";
 							const canSuspend =
 								member.status === "active" && !isCurrentAdmin && !isProtectedLastAdmin;
+							const canDelete = !isCurrentAdmin && !isProtectedLastAdmin && !isProtectedSystemAccount;
 
 							return (
 								<article className="member-row" key={member.id}>
@@ -263,6 +281,7 @@ export default function AdminMembers({ loaderData }: Route.ComponentProps) {
 									<div className="member-action" data-label="Action">
 										{member.status === "suspended" ? (
 											<Form method="post">
+												<input name="intent" type="hidden" value="change-status" />
 												<input name="targetUserId" type="hidden" value={member.id} />
 												<input name="nextStatus" type="hidden" value="active" />
 												<button className="member-action-button member-action-button--restore" disabled={submittingUserId === member.id} type="submit">
@@ -278,6 +297,7 @@ export default function AdminMembers({ loaderData }: Route.ComponentProps) {
 													}
 												}}
 											>
+												<input name="intent" type="hidden" value="change-status" />
 												<input name="targetUserId" type="hidden" value={member.id} />
 												<input name="nextStatus" type="hidden" value="suspended" />
 												<button
@@ -298,6 +318,18 @@ export default function AdminMembers({ loaderData }: Route.ComponentProps) {
 										) : (
 											<Link className="member-action-button" to="/admin/invitations">Reissue invite</Link>
 										)}
+										<Form
+											method="post"
+											onSubmit={(event) => {
+												if (!window.confirm(`Permanently delete ${member.name || member.email}? Their authored posts, comments, memberships, sessions, and profile will also be deleted. This cannot be undone.`)) event.preventDefault();
+											}}
+										>
+											<input name="intent" type="hidden" value="delete-member" />
+											<input name="targetUserId" type="hidden" value={member.id} />
+											<button className="member-action-button member-action-button--delete" disabled={!canDelete || submittingUserId === member.id} title={isCurrentAdmin ? "You cannot delete your own account" : isProtectedLastAdmin ? "The last active site administrator must remain" : isProtectedSystemAccount ? "This system account is required" : undefined} type="submit">
+												{submittingUserId === member.id && submittingIntent === "delete-member" ? "Deleting…" : "Delete"}
+											</button>
+										</Form>
 									</div>
 								</article>
 							);
@@ -322,12 +354,12 @@ export default function AdminMembers({ loaderData }: Route.ComponentProps) {
 					<div className="audit-list">
 						{loaderData.auditEvents.map((event) => (
 							<article className="audit-row" key={event.id}>
-								<span className={`audit-icon audit-icon--${event.action === "member.suspended" ? "suspended" : "restored"}`}>
-									<Icon name={event.action === "member.suspended" ? "x" : "activity"} size={15} />
+								<span className={`audit-icon audit-icon--${event.action === "member.restored" ? "restored" : "suspended"}`}>
+									<Icon name={event.action === "member.restored" ? "activity" : "x"} size={15} />
 								</span>
 								<p>
 									<strong>{event.actorName || event.actorEmail}</strong>{" "}
-									{event.action === "member.suspended" ? "suspended" : "restored"}{" "}
+									{event.action === "member.suspended" ? "suspended" : event.action === "member.deleted" ? "deleted" : "restored"}{" "}
 									<strong>{event.targetName || event.targetEmail}</strong>
 								</p>
 								<time dateTime={event.createdAt}>{formatDateTime(event.createdAt)}</time>

@@ -43,6 +43,7 @@ const actionSchema = z.discriminatedUnion("intent", [
 		description: optionalText(4000),
 		category: optionalText(600),
 		websiteUrl: optionalUrl,
+		eventSourceUrl: optionalUrl,
 		contactEmail: optionalEmail,
 		contactPhone: optionalText(80),
 		townCity: optionalText(200),

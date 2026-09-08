@@ -22,6 +22,7 @@ import {
 } from "../app/models/invitations.server";
 import {
 	changeMemberStatus,
+	deleteMember,
 	listManagedMembers,
 	listMemberAccessAudit,
 } from "../app/models/members.server";
@@ -38,6 +39,7 @@ import {
 } from "../app/models/affiliations.server";
 import {
 	createOrganization,
+	deleteOrganization,
 	getOrganizationAdministrationData,
 	getOrganizationBySlug,
 	getOrganizationManagementData,
@@ -73,6 +75,7 @@ import {
 import {
 	archiveComment,
 	createComment,
+	listFeedCommentPreviews,
 	listPostComments,
 	updateComment,
 } from "../app/models/comments.server";
@@ -901,6 +904,33 @@ describe("member access management", () => {
 });
 
 describe("organization administration", () => {
+	it("lets a site administrator permanently delete an organization", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "contributor",
+		});
+		const post = await createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "update",
+			title: "Organization update",
+			body: "This content should remain after its organization is deleted.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+		});
+
+		await deleteOrganization(env, siteAdmin, "org-one");
+
+		await expect(env.DB.prepare("SELECT id FROM organizations WHERE id = 'org-one'").first()).resolves.toBeNull();
+		await expect(env.DB.prepare("SELECT organization_id FROM posts WHERE id = ?1").bind(post.id).first<string>("organization_id")).resolves.toBeNull();
+		const audit = await env.DB.prepare("SELECT metadata_json AS metadataJson FROM audit_log WHERE action = 'organization.deleted'").first<{ metadataJson: string }>();
+		expect(JSON.parse(audit!.metadataJson)).toMatchObject({ name: "Community Center", slug: "community-center" });
+	});
+
 	it("creates and updates a live organization profile with audit records", async () => {
 		await seedSiteAdmin();
 		const created = await createOrganization(env, siteAdmin, {
@@ -919,6 +949,7 @@ describe("organization administration", () => {
 			description: "A longer organization profile.",
 			category: "Community & Advocacy",
 			websiteUrl: "https://example.org",
+			eventSourceUrl: "https://example.org/events",
 			contactEmail: "hello@example.org",
 			contactPhone: "(603) 555-0142",
 			townCity: "Portsmouth, NH",
@@ -937,6 +968,7 @@ describe("organization administration", () => {
 			name: "Seacoast Pride NH",
 			description: "A longer organization profile.",
 			category: "Community & Advocacy",
+			eventSourceUrl: "https://example.org/events",
 			contactPhone: "(603) 555-0142",
 			region: "Seacoast",
 			operatesStatewide: 1,
@@ -1010,6 +1042,49 @@ describe("organization administration", () => {
 				contactEmail: null,
 			}),
 		).rejects.toMatchObject({ reason: "slug-conflict" });
+	});
+});
+
+describe("member deletion", () => {
+	it("deletes a member and data tied to their account", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "contributor",
+		});
+		const post = await createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "update",
+			title: "Member-authored update",
+			body: "This content is deleted with the member account.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+		});
+		await env.DB.prepare(
+			`INSERT INTO auth_tokens (id, email, token_hash, purpose, expires_at, created_at)
+			 VALUES ('delete-token', ?1, 'delete-token-hash', 'login', ?2, ?3)`,
+		).bind(activeUser.email, new Date(Date.now() + 60_000).toISOString(), new Date().toISOString()).run();
+
+		await deleteMember(env, siteAdmin, activeUser.id);
+
+		await expect(env.DB.prepare("SELECT id FROM users WHERE id = ?1").bind(activeUser.id).first()).resolves.toBeNull();
+		await expect(env.DB.prepare("SELECT id FROM posts WHERE id = ?1").bind(post.id).first()).resolves.toBeNull();
+		await expect(env.DB.prepare("SELECT id FROM auth_tokens WHERE id = 'delete-token'").first()).resolves.toBeNull();
+		const audit = await env.DB.prepare("SELECT metadata_json AS metadataJson FROM audit_log WHERE action = 'member.deleted'").first<{ metadataJson: string }>();
+		expect(JSON.parse(audit!.metadataJson)).toMatchObject({ email: activeUser.email, siteRole: "member" });
+	});
+
+	it("protects the current and last active site administrator", async () => {
+		await seedSiteAdmin();
+		await expect(deleteMember(env, siteAdmin, siteAdmin.id)).rejects.toMatchObject({ reason: "self-deletion" });
+		await seedAdditionalSiteAdmin();
+		const secondAdmin = { id: "user-admin-two", email: "admin-two@example.org", name: "Second Admin", siteRole: "site_admin" as const, status: "active" as const };
+		await expect(deleteMember(env, secondAdmin, siteAdmin.id)).resolves.toBeDefined();
+		await expect(deleteMember(env, secondAdmin, secondAdmin.id)).rejects.toMatchObject({ reason: "self-deletion" });
 	});
 });
 
@@ -1159,6 +1234,7 @@ describe("organization-admin self-service", () => {
 			summary: "Updated by its administrator",
 			description: null,
 			websiteUrl: null,
+			eventSourceUrl: "https://example.org/community-events",
 			contactEmail: null,
 		});
 		await setOrganizationMembership(env, activeUser, {
@@ -1167,7 +1243,10 @@ describe("organization-admin self-service", () => {
 			role: "contributor",
 		});
 		const profile = await getOrganizationBySlug(env, "community-center", activeUser);
-		expect(profile?.organization.name).toBe("Community Center NH");
+		expect(profile?.organization).toMatchObject({
+			name: "Community Center NH",
+			eventSourceUrl: "https://example.org/community-events",
+		});
 		expect(profile?.members.map((member) => member.userId)).toContain(secondMember.id);
 		await expect(listManagedOrganizations(env, activeUser)).resolves.toEqual([
 			{ name: "Community Center NH", slug: "community-center" },
@@ -1280,6 +1359,29 @@ describe("State of Queer Digital participation", () => {
 });
 
 describe("content feeds and post permissions", () => {
+	it("allows members without an organization to post and manage personal community updates", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		expect(await listPostOrganizations(env, activeUser)).toEqual([]);
+
+		const created = await createPost(env, activeUser, {
+			organizationId: null,
+			section: "update",
+			title: "A personal community update",
+			body: "Sharing a community-wide update as an individual member.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			affiliationIds: [],
+		});
+
+		await expect(getPostById(env, activeUser, created.id)).resolves.toMatchObject({ id: created.id, organizationId: null, canEdit: true });
+		expect((await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(created.id);
+		await archivePost(env, activeUser, created.id);
+		await expect(getPostById(env, activeUser, created.id)).resolves.toMatchObject({ id: created.id, status: "archived" });
+	});
+
 	it("shows shared-network posts through direct or inherited affiliations", async () => {
 		await seedSiteAdmin();
 		await seedUser();
@@ -1712,6 +1814,26 @@ describe("dashboard data", () => {
 });
 
 describe("post conversations", () => {
+	it("returns the latest published comments for inline feed previews", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		const post = await createPost(env, siteAdmin, {
+			organizationId: null, section: "update", title: "Previewed conversation", body: "An update with enough comments to exercise the feed preview.", visibility: "members", status: "published", tags: [],
+		});
+		const comments = [];
+		for (let index = 0; index < 4; index += 1) {
+			comments.push(await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: `Feed comment ${index + 1}` }));
+		}
+		for (let index = 0; index < comments.length; index += 1) {
+			await env.DB.prepare("UPDATE comments SET created_at = ?1 WHERE id = ?2").bind(`2026-01-0${index + 1}T12:00:00.000Z`, comments[index].id).run();
+		}
+		await archiveComment(env, activeUser, { postId: post.id, commentId: comments[3].id });
+
+		const previews = await listFeedCommentPreviews(env, [post.id], 2);
+		expect(previews.map((comment) => comment.body)).toEqual(["Feed comment 2", "Feed comment 3"]);
+		expect(previews.every((comment) => comment.postId === post.id)).toBe(true);
+	});
+
 	it("creates comments and one-level reply threads on visible published posts", async () => {
 		await seedSiteAdmin();
 		await seedUser();

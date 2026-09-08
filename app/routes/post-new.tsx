@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Route } from "./+types/post-new";
 import { PostEditor } from "~/components/post-editor";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
-import { contentSections, isContentSection, normalizeTags, postStatuses, postVisibilities, sectionDefinitions } from "~/lib/content";
+import { communityUpdateTitle, contentSections, isContentSection, normalizeTags, postStatuses, postVisibilities, sectionDefinitions } from "~/lib/content";
 import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
 import { createPost, listAvailablePostAffiliations, listPostOrganizations, PostMutationError } from "~/models/posts.server";
@@ -17,7 +17,7 @@ const optionalOrganization = z.preprocess((value) => typeof value === "string" &
 const formSchema = z.object({
 	section: z.enum(contentSections),
 	title: z.string().trim().min(3, "Enter a title").max(180),
-	body: z.string().trim().min(10, "Add a little more detail").max(12000),
+	body: z.string().trim().min(2, "Add a little more detail").max(12000),
 	organizationId: optionalOrganization,
 	visibility: z.enum(postVisibilities),
 	status: z.enum(postStatuses),
@@ -46,7 +46,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		listVisibleMembers(context.cloudflare.env, user),
 		listVisibleOrganizations(context.cloudflare.env, user),
 	]);
-	if (user.siteRole !== "site_admin" && organizations.length === 0) throw new Response("Forbidden", { status: 403 });
+	if (section !== "updates" && user.siteRole !== "site_admin" && organizations.length === 0) throw new Response("Forbidden", { status: 403 });
 	const mentionTargets: MentionTarget[] = [
 		...members.filter((member) => member.id !== user.id).map((member) => ({ id: member.id, type: "person" as const, label: member.name || "Member", detail: member.profileTitle || member.organizationNames, href: `/members/${member.id}` })),
 		...visibleOrganizations.map((organization) => ({ id: organization.id, type: "organization" as const, label: organization.name, detail: organization.summary, href: `/organizations/${organization.slug}` })),
@@ -62,11 +62,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = formSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the post details" };
+	if (result.data.section !== "updates" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 	const eventResult = result.data.section === "events" ? parseEventDetails(formData) : null;
 	if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
 	try {
 		const created = await createPost(context.cloudflare.env, user, {
 			...result.data,
+			title: result.data.section === "updates" ? communityUpdateTitle(result.data.body) : result.data.title,
 			section: sectionDefinitions[result.data.section].databaseValue,
 			tags: normalizeTags(result.data.tags),
 			affiliationIds,

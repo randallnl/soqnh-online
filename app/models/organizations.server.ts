@@ -13,6 +13,7 @@ export type OrganizationRecord = {
 	description: string | null;
 	category: string | null;
 	websiteUrl: string | null;
+	eventSourceUrl: string | null;
 	contactEmail: string | null;
 	contactPhone: string | null;
 	townCity: string | null;
@@ -144,6 +145,7 @@ export async function listOrganizations(env: Env, includeInactive = false) {
 		        o.description,
 		        o.category,
 		        o.website_url AS websiteUrl,
+		        o.event_source_url AS eventSourceUrl,
 		        o.contact_email AS contactEmail,
 		        o.contact_phone AS contactPhone,
 		        o.town_city AS townCity,
@@ -197,6 +199,7 @@ export async function listVisibleOrganizations(
 		 )
 		 SELECT o.id, o.name, o.slug, o.summary, o.description, o.category,
 		        o.website_url AS websiteUrl,
+		        o.event_source_url AS eventSourceUrl,
 		        o.contact_email AS contactEmail,
 		        o.contact_phone AS contactPhone, o.town_city AS townCity, o.region,
 		        o.social_platform AS socialPlatform, o.social_handle AS socialHandle,
@@ -269,6 +272,7 @@ export async function getOrganizationBySlug(
 		        o.description,
 		        o.category,
 		        o.website_url AS websiteUrl,
+		        o.event_source_url AS eventSourceUrl,
 		        o.contact_email AS contactEmail,
 		        o.contact_phone AS contactPhone,
 		        o.town_city AS townCity,
@@ -393,7 +397,8 @@ export async function getOrganizationAdministrationData(env: Env) {
 export async function listDirectoryReviewQueue(env: Env) {
 	const result = await env.DB.prepare(
 		`SELECT o.id, o.name, o.slug, o.summary, o.description, o.category,
-		        o.website_url AS websiteUrl, o.contact_email AS contactEmail,
+		        o.website_url AS websiteUrl, o.event_source_url AS eventSourceUrl,
+		        o.contact_email AS contactEmail,
 		        o.contact_phone AS contactPhone, o.town_city AS townCity, o.region,
 		        o.social_platform AS socialPlatform, o.social_handle AS socialHandle,
 		        o.listing_rationale AS listingRationale,
@@ -596,6 +601,7 @@ export async function createOrganization(
 		description?: string | null;
 		category?: string | null;
 		websiteUrl: string | null;
+		eventSourceUrl?: string | null;
 		contactEmail: string | null;
 		contactPhone?: string | null;
 		townCity?: string | null;
@@ -618,11 +624,11 @@ export async function createOrganization(
 			env.DB.prepare(
 				`INSERT INTO organizations
 				 (id, name, slug, summary, description, category, website_url, contact_email,
-				  contact_phone, town_city, region, social_platform, social_handle,
+				  contact_phone, town_city, region, social_platform, social_handle, event_source_url,
 				  listing_rationale, leadership_identity, source_image_urls, operates_statewide,
 				  status, created_at, updated_at, event_scraping_enabled)
 				 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
-				  ?14, ?15, ?16, ?17, 'active', ?18, ?18, 0)`,
+				  ?14, ?15, ?16, ?17, ?18, 'active', ?19, ?19, 0)`,
 			).bind(
 				id,
 				input.name,
@@ -637,6 +643,7 @@ export async function createOrganization(
 				input.region ?? null,
 				input.socialPlatform ?? null,
 				input.socialHandle ?? null,
+				input.eventSourceUrl ?? null,
 				input.listingRationale ?? null,
 				input.leadershipIdentity ?? null,
 				input.sourceImageUrls ?? null,
@@ -675,6 +682,7 @@ export async function updateOrganization(
 		description: string | null;
 		category?: string | null;
 		websiteUrl: string | null;
+		eventSourceUrl?: string | null;
 		contactEmail: string | null;
 		contactPhone?: string | null;
 		townCity?: string | null;
@@ -697,10 +705,10 @@ export async function updateOrganization(
 				 SET name = ?1, slug = ?2, summary = ?3, description = ?4, category = ?5,
 				     website_url = ?6, contact_email = ?7, contact_phone = ?8,
 				     town_city = ?9, region = ?10, social_platform = ?11, social_handle = ?12,
-				     listing_rationale = ?13, leadership_identity = ?14,
-				     source_image_urls = ?15, operates_statewide = ?16,
-				     status = ?17, updated_at = ?18
-				 WHERE id = ?19`,
+				     event_source_url = ?13, listing_rationale = ?14, leadership_identity = ?15,
+				     source_image_urls = ?16, operates_statewide = ?17,
+				     status = ?18, updated_at = ?19
+				 WHERE id = ?20`,
 			).bind(
 				input.name,
 				input.slug,
@@ -714,6 +722,7 @@ export async function updateOrganization(
 				input.region ?? null,
 				input.socialPlatform ?? null,
 				input.socialHandle ?? null,
+				input.eventSourceUrl ?? null,
 				input.listingRationale ?? null,
 				input.leadershipIdentity ?? null,
 				input.sourceImageUrls ?? null,
@@ -757,6 +766,7 @@ export async function updateManagedOrganizationProfile(
 		description: string | null;
 		category?: string | null;
 		websiteUrl: string | null;
+		eventSourceUrl?: string | null;
 		contactEmail: string | null;
 		contactPhone?: string | null;
 		townCity?: string | null;
@@ -777,9 +787,9 @@ export async function updateManagedOrganizationProfile(
 			 SET name = ?1, summary = ?2, description = ?3, category = ?4,
 			     website_url = ?5, contact_email = ?6, contact_phone = ?7,
 			     town_city = ?8, region = ?9, social_platform = ?10, social_handle = ?11,
-			     listing_rationale = ?12, leadership_identity = ?13,
-			     source_image_urls = ?14, operates_statewide = ?15, updated_at = ?16
-			 WHERE id = ?17 AND status != 'archived'`,
+			     event_source_url = ?12, listing_rationale = ?13, leadership_identity = ?14,
+			     source_image_urls = ?15, operates_statewide = ?16, updated_at = ?17
+			 WHERE id = ?18 AND status != 'archived'`,
 		).bind(
 			input.name,
 			input.summary,
@@ -792,6 +802,7 @@ export async function updateManagedOrganizationProfile(
 			input.region ?? null,
 			input.socialPlatform ?? null,
 			input.socialHandle ?? null,
+			input.eventSourceUrl ?? null,
 			input.listingRationale ?? null,
 			input.leadershipIdentity ?? null,
 			input.sourceImageUrls ?? null,
@@ -1021,4 +1032,48 @@ export async function removeOrganizationMembership(
 	if (results[0]?.meta.changes !== 1) {
 		throw new OrganizationMutationError("membership-not-found");
 	}
+}
+
+export async function deleteOrganization(
+	env: Env,
+	actor: AuthenticatedUser,
+	organizationId: string,
+) {
+	if (actor.siteRole !== "site_admin") {
+		throw new OrganizationMutationError("forbidden");
+	}
+	const session = env.DB.withSession("first-primary");
+	const organization = await session.prepare(
+		`SELECT id, name, slug, logo_object_key AS logoObjectKey
+		 FROM organizations
+		 WHERE id = ?1
+		 LIMIT 1`,
+	).bind(organizationId).first<{
+		id: string;
+		name: string;
+		slug: string;
+		logoObjectKey: string | null;
+	}>();
+	if (!organization) throw new OrganizationMutationError("not-found");
+
+	const now = new Date().toISOString();
+	const results = await session.batch([
+		session.prepare("DELETE FROM organizations WHERE id = ?1").bind(organization.id),
+		session.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'organization.deleted', 'organization', ?3, ?4, ?5
+			 WHERE NOT EXISTS (SELECT 1 FROM organizations WHERE id = ?3)`,
+		).bind(
+			crypto.randomUUID(),
+			actor.id,
+			organization.id,
+			JSON.stringify({ name: organization.name, slug: organization.slug }),
+			now,
+		),
+		]);
+	if (!results[0] || results[0].meta.changes < 1) {
+		throw new OrganizationMutationError("not-found");
+	}
+	return { logoObjectKey: organization.logoObjectKey };
 }

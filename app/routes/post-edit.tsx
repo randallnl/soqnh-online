@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Route } from "./+types/post-edit";
 import { PostEditor } from "~/components/post-editor";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
-import { normalizeTags, postStatuses, postVisibilities, routeSectionForDatabase } from "~/lib/content";
+import { communityUpdateTitle, normalizeTags, postStatuses, postVisibilities, routeSectionForDatabase } from "~/lib/content";
 import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
 import { getPostById, listAvailablePostAffiliations, listPostOrganizations, PostMutationError, updatePost } from "~/models/posts.server";
@@ -17,7 +17,7 @@ const optionalOrganization = z.preprocess((value) => typeof value === "string" &
 const formSchema = z.object({
 	postId: z.string().uuid(),
 	title: z.string().trim().min(3, "Enter a title").max(180),
-	body: z.string().trim().min(10, "Add a little more detail").max(12000),
+	body: z.string().trim().min(2, "Add a little more detail").max(12000),
 	organizationId: optionalOrganization,
 	visibility: z.enum(postVisibilities),
 	status: z.enum(postStatuses),
@@ -54,9 +54,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 	try {
 		const existing = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!existing) throw new PostMutationError("not-found");
+		if (existing.section !== "update" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 		const eventResult = existing.section === "event" ? parseEventDetails(formData) : null;
 		if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
-		await updatePost(context.cloudflare.env, user, { ...result.data, tags: normalizeTags(result.data.tags), affiliationIds, event: eventResult?.data });
+		await updatePost(context.cloudflare.env, user, { ...result.data, title: existing.section === "update" ? communityUpdateTitle(result.data.body) : result.data.title, tags: normalizeTags(result.data.tags), affiliationIds, event: eventResult?.data });
 		if (existing.section === "update") await syncPostMentions(context.cloudflare.env, user, result.data.postId, mentionUserIds, existing.status !== "published" && result.data.status === "published");
 		throw redirect(`/posts/${result.data.postId}`);
 	} catch (error) {

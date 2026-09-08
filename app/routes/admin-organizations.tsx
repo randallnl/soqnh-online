@@ -6,6 +6,7 @@ import { Icon } from "~/components/icon";
 import { OrganizationProfileFields } from "~/components/organization-profile-fields";
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
+import { deleteIdentityImage } from "~/lib/media.server";
 import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import {
 	organizationRoles,
@@ -14,6 +15,7 @@ import {
 } from "~/lib/organizations";
 import {
 	createOrganization,
+	deleteOrganization,
 	getOrganizationAdministrationData,
 	listDirectoryReviewQueue,
 	OrganizationMutationError,
@@ -46,6 +48,7 @@ const organizationFields = z.object({
 	description: optionalText(4000),
 	category: optionalText(600),
 	websiteUrl: optionalUrl,
+	eventSourceUrl: optionalUrl,
 	contactEmail: optionalEmail,
 	contactPhone: optionalText(80),
 	townCity: optionalText(200),
@@ -75,6 +78,7 @@ const actionSchema = z.discriminatedUnion("intent", [
 		organizationId: identifier,
 		userId: identifier,
 	}),
+	z.object({ intent: z.literal("delete-organization"), organizationId: identifier }),
 ]);
 const directoryReviewSchema = z.object({
 	intent: z.literal("review-directory"),
@@ -150,6 +154,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (result.data.intent === "set-membership") {
 			await setOrganizationMembership(context.cloudflare.env, admin, result.data);
 			return { ok: true as const, message: "Organization membership updated." };
+		}
+		if (result.data.intent === "delete-organization") {
+			const deleted = await deleteOrganization(context.cloudflare.env, admin, result.data.organizationId);
+			if (deleted.logoObjectKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, deleted.logoObjectKey));
+			return { ok: true as const, message: "Organization permanently deleted. Existing posts and events were retained without organization attribution." };
 		}
 		await removeOrganizationMembership(context.cloudflare.env, admin, result.data);
 		return { ok: true as const, message: "Member removed from the organization." };
@@ -232,6 +241,13 @@ export default function AdminOrganizations({ loaderData }: Route.ComponentProps)
 										{memberships.length === 0 ? <p className="muted-empty">No members assigned yet.</p> : memberships.map((membership) => (
 											<article key={membership.userId}><div><strong>{membership.name || membership.email}</strong><p>{membership.email}</p></div><Form method="post"><input name="intent" type="hidden" value="set-membership" /><input name="organizationId" type="hidden" value={organization.id} /><input name="userId" type="hidden" value={membership.userId} /><select aria-label={`Role for ${membership.name || membership.email}`} defaultValue={membership.role} name="role" onChange={(event) => event.currentTarget.form?.requestSubmit()}>{organizationRoles.map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></Form><Form method="post" onSubmit={(event) => { if (!window.confirm(`Remove ${membership.name || membership.email} from ${organization.name}?`)) event.preventDefault(); }}><input name="intent" type="hidden" value="remove-membership" /><input name="organizationId" type="hidden" value={organization.id} /><input name="userId" type="hidden" value={membership.userId} /><button className="member-action-button member-action-button--suspend" type="submit">Remove</button></Form></article>
 										))}
+									</div>
+									<div className="organization-danger-zone">
+										<div><strong>Delete organization</strong><p>Permanently remove this profile, memberships, claims, and affiliation links. Existing posts and events will remain without organization attribution.</p></div>
+										<Form method="post" onSubmit={(event) => { if (!window.confirm(`Permanently delete ${organization.name}? This cannot be undone.`)) event.preventDefault(); }}>
+											<input name="intent" type="hidden" value="delete-organization" /><input name="organizationId" type="hidden" value={organization.id} />
+											<button className="member-action-button member-action-button--delete" disabled={submitting} type="submit">Delete organization</button>
+										</Form>
 									</div>
 								</div>
 							</div>

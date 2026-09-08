@@ -17,10 +17,9 @@ type NavigationItem = {
 
 const primaryNavigation: NavigationItem[] = [
 	{ label: "Overview", to: "/", icon: "dashboard" },
-	{ label: "Legislation", to: "/legislation", icon: "gavel" },
 	{ label: "Events", to: "/events", icon: "calendar" },
 	{ label: "Projects", to: "/projects", icon: "clipboard" },
-	{ label: "Updates", to: "/updates", icon: "message" },
+	{ label: "Community Feed", to: "/updates", icon: "message" },
 ];
 
 const communityNavigation: NavigationItem[] = [
@@ -231,7 +230,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 							<Icon name="bell" />
 							{loaderData.unreadCount > 0 && <span />}
 						</Link>
-						<Link className="button button--primary button--compact" to="/posts/new?section=updates">
+						<Link className="button button--primary button--compact" to="/updates#community-update-composer">
 							<Icon name="plus" size={17} />
 							<span>New post</span>
 						</Link>

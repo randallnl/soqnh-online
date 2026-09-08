@@ -20,6 +20,16 @@ export type CommentRecord = {
 	replies: CommentRecord[];
 };
 
+export type FeedCommentPreview = {
+	id: string;
+	postId: string;
+	authorUserId: string;
+	authorName: string | null;
+	authorAvatarObjectKey: string | null;
+	body: string;
+	createdAt: string;
+};
+
 type CommentRow = Omit<CommentRecord, "canEdit" | "canDelete" | "replies"> & {
 	canEdit: number;
 	canDelete: number;
@@ -84,6 +94,30 @@ export async function listPostComments(env: Env, viewer: AuthenticatedUser, post
 		else roots.push(comment);
 	}
 	return roots;
+}
+
+export async function listFeedCommentPreviews(env: Env, postIds: string[], limitPerPost = 3) {
+	if (postIds.length === 0) return [];
+	const uniquePostIds = [...new Set(postIds)].slice(0, 20);
+	const placeholders = uniquePostIds.map((_, index) => `?${index + 2}`).join(", ");
+	const result = await env.DB.prepare(
+		`WITH ranked_comments AS (
+		   SELECT c.id, c.post_id AS postId, c.author_user_id AS authorUserId,
+		          u.name AS authorName, u.avatar_object_key AS authorAvatarObjectKey,
+		          c.body, c.created_at AS createdAt,
+		          row_number() OVER (
+		            PARTITION BY c.post_id ORDER BY c.created_at DESC, c.id DESC
+		          ) AS commentRank
+		   FROM comments AS c
+		   JOIN users AS u ON u.id = c.author_user_id
+		   WHERE c.status = 'published' AND c.post_id IN (${placeholders})
+		 )
+		 SELECT id, postId, authorUserId, authorName, authorAvatarObjectKey, body, createdAt
+		 FROM ranked_comments
+		 WHERE commentRank <= ?1
+		 ORDER BY postId, createdAt, id`,
+	).bind(Math.max(1, Math.min(limitPerPost, 5)), ...uniquePostIds).all<FeedCommentPreview>();
+	return result.results;
 }
 
 export async function createComment(

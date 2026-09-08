@@ -15,7 +15,7 @@ export type ManagedMember = {
 
 export type MemberAccessAuditEvent = {
 	id: string;
-	action: "member.suspended" | "member.restored";
+	action: "member.suspended" | "member.restored" | "member.deleted";
 	targetName: string | null;
 	targetEmail: string;
 	actorName: string | null;
@@ -35,6 +35,20 @@ export class MemberStatusError extends Error {
 	) {
 		super(reason);
 		this.name = "MemberStatusError";
+	}
+}
+
+export class MemberDeletionError extends Error {
+	constructor(
+		public readonly reason:
+			| "not-found"
+			| "forbidden"
+			| "self-deletion"
+			| "last-site-admin"
+			| "protected-account",
+	) {
+		super(reason);
+		this.name = "MemberDeletionError";
 	}
 }
 
@@ -93,16 +107,16 @@ export async function listMemberAccessAudit(env: Env) {
 	const result = await env.DB.prepare(
 		`SELECT a.id,
 		        a.action,
-		        target.name AS targetName,
-		        target.email AS targetEmail,
+		        coalesce(target.name, json_extract(a.metadata_json, '$.name')) AS targetName,
+		        coalesce(target.email, json_extract(a.metadata_json, '$.email'), a.entity_id) AS targetEmail,
 		        actor.name AS actorName,
 		        actor.email AS actorEmail,
 		        a.created_at AS createdAt
 		 FROM audit_log AS a
-		 JOIN users AS target ON target.id = a.entity_id
+		 LEFT JOIN users AS target ON target.id = a.entity_id
 		 JOIN users AS actor ON actor.id = a.actor_user_id
 		 WHERE a.entity_type = 'user'
-		   AND a.action IN ('member.suspended', 'member.restored')
+		   AND a.action IN ('member.suspended', 'member.restored', 'member.deleted')
 		 ORDER BY a.created_at DESC
 		 LIMIT 20`,
 	).all<MemberAccessAuditEvent>();
@@ -218,4 +232,117 @@ export async function changeMemberStatus(
 	}
 
 	return { targetUserId: target.id, previousStatus, nextStatus: input.nextStatus };
+}
+
+export async function deleteMember(
+	env: Env,
+	actor: AuthenticatedUser,
+	targetUserId: string,
+) {
+	if (actor.siteRole !== "site_admin") {
+		throw new MemberDeletionError("forbidden");
+	}
+	const session = env.DB.withSession("first-primary");
+	const target = await session.prepare(
+		`SELECT id, email, name, avatar_object_key AS avatarObjectKey,
+		        site_role AS siteRole, status
+		 FROM users
+		 WHERE id = ?1
+		 LIMIT 1`,
+	).bind(targetUserId).first<{
+		id: string;
+		email: string;
+		name: string | null;
+		avatarObjectKey: string | null;
+		siteRole: "member" | "site_admin";
+		status: MemberStatus;
+	}>();
+
+	if (!target) throw new MemberDeletionError("not-found");
+	if (target.id === actor.id) throw new MemberDeletionError("self-deletion");
+	if (target.id === "system:event-scraper") {
+		throw new MemberDeletionError("protected-account");
+	}
+	if (target.siteRole === "site_admin" && target.status === "active") {
+		const activeAdminCount = await session.prepare(
+			`SELECT count(*) AS count FROM users
+			 WHERE site_role = 'site_admin' AND status = 'active'`,
+		).first<number>("count");
+		if ((activeAdminCount ?? 0) <= 1) {
+			throw new MemberDeletionError("last-site-admin");
+		}
+	}
+
+	const attachmentResult = await session.prepare(
+		`WITH RECURSIVE removed_comments(id) AS (
+		   SELECT c.id
+		   FROM comments AS c
+		   JOIN posts AS p ON p.id = c.post_id
+		   WHERE c.author_user_id = ?1 OR p.author_user_id = ?1
+		   UNION
+		   SELECT child.id
+		   FROM comments AS child
+		   JOIN removed_comments AS parent ON child.parent_comment_id = parent.id
+		 )
+		 SELECT DISTINCT a.object_key AS objectKey
+		 FROM attachments AS a
+		 LEFT JOIN posts AS p ON p.id = a.post_id
+		 WHERE a.uploaded_by_user_id = ?1
+		    OR p.author_user_id = ?1
+		    OR a.comment_id IN (SELECT id FROM removed_comments)`,
+	).bind(target.id).all<{ objectKey: string }>();
+
+	const now = new Date().toISOString();
+	const results = await session.batch([
+		session.prepare(
+			`DELETE FROM users
+			 WHERE id = ?1
+			   AND id != ?2
+			   AND id != 'system:event-scraper'
+			   AND (
+			     site_role != 'site_admin'
+			     OR status != 'active'
+			     OR (SELECT count(*) FROM users WHERE site_role = 'site_admin' AND status = 'active') > 1
+			   )`,
+		).bind(target.id, actor.id),
+		session.prepare(
+			`DELETE FROM auth_tokens
+			 WHERE lower(email) = lower(?1)
+			   AND NOT EXISTS (SELECT 1 FROM users WHERE id = ?2)`,
+		).bind(target.email, target.id),
+		session.prepare(
+			`DELETE FROM invitations
+			 WHERE lower(email) = lower(?1)
+			   AND NOT EXISTS (SELECT 1 FROM users WHERE id = ?2)`,
+		).bind(target.email, target.id),
+		session.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'member.deleted', 'user', ?3, ?4, ?5
+			 WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = ?3)`,
+		).bind(
+			crypto.randomUUID(),
+			actor.id,
+			target.id,
+			JSON.stringify({
+				name: target.name,
+				email: target.email,
+				siteRole: target.siteRole,
+				status: target.status,
+			}),
+			now,
+		),
+	]);
+
+	if (!results[0] || results[0].meta.changes < 1) {
+		if (target.id === actor.id) throw new MemberDeletionError("self-deletion");
+		if (target.id === "system:event-scraper") throw new MemberDeletionError("protected-account");
+		if (target.siteRole === "site_admin") throw new MemberDeletionError("last-site-admin");
+		throw new MemberDeletionError("not-found");
+	}
+
+	return {
+		avatarObjectKey: target.avatarObjectKey,
+		attachmentObjectKeys: attachmentResult.results.map((item) => item.objectKey),
+	};
 }

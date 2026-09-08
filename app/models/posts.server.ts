@@ -151,7 +151,7 @@ async function requirePostAffiliations(
 	if (affiliationIds === undefined) return [];
 	const uniqueIds = [...new Set(affiliationIds)];
 	if (uniqueIds.length === 0) {
-		if (actor.siteRole === "site_admin" && organizationId === null) return [];
+		if (organizationId === null) return [];
 		const participating = organizationId
 			? await env.DB.prepare(
 				`SELECT 1 FROM organizations
@@ -208,9 +208,10 @@ async function requirePostOrganization(
 	env: Env,
 	actor: AuthenticatedUser,
 	organizationId: string | null,
+	section: DatabaseSection,
 ) {
 	if (!organizationId) {
-		if (actor.siteRole !== "site_admin") {
+		if (actor.siteRole !== "site_admin" && section !== "update") {
 			throw new PostMutationError("organization-required");
 		}
 		return;
@@ -360,9 +361,12 @@ export async function listSectionPosts(
 			        CASE WHEN ?5 = 1 OR EXISTS (
 			          SELECT 1 FROM organization_memberships
 			          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
-			        ) OR (p.author_user_id = ?1 AND EXISTS (
-			          SELECT 1 FROM organization_memberships
-			          WHERE organization_id = p.organization_id AND user_id = ?1 AND role IN ('contributor', 'org_admin')
+			        ) OR (p.author_user_id = ?1 AND (
+			          (p.section = 'update' AND p.organization_id IS NULL)
+			          OR EXISTS (
+			            SELECT 1 FROM organization_memberships
+			            WHERE organization_id = p.organization_id AND user_id = ?1 AND role IN ('contributor', 'org_admin')
+			          )
 			        )) THEN 1 ELSE 0 END AS canEdit,
 			        CASE WHEN p.section = 'event' AND (?5 = 1 OR EXISTS (
 			          SELECT 1 FROM organization_memberships
@@ -467,9 +471,12 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		        CASE WHEN ?3 = 1 OR EXISTS (
 		          SELECT 1 FROM organization_memberships
 		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
-		        ) OR (p.author_user_id = ?1 AND EXISTS (
-		          SELECT 1 FROM organization_memberships
-		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role IN ('contributor', 'org_admin')
+		        ) OR (p.author_user_id = ?1 AND (
+		          (p.section = 'update' AND p.organization_id IS NULL)
+		          OR EXISTS (
+		            SELECT 1 FROM organization_memberships
+		            WHERE organization_id = p.organization_id AND user_id = ?1 AND role IN ('contributor', 'org_admin')
+		          )
 		        )) THEN 1 ELSE 0 END AS canEdit,
 		        CASE WHEN p.section = 'event' AND (?3 = 1 OR EXISTS (
 		          SELECT 1 FROM organization_memberships
@@ -534,7 +541,7 @@ export async function createPost(
 		event?: EventDetailsInput;
 	},
 ) {
-	await requirePostOrganization(env, actor, input.organizationId);
+	await requirePostOrganization(env, actor, input.organizationId, input.section);
 	if (input.visibility === "organization" && !input.organizationId) {
 		throw new PostMutationError("organization-required");
 	}
@@ -593,7 +600,7 @@ export async function updatePost(
 	const existing = await getPostById(env, actor, input.postId);
 	if (!existing) throw new PostMutationError("not-found");
 	if (!existing.canEdit) throw new PostMutationError("forbidden");
-	await requirePostOrganization(env, actor, input.organizationId);
+	await requirePostOrganization(env, actor, input.organizationId, existing.section);
 	if (input.visibility === "organization" && !input.organizationId) {
 		throw new PostMutationError("organization-required");
 	}

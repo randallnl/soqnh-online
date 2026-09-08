@@ -108,6 +108,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 				)}
 				<div className="organization-contact-row">
 					{organization.websiteUrl && <a href={organization.websiteUrl} rel="noreferrer" target="_blank"><Icon name="activity" size={16} /> Visit website</a>}
+					{organization.eventSourceUrl && <a href={organization.eventSourceUrl} rel="noreferrer" target="_blank"><Icon name="calendar" size={16} /> View events</a>}
 					{organization.contactEmail && <a href={`mailto:${organization.contactEmail}`}><Icon name="message" size={16} /> {organization.contactEmail}</a>}
 					{organization.contactPhone && <a href={`tel:${organization.contactPhone.replace(/[^+\d]/g, "")}`}><Icon name="activity" size={16} /> {organization.contactPhone}</a>}
 					{organization.socialHandle && (organizationSocialUrl ? <a href={organizationSocialUrl} rel="noreferrer" target="_blank"><Icon name="people" size={16} /> {organization.socialPlatform ? `${organization.socialPlatform}: ` : ""}{organization.socialHandle}</a> : <span><Icon name="people" size={16} /> {organization.socialPlatform ? `${organization.socialPlatform}: ` : ""}{organization.socialHandle}</span>)}
