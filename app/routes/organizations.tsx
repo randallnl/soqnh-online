@@ -1,9 +1,10 @@
-import { Link } from "react-router";
+import { Form, Link } from "react-router";
 
 import type { Route } from "./+types/organizations";
 import { Icon } from "~/components/icon";
 import { OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
+import { directoryFilterValue, filterOrganizations, uniqueDirectoryOptions } from "~/lib/directory-filters";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -15,10 +16,28 @@ export function meta(_args: Route.MetaArgs) {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	return { organizations: await listVisibleOrganizations(context.cloudflare.env, user) };
+	const url = new URL(request.url);
+	const filters = {
+		query: directoryFilterValue(url.searchParams.get("q"), 160),
+		category: directoryFilterValue(url.searchParams.get("category")),
+		region: directoryFilterValue(url.searchParams.get("region")),
+		affiliationId: directoryFilterValue(url.searchParams.get("affiliation"), 100),
+	};
+	const allOrganizations = await listVisibleOrganizations(context.cloudflare.env, user);
+	const affiliationOptions = [...new Map(allOrganizations.flatMap((organization) => organization.affiliations).map((affiliation) => [affiliation.id, affiliation])).values()]
+		.sort((left, right) => left.name.localeCompare(right.name));
+	return {
+		organizations: filterOrganizations(allOrganizations, filters),
+		totalOrganizations: allOrganizations.length,
+		filters,
+		categoryOptions: uniqueDirectoryOptions(allOrganizations.map((organization) => organization.category)),
+		regionOptions: uniqueDirectoryOptions(allOrganizations.map((organization) => organization.region)),
+		affiliationOptions,
+	};
 }
 
 export default function Organizations({ loaderData }: Route.ComponentProps) {
+	const hasFilters = Boolean(loaderData.filters.query || loaderData.filters.category || loaderData.filters.region || loaderData.filters.affiliationId);
 	return (
 		<div className="organization-page">
 			<section className="page-heading">
@@ -28,12 +47,21 @@ export default function Organizations({ loaderData }: Route.ComponentProps) {
 					<p>Meet the groups building support, connection, and power across New Hampshire.</p>
 				</div>
 			</section>
+			<Form className="panel directory-filter-panel" method="get" role="search">
+				<label className="directory-search-field">Search organizations<span><Icon name="search" size={17} /><input defaultValue={loaderData.filters.query} maxLength={160} name="q" placeholder="Name, service, town, or keyword" type="search" /></span></label>
+				<label>Category<select defaultValue={loaderData.filters.category} name="category" onChange={(event) => event.currentTarget.form?.requestSubmit()}><option value="">All categories</option>{loaderData.categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+				<label>Region<select defaultValue={loaderData.filters.region} name="region" onChange={(event) => event.currentTarget.form?.requestSubmit()}><option value="">All regions</option>{loaderData.regionOptions.map((region) => <option key={region} value={region}>{region}</option>)}</select></label>
+				<label>Affiliation<select defaultValue={loaderData.filters.affiliationId} name="affiliation" onChange={(event) => event.currentTarget.form?.requestSubmit()}><option value="">All affiliations</option>{loaderData.affiliationOptions.map((affiliation) => <option key={affiliation.id} value={affiliation.id}>{affiliation.name}</option>)}</select></label>
+				<div className="directory-filter-actions"><button className="button button--secondary" type="submit"><Icon name="search" size={16} /> Search</button>{hasFilters && <Link to="/organizations">Clear</Link>}</div>
+			</Form>
+			<p className="directory-result-count">Showing {loaderData.organizations.length} of {loaderData.totalOrganizations} visible {loaderData.totalOrganizations === 1 ? "organization" : "organizations"}</p>
 
 			{loaderData.organizations.length === 0 ? (
 				<section className="panel empty-state">
 					<Icon name="building" size={26} />
-					<strong>No organizations are visible in your network yet</strong>
-					<p>Your organization or direct affiliations determine which groups appear here.</p>
+					<strong>{hasFilters ? "No organizations match these filters" : "No organizations are visible in your network yet"}</strong>
+					<p>{hasFilters ? "Try a broader search or clear the current filters." : "Your organization or direct affiliations determine which groups appear here."}</p>
+					{hasFilters && <Link className="button button--secondary" to="/organizations">Clear filters</Link>}
 				</section>
 			) : (
 				<section className="organization-card-grid">

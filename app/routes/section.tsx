@@ -165,24 +165,26 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 
 			{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}
 
-			{sectionKey === "updates" && loaderData.canCreate && <Form className="panel community-update-composer" id="community-update-composer" method="post">
-				<input name="intent" type="hidden" value="create-update" />
-				<div className="community-update-composer-heading"><div><p className="eyebrow">Community feed</p><h2>Post a community update</h2></div><Icon name="message" size={22} /></div>
-				<label className="sr-only" htmlFor="community-update-body">Community update</label>
-				<MentionTextarea id="community-update-body" maxLength={12000} minLength={2} placeholder="Share news, ask a question, celebrate a win, or let the community know what’s happening… Type @ to tag." required rows={4} targets={loaderData.mentionTargets} />
-				<div className="community-update-options">
-					<label>Post as<select defaultValue={loaderData.authoringOrganizations[0]?.id ?? ""} name="organizationId"><option value="">Yourself · community-wide</option>{loaderData.authoringOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · State of Queer Digital" : ""}</option>)}</select></label>
-					<label>Topics <span>(optional)</span><input maxLength={320} name="tags" placeholder="mutual-aid, celebration, question" /></label>
-				</div>
-				<details className="community-update-audience">
-					<summary>Choose affiliations</summary>
-					<p>Select the coalition spaces this update belongs to. An organization outside State of Queer Digital must choose at least one.</p>
-					{loaderData.availableAffiliations.length > 0 ? <div>{loaderData.availableAffiliations.map((affiliation) => <label key={affiliation.id}><input name="affiliationId" type="checkbox" value={affiliation.id} />{affiliation.name}</label>)}</div> : <p>You do not currently have an affiliation available.</p>}
-				</details>
-				<div className="community-update-composer-actions"><span>Community posts are shared with your selected community spaces.</span><button className="button button--primary" disabled={navigation.state === "submitting" && submittingIntent === "create-update"} type="submit">{navigation.state === "submitting" && submittingIntent === "create-update" ? "Posting…" : "Post update"}</button></div>
-			</Form>}
+			{sectionKey === "updates" && loaderData.canCreate && <details className="panel community-update-composer" id="community-update-composer">
+				<summary className="community-update-composer-summary"><span><Icon name="message" size={19} /><span><strong>Post a community update</strong><small>Share news, ask a question, or celebrate a win</small></span></span><Icon className="community-update-expand-icon" name="plus" size={18} /></summary>
+				<Form className="community-update-composer-form" method="post">
+					<input name="intent" type="hidden" value="create-update" />
+					<label className="sr-only" htmlFor="community-update-body">Community update</label>
+					<MentionTextarea id="community-update-body" maxLength={12000} minLength={2} placeholder="Share news, ask a question, celebrate a win, or let the community know what’s happening… Type @ to tag." required rows={4} targets={loaderData.mentionTargets} />
+					<div className="community-update-options">
+						<label>Post as<select defaultValue={loaderData.authoringOrganizations[0]?.id ?? ""} name="organizationId"><option value="">Yourself · community-wide</option>{loaderData.authoringOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · State of Queer Digital" : ""}</option>)}</select></label>
+						<label>Topics <span>(optional)</span><input maxLength={320} name="tags" placeholder="mutual-aid, celebration, question" /></label>
+					</div>
+					<details className="community-update-audience">
+						<summary>Choose affiliations</summary>
+						<p>Select the coalition spaces this update belongs to. An organization outside State of Queer Digital must choose at least one.</p>
+						{loaderData.availableAffiliations.length > 0 ? <div>{loaderData.availableAffiliations.map((affiliation) => <label key={affiliation.id}><input name="affiliationId" type="checkbox" value={affiliation.id} />{affiliation.name}</label>)}</div> : <p>You do not currently have an affiliation available.</p>}
+					</details>
+					<div className="community-update-composer-actions"><span>Community posts are shared with your selected community spaces.</span><button className="button button--primary" disabled={navigation.state === "submitting" && submittingIntent === "create-update"} type="submit">{navigation.state === "submitting" && submittingIntent === "create-update" ? "Posting…" : "Post update"}</button></div>
+				</Form>
+			</details>}
 
-			<section className="panel content-filter-panel">
+			<section className={`panel content-filter-panel${sectionKey === "updates" ? " content-filter-panel--community" : ""}`}>
 				<Form className="content-filter-form" method="get">
 					<input name="affiliations" type="hidden" value="selected" />
 					{sectionKey === "events" && <label>When<select defaultValue={filters.eventTiming} name="when"><option value="upcoming">Upcoming events</option><option value="past">Past events</option><option value="all">All events</option></select></label>}
@@ -198,7 +200,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 			{feed.posts.length === 0 ? (
 				<section className="panel empty-state content-empty-state"><Icon name={section.icon} size={28} /><strong>No posts match this view</strong><p>{loaderData.canCreate ? "Start the conversation with the first post." : "Try another filter or check back later."}</p></section>
 			) : (
-				<section className={`content-feed${sectionKey === "events" ? " content-feed--events" : ""}`} aria-label={`${section.title} posts`}>
+				<section className={`content-feed${sectionKey === "events" ? " content-feed--events" : ""}${sectionKey === "projects" ? " content-feed--projects" : ""}`} aria-label={`${section.title} posts`}>
 					{feed.posts.map((post) => {
 						const commentPreviews = loaderData.feedCommentPreviews.filter((comment) => comment.postId === post.id);
 						const commentMentionTargets = loaderData.commentMentionTargetsByPost[post.id] ?? [];

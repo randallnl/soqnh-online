@@ -15,9 +15,11 @@ import {
 	getOrganizationManagementData,
 	OrganizationMutationError,
 	removeOrganizationMembership,
+	requestDirectoryParticipation,
 	setOrganizationMembership,
 	updateManagedOrganizationProfile,
 	updateOrganizationLogo,
+	withdrawDirectoryParticipation,
 } from "~/models/organizations.server";
 
 const optionalText = (maximum: number) => z.preprocess(
@@ -82,7 +84,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	}
 }
 
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context, params }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	try {
@@ -115,6 +117,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	try {
 		if (result.data.intent === "update-profile") {
+			const managed = await getOrganizationManagementData(context.cloudflare.env, user, params.slug);
+			if (!managed || managed.organization.id !== result.data.organizationId) throw new OrganizationMutationError("not-found");
+			const directoryOptIn = formData.get("directoryOptIn") === "on";
+			const wasParticipating = managed.organization.directoryStatus === "pending" || managed.organization.directoryStatus === "published";
 			const newLogoKey = await uploadIdentityImage(context.cloudflare.env, formData.get("logo"), "org-logos", result.data.organizationId);
 			try {
 				await updateManagedOrganizationProfile(context.cloudflare.env, user, result.data);
@@ -125,6 +131,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 			} catch (error) {
 				if (newLogoKey) await deleteIdentityImage(context.cloudflare.env, newLogoKey);
 				throw error;
+			}
+			if (directoryOptIn && !wasParticipating) {
+				await requestDirectoryParticipation(context.cloudflare.env, user, result.data.organizationId);
+				return { ok: true as const, message: "Organization profile updated and the State of Queer Digital opt-in request was submitted for review." };
+			}
+			if (!directoryOptIn && wasParticipating) {
+				await withdrawDirectoryParticipation(context.cloudflare.env, user, result.data.organizationId);
+				return { ok: true as const, message: managed.organization.directoryStatus === "pending" ? "Organization profile updated and the opt-in request was canceled." : "Organization profile updated and removed from State of Queer Digital." };
 			}
 			return { ok: true as const, message: "Organization profile updated." };
 		}
@@ -166,6 +180,7 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 	const navigation = useNavigation();
 	const submitting = navigation.state === "submitting";
 	const { organization, memberships } = loaderData;
+	const directoryParticipating = organization.directoryStatus === "pending" || organization.directoryStatus === "published";
 
 	return (
 		<div className="organization-manage-page">
@@ -182,6 +197,22 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 					<input name="intent" type="hidden" value="update-profile" /><input name="organizationId" type="hidden" value={organization.id} />
 					<label>Organization logo<input accept="image/png,image/jpeg,image/webp,image/gif" name="logo" type="file" /></label>
 					<OrganizationProfileFields organization={organization} />
+					<div className={`directory-profile-opt-in directory-profile-opt-in--${organization.directoryStatus}`}>
+						<label>
+							<input
+								aria-describedby="manage-directory-opt-in-description manage-directory-opt-in-status"
+								defaultChecked={directoryParticipating}
+								disabled={submitting}
+								name="directoryOptIn"
+								onChange={(event) => {
+									if (!event.currentTarget.checked && directoryParticipating && !window.confirm("Opt this organization out of State of Queer Digital and remove it from the public directory?")) event.currentTarget.checked = true;
+								}}
+								type="checkbox"
+							/>
+							<span><strong>Opt in to State of Queer Digital</strong><small id="manage-directory-opt-in-description">By checking this box, you confirm that this organization may be added to a public directory after administrator review. Its organization profile information may be published; member and affiliation details remain private.</small></span>
+						</label>
+						<p id="manage-directory-opt-in-status">{organization.directoryStatus === "pending" ? "Pending administrator review. Uncheck the box and save to cancel this request." : organization.directoryStatus === "published" ? "Approved and eligible to appear in the public directory. Uncheck the box and save to opt out." : organization.directoryStatus === "rejected" ? `Changes requested${organization.directoryReviewNote ? `: ${organization.directoryReviewNote}` : "."} Check the box and save to resubmit.` : "Not currently opted in. Check the box and save to request review."}</p>
+					</div>
 					<button className="button button--primary" disabled={submitting} type="submit">Save profile</button>
 				</Form>
 				<div className="managed-affiliation-note"><div><p className="eyebrow">Visibility network</p><h3>Affiliations</h3></div>{organization.affiliations.length === 0 ? <p>No affiliations are assigned. A site administrator must connect this organization before it becomes discoverable through the network.</p> : <div className="affiliation-chip-row">{organization.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}<small>Affiliations control access and can only be changed by a site administrator.</small></div>

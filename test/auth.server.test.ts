@@ -63,6 +63,7 @@ import {
 	submitOrganizationClaim,
 } from "../app/models/organization-claims.server";
 import { normalizeTags } from "../app/lib/content";
+import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
 import { eventReviewSchema } from "../app/lib/event-review";
 import {
 	archivePost,
@@ -284,6 +285,30 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM organizations"),
 		env.DB.prepare("DELETE FROM affiliations"),
 	]);
+});
+
+describe("directory filters", () => {
+	it("searches and combines organization and member filters", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedOrganization();
+		await seedSecondOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-two", userId: secondMember.id, role: "viewer" });
+		await env.DB.prepare("UPDATE organizations SET summary = 'Peer support and community care', category = 'Community services', region = 'Capital Area' WHERE id = 'org-one'").run();
+		await env.DB.prepare("UPDATE users SET profile_title = 'Community organizer', location = 'Concord' WHERE id = ?1").bind(activeUser.id).run();
+
+		const organizations = await listVisibleOrganizations(env, siteAdmin);
+		expect(filterOrganizations(organizations, { query: "peer support", category: "Community services", region: "Capital Area", affiliationId: "aff-shared" }).map((organization) => organization.id)).toEqual(["org-one"]);
+		expect(filterOrganizations(organizations, { query: "missing", category: "", region: "", affiliationId: "" })).toEqual([]);
+
+		const members = await listVisibleMembers(env, siteAdmin);
+		expect(filterMembers(members, { query: "organizer", organizationId: "org-one", location: "Concord" }).map((member) => member.id)).toEqual([activeUser.id]);
+		expect(filterMembers(members, { query: "", organizationId: "org-two", location: "" }).map((member) => member.id)).toEqual([secondMember.id]);
+	});
 });
 
 describe("member profiles", () => {

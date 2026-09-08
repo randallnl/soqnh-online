@@ -8,6 +8,7 @@ export type MemberDirectoryRecord = {
 	pronouns: string | null;
 	bio: string | null;
 	location: string | null;
+	organizationIds: string | null;
 	organizationNames: string | null;
 	affiliationNames: string | null;
 };
@@ -46,6 +47,11 @@ export async function listVisibleMembers(env: Env, viewer: AuthenticatedUser) {
 		`WITH ${effectiveAffiliations}
 		 SELECT u.id, u.name, u.avatar_object_key AS avatarObjectKey,
 		        u.profile_title AS profileTitle, u.pronouns, u.bio, u.location,
+		        (SELECT group_concat(id, ',') FROM (
+		          SELECT DISTINCT o.id
+		          FROM organization_memberships AS om JOIN organizations AS o ON o.id = om.organization_id
+		          WHERE om.user_id = u.id AND o.status != 'archived' ORDER BY o.name COLLATE NOCASE
+		        )) AS organizationIds,
 		        (SELECT group_concat(name, ', ') FROM (
 		          SELECT DISTINCT o.name
 		          FROM organization_memberships AS om JOIN organizations AS o ON o.id = om.organization_id
@@ -72,6 +78,11 @@ export async function getVisibleMemberProfile(env: Env, viewer: AuthenticatedUse
 		        u.profile_title AS profileTitle, u.pronouns, u.bio, u.location,
 		        u.website_url AS websiteUrl, u.profile_visibility AS profileVisibility,
 		        u.site_role AS siteRole,
+		        (SELECT group_concat(id, ',') FROM (
+		          SELECT DISTINCT o.id FROM organization_memberships AS om
+		          JOIN organizations AS o ON o.id = om.organization_id
+		          WHERE om.user_id = u.id AND o.status != 'archived' ORDER BY o.name COLLATE NOCASE
+		        )) AS organizationIds,
 		        (SELECT group_concat(name, ', ') FROM (
 		          SELECT DISTINCT o.name FROM organization_memberships AS om
 		          JOIN organizations AS o ON o.id = om.organization_id
