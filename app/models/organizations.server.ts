@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from "../lib/auth.server";
 import type {
+	DirectoryStatus,
 	OrganizationRole,
 	OrganizationStatus,
 } from "../lib/organizations";
@@ -14,6 +15,11 @@ export type OrganizationRecord = {
 	contactEmail: string | null;
 	logoObjectKey: string | null;
 	status: OrganizationStatus;
+	directoryStatus: DirectoryStatus;
+	directoryRequestedAt: string | null;
+	directoryReviewedAt: string | null;
+	directoryReviewNote: string | null;
+	directoryPublishedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
 	memberCount: number;
@@ -50,6 +56,11 @@ export type AvailableMember = {
 	email: string;
 };
 
+export type DirectoryReviewRecord = OrganizationRecord & {
+	requesterName: string | null;
+	requesterEmail: string | null;
+};
+
 export class OrganizationMutationError extends Error {
 	constructor(
 		public readonly reason:
@@ -58,7 +69,8 @@ export class OrganizationMutationError extends Error {
 			| "member-unavailable"
 			| "membership-not-found"
 			| "forbidden"
-			| "self-management",
+			| "self-management"
+			| "directory-transition",
 	) {
 		super(reason);
 		this.name = "OrganizationMutationError";
@@ -124,6 +136,11 @@ export async function listOrganizations(env: Env, includeInactive = false) {
 		        o.contact_email AS contactEmail,
 		        o.logo_object_key AS logoObjectKey,
 		        o.status,
+		        o.directory_status AS directoryStatus,
+		        o.directory_requested_at AS directoryRequestedAt,
+		        o.directory_reviewed_at AS directoryReviewedAt,
+		        o.directory_review_note AS directoryReviewNote,
+		        o.directory_published_at AS directoryPublishedAt,
 		        o.created_at AS createdAt,
 		        o.updated_at AS updatedAt,
 		        count(om.user_id) AS memberCount
@@ -162,11 +179,19 @@ export async function listVisibleOrganizations(
 		        o.website_url AS websiteUrl,
 		        o.contact_email AS contactEmail,
 		        o.logo_object_key AS logoObjectKey,
-		        o.status, o.created_at AS createdAt, o.updated_at AS updatedAt,
+		        o.status,
+		        o.directory_status AS directoryStatus,
+		        o.directory_requested_at AS directoryRequestedAt,
+		        o.directory_reviewed_at AS directoryReviewedAt,
+		        o.directory_review_note AS directoryReviewNote,
+		        o.directory_published_at AS directoryPublishedAt,
+		        o.created_at AS createdAt, o.updated_at AS updatedAt,
 		        (SELECT count(*) FROM organization_memberships WHERE organization_id = o.id) AS memberCount
 		 FROM organizations AS o
 		 WHERE o.status = 'active'
 		   AND (
+		     o.directory_status = 'published'
+		     OR
 		     EXISTS (
 		       SELECT 1 FROM organization_memberships
 		       WHERE organization_id = o.id AND user_id = ?1
@@ -220,6 +245,11 @@ export async function getOrganizationBySlug(
 		        o.contact_email AS contactEmail,
 		        o.logo_object_key AS logoObjectKey,
 		        o.status,
+		        o.directory_status AS directoryStatus,
+		        o.directory_requested_at AS directoryRequestedAt,
+		        o.directory_reviewed_at AS directoryReviewedAt,
+		        o.directory_review_note AS directoryReviewNote,
+		        o.directory_published_at AS directoryPublishedAt,
 		        o.created_at AS createdAt,
 		        o.updated_at AS updatedAt,
 		        count(om.user_id) AS memberCount
@@ -250,6 +280,8 @@ export async function getOrganizationBySlug(
 			 WHERE o.id = ?2
 			   AND o.status != 'archived'
 			   AND (
+			     o.directory_status = 'published'
+			     OR
 			     EXISTS (
 			       SELECT 1 FROM organization_memberships
 			       WHERE organization_id = o.id AND user_id = ?1
@@ -320,6 +352,129 @@ export async function getOrganizationAdministrationData(env: Env) {
 		memberships: membershipResult.results,
 		availableMembers: memberResult.results,
 	};
+}
+
+export async function listDirectoryReviewQueue(env: Env) {
+	const result = await env.DB.prepare(
+		`SELECT o.id, o.name, o.slug, o.summary, o.description,
+		        o.website_url AS websiteUrl, o.contact_email AS contactEmail,
+		        o.logo_object_key AS logoObjectKey, o.status,
+		        o.directory_status AS directoryStatus,
+		        o.directory_requested_at AS directoryRequestedAt,
+		        o.directory_reviewed_at AS directoryReviewedAt,
+		        o.directory_review_note AS directoryReviewNote,
+		        o.directory_published_at AS directoryPublishedAt,
+		        o.created_at AS createdAt, o.updated_at AS updatedAt,
+		        (SELECT count(*) FROM organization_memberships WHERE organization_id = o.id) AS memberCount,
+		        u.name AS requesterName, u.email AS requesterEmail
+		 FROM organizations AS o
+		 LEFT JOIN users AS u ON u.id = o.directory_requested_by_user_id
+		 WHERE o.directory_status = 'pending'
+		 ORDER BY o.directory_requested_at ASC, o.name COLLATE NOCASE`,
+	).all<Omit<DirectoryReviewRecord, "affiliations">>();
+	const withAffiliations = await attachAffiliations(env, result.results);
+	return withAffiliations as DirectoryReviewRecord[];
+}
+
+export async function requestDirectoryParticipation(
+	env: Env,
+	actor: AuthenticatedUser,
+	organizationId: string,
+) {
+	await requireOrganizationManager(env, actor, organizationId);
+	const now = new Date().toISOString();
+	const results = await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE organizations
+			 SET directory_status = 'pending', directory_requested_by_user_id = ?1,
+			     directory_requested_at = ?2, directory_reviewed_by_user_id = NULL,
+			     directory_reviewed_at = NULL, directory_review_note = NULL, updated_at = ?2
+			 WHERE id = ?3 AND status = 'active'
+			   AND directory_status IN ('not_listed', 'rejected', 'opted_out')`,
+		).bind(actor.id, now, organizationId),
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'organization.directory_requested', 'organization', ?3, NULL, ?4
+			 WHERE EXISTS (SELECT 1 FROM organizations WHERE id = ?3 AND directory_status = 'pending' AND updated_at = ?4)`,
+		).bind(crypto.randomUUID(), actor.id, organizationId, now),
+	]);
+	if (results[0]?.meta.changes !== 1) throw new OrganizationMutationError("directory-transition");
+}
+
+export async function withdrawDirectoryParticipation(
+	env: Env,
+	actor: AuthenticatedUser,
+	organizationId: string,
+) {
+	await requireOrganizationManager(env, actor, organizationId);
+	const now = new Date().toISOString();
+	const results = await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE organizations
+			 SET directory_status = 'opted_out', directory_reviewed_by_user_id = NULL,
+			     directory_reviewed_at = NULL, directory_review_note = NULL,
+			     directory_published_at = NULL, updated_at = ?1
+			 WHERE id = ?2 AND status != 'archived'
+			   AND directory_status IN ('pending', 'published', 'rejected')`,
+		).bind(now, organizationId),
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'organization.directory_withdrawn', 'organization', ?3, NULL, ?4
+			 WHERE EXISTS (SELECT 1 FROM organizations WHERE id = ?3 AND directory_status = 'opted_out' AND updated_at = ?4)`,
+		).bind(crypto.randomUUID(), actor.id, organizationId, now),
+	]);
+	if (results[0]?.meta.changes !== 1) throw new OrganizationMutationError("directory-transition");
+}
+
+export async function reviewDirectoryParticipation(
+	env: Env,
+	actor: AuthenticatedUser,
+	input: { organizationId: string; decision: "approve" | "reject"; note: string | null },
+) {
+	if (actor.siteRole !== "site_admin") throw new OrganizationMutationError("forbidden");
+	const now = new Date().toISOString();
+	const status = input.decision === "approve" ? "published" : "rejected";
+	const existing = await env.DB.prepare(
+		`SELECT directory_requested_by_user_id AS requesterUserId
+		 FROM organizations WHERE id = ?1 AND directory_status = 'pending'`,
+	).bind(input.organizationId).first<{ requesterUserId: string | null }>();
+	if (!existing) throw new OrganizationMutationError("directory-transition");
+	const statements = [
+		env.DB.prepare(
+			`UPDATE organizations
+			 SET directory_status = ?1, directory_reviewed_by_user_id = ?2,
+			     directory_reviewed_at = ?3, directory_review_note = ?4,
+			     directory_published_at = CASE WHEN ?1 = 'published' THEN ?3 ELSE NULL END,
+			     updated_at = ?3
+			 WHERE id = ?5 AND directory_status = 'pending'`,
+		).bind(status, actor.id, now, input.note, input.organizationId),
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, ?3, 'organization', ?4, ?5, ?6
+			 WHERE EXISTS (SELECT 1 FROM organizations WHERE id = ?4 AND directory_status = ?7 AND updated_at = ?6)`,
+		).bind(
+			crypto.randomUUID(), actor.id,
+			input.decision === "approve" ? "organization.directory_approved" : "organization.directory_rejected",
+			input.organizationId, JSON.stringify({ note: input.note }), now, status,
+		),
+	];
+	if (existing.requesterUserId) {
+		statements.push(env.DB.prepare(
+			`INSERT INTO notifications
+			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
+			 SELECT ?1, ?2, ?3, NULL, NULL, 'approval',
+			        CASE WHEN ?4 = 'published'
+			          THEN 'Your organization is now approved for State of Queer Digital.'
+			          ELSE 'Your State of Queer Digital request needs changes.' END,
+			        NULL, ?5
+			 WHERE EXISTS (SELECT 1 FROM users WHERE id = ?2 AND status = 'active')`,
+		).bind(crypto.randomUUID(), existing.requesterUserId, actor.id, status, now));
+	}
+	const results = await env.DB.batch(statements);
+	if (results[0]?.meta.changes !== 1) throw new OrganizationMutationError("directory-transition");
 }
 
 export async function getOrganizationManagementData(

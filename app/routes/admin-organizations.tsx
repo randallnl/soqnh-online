@@ -14,8 +14,10 @@ import {
 import {
 	createOrganization,
 	getOrganizationAdministrationData,
+	listDirectoryReviewQueue,
 	OrganizationMutationError,
 	removeOrganizationMembership,
+	reviewDirectoryParticipation,
 	setOrganizationMembership,
 	updateOrganization,
 } from "~/models/organizations.server";
@@ -62,6 +64,12 @@ const actionSchema = z.discriminatedUnion("intent", [
 		userId: identifier,
 	}),
 ]);
+const directoryReviewSchema = z.object({
+	intent: z.literal("review-directory"),
+	organizationId: identifier,
+	decision: z.enum(["approve", "reject"]),
+	note: optionalText(500),
+});
 
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
 
@@ -71,11 +79,12 @@ export function meta(_args: Route.MetaArgs) {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const admin = await requireSiteAdmin(request, context.cloudflare.env);
-	const [data, pendingClaims] = await Promise.all([
+	const [data, pendingClaims, directoryQueue] = await Promise.all([
 		getOrganizationAdministrationData(context.cloudflare.env),
 		listReviewableOrganizationClaims(context.cloudflare.env, admin),
+		listDirectoryReviewQueue(context.cloudflare.env),
 	]);
-	return { ...data, pendingClaims };
+	return { ...data, pendingClaims, directoryQueue };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -83,6 +92,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const admin = await requireSiteAdmin(request, context.cloudflare.env);
 	const formData = await request.formData();
 	const raw = Object.fromEntries(formData);
+	if (raw.intent === "review-directory") {
+		const review = directoryReviewSchema.safeParse(raw);
+		if (!review.success) return { ok: false as const, error: review.error.issues[0]?.message ?? "Check the opt-in decision" };
+		if (review.data.decision === "reject" && !review.data.note) return { ok: false as const, error: "Add the changes needed before returning this request." };
+		try {
+			await reviewDirectoryParticipation(context.cloudflare.env, admin, review.data);
+			return { ok: true as const, message: review.data.decision === "approve" ? "Organization approved for State of Queer Digital." : "Opt-in request returned for changes." };
+		} catch (error) {
+			if (error instanceof OrganizationMutationError) return { ok: false as const, error: error.reason === "directory-transition" ? "That request has already been reviewed." : "The opt-in request could not be reviewed." };
+			throw error;
+		}
+	}
 	if (raw.intent === "review-organization-claim") {
 		const review = reviewOrganizationClaimSchema.safeParse(raw);
 		if (!review.success) return { ok: false as const, error: review.error.issues[0]?.message ?? "Check the claim decision" };
@@ -129,6 +150,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				"membership-not-found": "That membership has already been removed.",
 				"forbidden": "You no longer have permission to manage that organization.",
 				"self-management": "Organization administrators cannot remove or demote their own access.",
+				"directory-transition": "The State of Queer Digital participation status changed. Refresh and try again.",
 			};
 			return { ok: false as const, error: messages[error.reason] };
 		}
@@ -145,6 +167,11 @@ export default function AdminOrganizations({ loaderData }: Route.ComponentProps)
 		<div className="admin-page organization-admin-page">
 			<section className="page-heading"><div><p className="eyebrow">Site administration</p><h1>Organizations</h1><p>Manage organization profiles and the people who can view, contribute, or administer them.</p></div><Link className="button button--secondary heading-action" to="/organizations"><Icon name="building" size={17} /> View directory</Link></section>
 			{actionData && <p className={`admin-notice form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}
+
+			<section className="panel directory-review-panel">
+				<div className="panel-heading"><div><p className="eyebrow">State of Queer Digital</p><h2>Opt-in requests</h2></div><span>{loaderData.directoryQueue.length}</span></div>
+				{loaderData.directoryQueue.length === 0 ? <p className="muted-empty">No organizations are awaiting opt-in review.</p> : <div className="directory-review-list">{loaderData.directoryQueue.map((organization) => <article key={organization.id}><div className="directory-review-summary"><span className="organization-monogram">{organization.name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}</span><div><strong>{organization.name}</strong><p>Requested by {organization.requesterName || organization.requesterEmail || "an organization administrator"}</p><small>{organization.summary || "No organization summary supplied."}</small></div></div><div className="directory-review-actions"><Form method="post"><input name="intent" type="hidden" value="review-directory" /><input name="organizationId" type="hidden" value={organization.id} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary button--compact" disabled={submitting} type="submit">Approve</button></Form><Form className="directory-review-reject" method="post"><input name="intent" type="hidden" value="review-directory" /><input name="organizationId" type="hidden" value={organization.id} /><input name="decision" type="hidden" value="reject" /><input aria-label={`Changes needed for ${organization.name}`} maxLength={500} name="note" placeholder="Changes needed" required /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Return</button></Form></div></article>)}</div>}
+			</section>
 
 			<section className="panel organization-claim-review-panel">
 				<div className="panel-heading"><div><p className="eyebrow">Membership moderation</p><h2>Pending organization claims</h2></div><span>{loaderData.pendingClaims.length}</span></div>
@@ -171,7 +198,7 @@ export default function AdminOrganizations({ loaderData }: Route.ComponentProps)
 						<details className="panel organization-admin-card" key={organization.id}>
 							<summary>
 								<span className="organization-monogram">{organization.name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}</span>
-								<div><strong>{organization.name}</strong><p>/{organization.slug} · {organization.memberCount} members</p></div>
+								<div><strong>{organization.name}</strong><p>/{organization.slug} · {organization.memberCount} members · {organization.directoryStatus === "published" ? "participating" : organization.directoryStatus.replaceAll("_", " ")}</p></div>
 								<span className={`status-pill status-pill--${organization.status}`}>{organization.status}</span>
 								<Icon name="chevron-right" size={18} />
 							</summary>

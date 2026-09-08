@@ -105,6 +105,23 @@ export const organizations = sqliteTable(
 		eventScrapingEnabled: integer("event_scraping_enabled")
 			.notNull()
 			.default(0),
+		directoryStatus: text("directory_status", {
+			enum: ["not_listed", "pending", "published", "rejected", "opted_out"],
+		})
+			.notNull()
+			.default("not_listed"),
+		directoryRequestedByUserId: text("directory_requested_by_user_id").references(
+			() => users.id,
+			{ onDelete: "set null" },
+		),
+		directoryRequestedAt: text("directory_requested_at"),
+		directoryReviewedByUserId: text("directory_reviewed_by_user_id").references(
+			() => users.id,
+			{ onDelete: "set null" },
+		),
+		directoryReviewedAt: text("directory_reviewed_at"),
+		directoryReviewNote: text("directory_review_note"),
+		directoryPublishedAt: text("directory_published_at"),
 	},
 	(table) => [
 		check(
@@ -114,6 +131,14 @@ export const organizations = sqliteTable(
 		check(
 			"organizations_event_scraping_enabled_check",
 			sql`${table.eventScrapingEnabled} in (0, 1)`,
+		),
+		check(
+			"organizations_directory_status_check",
+			sql`${table.directoryStatus} in ('not_listed', 'pending', 'published', 'rejected', 'opted_out')`,
+		),
+		index("idx_organizations_directory_status_name").on(
+			table.directoryStatus,
+			table.name,
 		),
 	],
 );

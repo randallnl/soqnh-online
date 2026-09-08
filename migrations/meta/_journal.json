@@ -43,6 +43,13 @@
       "when": 1788881964592,
       "tag": "0005_even_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788894635971,
+      "tag": "0006_nebulous_cerise",
+      "breakpoints": true
     }
   ]
 }

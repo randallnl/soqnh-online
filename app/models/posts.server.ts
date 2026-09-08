@@ -24,6 +24,7 @@ export type PostOrganizationOption = {
 	name: string;
 	slug: string;
 	role: "contributor" | "org_admin" | null;
+	directoryStatus: "not_listed" | "pending" | "published" | "rejected" | "opted_out";
 };
 
 export type PostAffiliationOption = {
@@ -141,6 +142,7 @@ async function requirePostAffiliations(
 	env: Env,
 	actor: AuthenticatedUser,
 	visibility: PostVisibility,
+	organizationId: string | null,
 	affiliationIds: string[] | undefined,
 ) {
 	if (visibility === "organization") return [];
@@ -148,7 +150,17 @@ async function requirePostAffiliations(
 	// every user-facing create/edit route supplies this field explicitly.
 	if (affiliationIds === undefined) return [];
 	const uniqueIds = [...new Set(affiliationIds)];
-	if (uniqueIds.length === 0) throw new PostMutationError("affiliation-required");
+	if (uniqueIds.length === 0) {
+		if (actor.siteRole === "site_admin" && organizationId === null) return [];
+		const participating = organizationId
+			? await env.DB.prepare(
+				`SELECT 1 FROM organizations
+				 WHERE id = ?1 AND status = 'active' AND directory_status = 'published'`,
+			).bind(organizationId).first<number>("1")
+			: null;
+		if (participating === null) throw new PostMutationError("affiliation-required");
+		return [];
+	}
 	if (uniqueIds.length > 20) throw new PostMutationError("affiliation-unavailable");
 	const placeholders = uniqueIds.map((_, index) => `?${index + 3}`).join(", ");
 	const result = await env.DB.prepare(
@@ -178,7 +190,7 @@ async function requirePostAffiliations(
 
 export async function listPostOrganizations(env: Env, actor: AuthenticatedUser) {
 	const result = await env.DB.prepare(
-		`SELECT o.id, o.name, o.slug,
+		`SELECT o.id, o.name, o.slug, o.directory_status AS directoryStatus,
 		        CASE WHEN ?2 = 1 THEN NULL ELSE om.role END AS role
 		 FROM organizations AS o
 		 LEFT JOIN organization_memberships AS om
@@ -285,6 +297,15 @@ export async function listSectionPosts(
 		       ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
 		         p.organization_id IS NULL
 		         OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+		         OR (o.directory_status = 'published' AND EXISTS (
+		           SELECT 1
+		           FROM organization_memberships AS directory_membership
+		           JOIN organizations AS directory_organization
+		             ON directory_organization.id = directory_membership.organization_id
+		            AND directory_organization.status = 'active'
+		            AND directory_organization.directory_status = 'published'
+		           WHERE directory_membership.user_id = ?1
+		         ))
 		         OR EXISTS (
 		           SELECT 1 FROM organization_affiliations AS legacy_affiliation
 		           JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
@@ -369,9 +390,18 @@ export async function listSectionPosts(
 			       JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
 			       WHERE post_affiliation.post_id = p.id
 			     ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
-			       p.organization_id IS NULL
-			       OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
-			       OR EXISTS (
+		       p.organization_id IS NULL
+		       OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+		       OR (o.directory_status = 'published' AND EXISTS (
+		         SELECT 1
+		         FROM organization_memberships AS directory_membership
+		         JOIN organizations AS directory_organization
+		           ON directory_organization.id = directory_membership.organization_id
+		          AND directory_organization.status = 'active'
+		          AND directory_organization.directory_status = 'published'
+		         WHERE directory_membership.user_id = ?1
+		       ))
+		       OR EXISTS (
 			         SELECT 1 FROM organization_affiliations AS legacy_affiliation
 			         JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
 			         WHERE legacy_affiliation.organization_id = p.organization_id
@@ -466,6 +496,15 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 			       ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
 			         p.organization_id IS NULL
 			         OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+			         OR (o.directory_status = 'published' AND EXISTS (
+			           SELECT 1
+			           FROM organization_memberships AS directory_membership
+			           JOIN organizations AS directory_organization
+			             ON directory_organization.id = directory_membership.organization_id
+			            AND directory_organization.status = 'active'
+			            AND directory_organization.directory_status = 'published'
+			           WHERE directory_membership.user_id = ?1
+			         ))
 			         OR EXISTS (
 			           SELECT 1 FROM organization_affiliations AS legacy_affiliation
 			           JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
@@ -502,7 +541,7 @@ export async function createPost(
 	if (input.section === "event" && !input.event) {
 		throw new PostMutationError("event-details-required");
 	}
-	const affiliationIds = await requirePostAffiliations(env, actor, input.visibility, input.affiliationIds);
+	const affiliationIds = await requirePostAffiliations(env, actor, input.visibility, input.organizationId, input.affiliationIds);
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
 	const status = input.section === "event" ? "draft" : input.status;
@@ -561,7 +600,7 @@ export async function updatePost(
 	if (existing.section === "event" && !input.event) {
 		throw new PostMutationError("event-details-required");
 	}
-	const affiliationIds = await requirePostAffiliations(env, actor, input.visibility, input.affiliationIds);
+	const affiliationIds = await requirePostAffiliations(env, actor, input.visibility, input.organizationId, input.affiliationIds);
 	const now = new Date().toISOString();
 	const status = existing.section === "event" ? "draft" : input.status;
 	const statements = [

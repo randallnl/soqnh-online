@@ -49,7 +49,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (error instanceof PostMutationError) {
-			const messages = { "not-found": "That post is no longer available.", "forbidden": "You cannot edit that post.", "organization-required": "Choose an organization for that visibility setting.", "organization-unavailable": "You cannot post for that organization.", "affiliation-required": "Choose at least one affiliation for shared-network content.", "affiliation-unavailable": "You can only tag affiliations you belong to.", "event-details-required": "Add the event date and time before submitting it." };
+			const messages = { "not-found": "That post is no longer available.", "forbidden": "You cannot edit that post.", "organization-required": "Choose an organization for that visibility setting.", "organization-unavailable": "You cannot post for that organization.", "affiliation-required": "Choose at least one affiliation, or opt the posting organization in to State of Queer Digital for statewide sharing.", "affiliation-unavailable": "You can only tag affiliations you belong to.", "event-details-required": "Add the event date and time before submitting it." };
 			return { ok: false as const, error: messages[error.reason] };
 		}
 		return { ok: false as const, error: "The post could not be updated." };

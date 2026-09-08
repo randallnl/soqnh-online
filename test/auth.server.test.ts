@@ -41,12 +41,16 @@ import {
 	getOrganizationAdministrationData,
 	getOrganizationBySlug,
 	getOrganizationManagementData,
+	listDirectoryReviewQueue,
 	listManagedOrganizations,
 	listVisibleOrganizations,
 	removeOrganizationMembership,
+	requestDirectoryParticipation,
+	reviewDirectoryParticipation,
 	setOrganizationMembership,
 	updateOrganization,
 	updateManagedOrganizationProfile,
+	withdrawDirectoryParticipation,
 } from "../app/models/organizations.server";
 import {
 	cancelOrganizationClaim,
@@ -1196,6 +1200,74 @@ describe("organization-admin self-service", () => {
 				userId: activeUser.id,
 			}),
 		).rejects.toMatchObject({ reason: "self-management" });
+	});
+});
+
+describe("State of Queer Digital participation", () => {
+	it("supports request, review, notification, audit, and withdrawal", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "org_admin" });
+		await updateManagedOrganizationProfile(env, activeUser, {
+			organizationId: "org-one",
+			name: "Community Center",
+			summary: "Affirming community support across central New Hampshire.",
+			description: "Programs, referrals, and gathering space.",
+			websiteUrl: "https://example.org",
+			contactEmail: "hello@example.org",
+		});
+
+		expect((await getOrganizationBySlug(env, "community-center", siteAdmin))?.organization.directoryStatus).toBe("not_listed");
+		await requestDirectoryParticipation(env, activeUser, "org-one");
+		expect(await listDirectoryReviewQueue(env)).toMatchObject([{ id: "org-one", directoryStatus: "pending", requesterEmail: activeUser.email }]);
+
+		await reviewDirectoryParticipation(env, siteAdmin, { organizationId: "org-one", decision: "reject", note: "Confirm authorization." });
+		expect((await getOrganizationBySlug(env, "community-center", siteAdmin))?.organization).toMatchObject({ directoryStatus: "rejected", directoryReviewNote: "Confirm authorization." });
+		await requestDirectoryParticipation(env, activeUser, "org-one");
+		await reviewDirectoryParticipation(env, siteAdmin, { organizationId: "org-one", decision: "approve", note: null });
+		expect((await getOrganizationBySlug(env, "community-center", siteAdmin))?.organization).toMatchObject({ directoryStatus: "published", directoryReviewNote: null });
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM notifications WHERE user_id = ?1 AND type = 'approval'").bind(activeUser.id).first<number>("count")).toBe(2);
+
+		await withdrawDirectoryParticipation(env, activeUser, "org-one");
+		expect((await getOrganizationBySlug(env, "community-center", siteAdmin))?.organization.directoryStatus).toBe("opted_out");
+		const actions = await env.DB.prepare("SELECT action FROM audit_log WHERE entity_id = 'org-one' AND action LIKE 'organization.directory_%' ORDER BY rowid").all<{ action: string }>();
+		expect(actions.results.map((entry) => entry.action)).toEqual([
+			"organization.directory_requested",
+			"organization.directory_rejected",
+			"organization.directory_requested",
+			"organization.directory_approved",
+			"organization.directory_withdrawn",
+		]);
+	});
+
+	it("shares untagged posts statewide only among participating organizations", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await seedSecondOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-two", userId: secondMember.id, role: "viewer" });
+		await requestDirectoryParticipation(env, siteAdmin, "org-one");
+		await reviewDirectoryParticipation(env, siteAdmin, { organizationId: "org-one", decision: "approve", note: null });
+		await requestDirectoryParticipation(env, siteAdmin, "org-two");
+		await reviewDirectoryParticipation(env, siteAdmin, { organizationId: "org-two", decision: "approve", note: null });
+
+		const created = await createPost(env, activeUser, {
+			organizationId: "org-one",
+			section: "update",
+			title: "Statewide collaboration request",
+			body: "We are looking for participating partners across New Hampshire.",
+			visibility: "members",
+			status: "published",
+			tags: ["collaboration"],
+			affiliationIds: [],
+		});
+
+		expect((await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(created.id);
+		expect((await listSectionPosts(env, thirdMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts).toEqual([]);
 	});
 });
 

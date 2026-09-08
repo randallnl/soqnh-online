@@ -4209,6 +4209,69 @@ h3 {
 @media (max-width: 480px) {
 	.audit-log-table article { grid-template-columns: 1fr; }
 }
+
+/* State of Queer Digital opt-in workflow */
+
+.directory-opt-in-panel {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 18px 28px;
+	align-items: center;
+	padding: 26px;
+	border-top: 5px solid var(--plum-700);
+	scroll-margin-top: calc(var(--topbar-height) + 20px);
+}
+
+.directory-opt-in-panel--published { border-top-color: var(--green-600); }
+.directory-opt-in-panel--pending { border-top-color: var(--gold-600); }
+.directory-opt-in-panel--rejected { border-top-color: var(--danger); }
+
+.directory-opt-in-copy {
+	display: flex;
+	align-items: flex-start;
+	gap: 16px;
+}
+
+.directory-opt-in-copy h2 { margin-top: 5px; font-size: 1.25rem; }
+.directory-opt-in-copy h2 + p { max-width: 760px; margin-top: 7px; color: var(--ink-600); font-size: .76rem; line-height: 1.6; }
+.directory-opt-in-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.directory-opt-in-actions form { margin: 0; }
+.directory-opt-in-note,
+.directory-opt-in-panel > .form-message { grid-column: 1 / -1; margin: 0; }
+.directory-opt-in-note { color: var(--ink-500); font-size: .7rem; }
+
+.status-pill--directory-not_listed,
+.status-pill--directory-opted_out { color: var(--ink-600); background: var(--ink-100); }
+.status-pill--directory-pending { color: #865d13; background: var(--gold-50); }
+.status-pill--directory-published { color: var(--green-800); background: var(--green-50); }
+.status-pill--directory-rejected { color: var(--danger); background: var(--danger-bg); }
+
+.directory-review-panel { overflow: hidden; }
+.directory-review-list { display: grid; }
+.directory-review-list article { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 22px; padding: 18px 24px; border-top: 1px solid var(--ink-100); }
+.directory-review-summary { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.directory-review-summary strong { font-size: .78rem; }
+.directory-review-summary p,
+.directory-review-summary small { display: block; margin-top: 4px; color: var(--ink-500); font-size: .63rem; line-height: 1.45; }
+.directory-review-actions,
+.directory-review-reject { display: flex; align-items: center; gap: 8px; }
+.directory-review-reject input { min-width: 210px; height: 38px; padding: 0 10px; border: 1px solid var(--ink-200); border-radius: 8px; background: var(--surface); font: inherit; font-size: .66rem; }
+
+@media (max-width: 900px) {
+	.directory-opt-in-panel { grid-template-columns: 1fr; }
+	.directory-opt-in-actions { justify-content: flex-start; }
+	.directory-review-list article { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+	.directory-opt-in-copy { flex-direction: column; }
+	.directory-opt-in-actions { align-items: stretch; flex-direction: column; }
+	.directory-opt-in-actions .button { width: 100%; }
+	.directory-review-actions,
+	.directory-review-reject { align-items: stretch; flex-direction: column; }
+	.directory-review-reject input { width: 100%; min-width: 0; }
+}
+
 .onboarding-frame {
 	min-height: 100vh;
 	background: var(--ink-50);

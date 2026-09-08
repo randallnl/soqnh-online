@@ -32,7 +32,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 		<div className="organization-detail-page">
 			<div className="organization-detail-actions">
 				<Link className="back-link" to="/organizations">← All organizations</Link>
-				{loaderData.canManage && <Link className="button button--secondary button--compact" to={`/organizations/${organization.slug}/manage`}><Icon name="settings" size={16} /> Manage organization</Link>}
+				{loaderData.canManage && <div>{organization.directoryStatus !== "published" && <Link className="button button--primary button--compact" to={`/organizations/${organization.slug}/manage#digital-directory`}><Icon name="sparkles" size={16} /> Opt in to State of Queer Digital</Link>}<Link className="button button--secondary button--compact" to={`/organizations/${organization.slug}/manage`}><Icon name="settings" size={16} /> Manage organization</Link></div>}
 			</div>
 			<section className="organization-profile panel">
 				<div className="organization-profile-header">
