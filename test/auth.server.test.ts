@@ -346,12 +346,6 @@ describe("organization membership claims", () => {
 	it("keeps a self-selected role pending until a site administrator approves it", async () => {
 		await Promise.all([seedUser(), seedSiteAdmin()]);
 		await seedOrganization();
-		expect(await listClaimableOrganizations(env, activeUser)).toEqual([]);
-		await expect(submitOrganizationClaim(env, activeUser, { organizationId: "org-one", requestedRole: "viewer" })).rejects.toMatchObject({ reason: "organization-unavailable" });
-		await seedAffiliation();
-		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
-		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
-
 		const claimable = await listClaimableOrganizations(env, activeUser);
 		expect(claimable).toEqual([expect.objectContaining({ id: "org-one", currentRole: null, hasPendingClaim: false })]);
 		const claim = await submitOrganizationClaim(env, activeUser, {
@@ -923,8 +917,18 @@ describe("organization administration", () => {
 			slug: "seacoast-pride-nh",
 			summary: "Updated summary",
 			description: "A longer organization profile.",
+			category: "Community & Advocacy",
 			websiteUrl: "https://example.org",
 			contactEmail: "hello@example.org",
+			contactPhone: "(603) 555-0142",
+			townCity: "Portsmouth, NH",
+			region: "Seacoast",
+			socialPlatform: "Instagram",
+			socialHandle: "@seacoastpride",
+			listingRationale: "An affirming statewide resource.",
+			leadershipIdentity: "Yes, queer-led",
+			sourceImageUrls: "https://example.org/logo.png",
+			operatesStatewide: 1,
 			status: "active",
 		});
 
@@ -932,6 +936,10 @@ describe("organization administration", () => {
 		expect(profile?.organization).toMatchObject({
 			name: "Seacoast Pride NH",
 			description: "A longer organization profile.",
+			category: "Community & Advocacy",
+			contactPhone: "(603) 555-0142",
+			region: "Seacoast",
+			operatesStatewide: 1,
 			memberCount: 0,
 		});
 		const auditCount = await env.DB.prepare(
@@ -1792,9 +1800,11 @@ describe("post interactions and notifications", () => {
 		const mentionable = await listMentionableMembers(env, activeUser, post.id);
 		expect(mentionable.map((member) => member.id)).toContain(secondMember.id);
 		expect(mentionable.map((member) => member.id)).not.toContain(thirdMember.id);
-		await expect(createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "A crafted invalid mention.", mentionUserId: thirdMember.id })).rejects.toMatchObject({ reason: "member-unavailable" });
-		await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "A valid internal mention.", mentionUserId: secondMember.id });
+		await expect(createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "A crafted invalid mention.", mentionUserIds: [thirdMember.id] })).rejects.toMatchObject({ reason: "member-unavailable" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: thirdMember.id, role: "viewer" });
+		await createComment(env, activeUser, { postId: post.id, parentCommentId: null, body: "A valid internal mention for @Second Member and @Third Member.", mentionUserIds: [secondMember.id, thirdMember.id] });
 		expect(await countUnreadNotifications(env, secondMember)).toBe(1);
+		expect(await countUnreadNotifications(env, thirdMember)).toBe(1);
 		await removeOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id });
 		expect(await countUnreadNotifications(env, secondMember)).toBe(0);
 		expect(await listNotifications(env, secondMember)).toEqual([]);

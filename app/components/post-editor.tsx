@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { postStatuses, postVisibilities, type ContentSection } from "~/lib/content";
 import { eventDateTimeInputValue } from "~/lib/events";
+import { MentionTextarea, type MentionTarget } from "~/components/mention-textarea";
 import type { PostAffiliationOption, PostOrganizationOption, PostRecord } from "~/models/posts.server";
 
 const visibilityLabels = { members: "Shared network or affiliations", organization: "Organization members only" } as const;
@@ -16,6 +17,8 @@ export function PostEditor({
 	post,
 	submitting,
 	message,
+	mentionTargets = [],
+	mentionUserIds = [],
 }: {
 	section: ContentSection;
 	organizations: PostOrganizationOption[];
@@ -24,6 +27,8 @@ export function PostEditor({
 	post?: PostRecord;
 	submitting: boolean;
 	message?: { ok: boolean; text: string };
+	mentionTargets?: MentionTarget[];
+	mentionUserIds?: string[];
 }) {
 	const isEvent = section === "events";
 	const [visibility, setVisibility] = useState(post?.visibility ?? "members");
@@ -33,7 +38,7 @@ export function PostEditor({
 			{post && <input name="postId" type="hidden" value={post.id} />}
 			<div className="post-editor-grid">
 				<label className="wide-field">Title<input defaultValue={post?.title ?? ""} maxLength={180} name="title" required /></label>
-				<label className="wide-field">Body<textarea defaultValue={post?.body ?? ""} maxLength={12000} name="body" required rows={12} /></label>
+				<label className="wide-field">Body{section === "updates" ? <><MentionTextarea defaultMentionUserIds={mentionUserIds} defaultValue={post?.body ?? ""} id="post-body" maxLength={12000} required rows={12} targets={mentionTargets} /><span className="field-help">Type @ to tag a person or organization. Tagged people receive a notification when the update is published.</span></> : <textarea defaultValue={post?.body ?? ""} maxLength={12000} name="body" required rows={12} />}</label>
 				{isEvent && <fieldset className="event-editor-fields wide-field"><legend>Event details</legend><div className="post-editor-grid"><label>Starts<input defaultValue={eventDateTimeInputValue(post?.eventStartsAt ?? null)} name="startsAt" required type="datetime-local" /></label><label>Ends <span>(optional)</span><input defaultValue={eventDateTimeInputValue(post?.eventEndsAt ?? null)} name="endsAt" type="datetime-local" /></label><label className="wide-field">Location<input defaultValue={post?.eventLocationName ?? ""} maxLength={240} name="locationName" placeholder="Venue, town, or Online" /></label><label>Map or location URL<input defaultValue={post?.eventLocationUrl ?? ""} name="locationUrl" placeholder="https://…" type="url" /></label><label>Registration URL<input defaultValue={post?.eventRegistrationUrl ?? ""} name="registrationUrl" placeholder="https://…" type="url" /></label><label>Original source URL<input defaultValue={post?.eventSourceUrl ?? ""} name="sourceUrl" placeholder="https://…" type="url" /></label><label>Image URL<input defaultValue={post?.eventImageUrl ?? ""} name="imageUrl" placeholder="https://…" type="url" /></label></div></fieldset>}
 				<label>Organization<select defaultValue={post?.organizationId ?? (allowEcosystemWide ? "" : organizations[0]?.id ?? "")} name="organizationId">{allowEcosystemWide && <option value="">Ecosystem-wide</option>}{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · State of Queer Digital" : ""}</option>)}</select></label>
 				<label>Visibility<select name="visibility" onChange={(event) => setVisibility(event.currentTarget.value as typeof visibility)} value={visibility}>{postVisibilities.map((option) => <option key={option} value={option}>{visibilityLabels[option]}</option>)}</select></label>

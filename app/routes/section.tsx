@@ -3,6 +3,7 @@ import { Form, Link } from "react-router";
 import type { Route } from "./+types/section";
 import { Icon } from "~/components/icon";
 import { IdentityAvatar } from "~/components/identity-avatar";
+import { MentionText, type MentionTarget } from "~/components/mention-textarea";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { isContentSection, isEventTiming, sectionDefinitions, type EventTiming } from "~/lib/content";
 import { formatEventDateTime } from "~/lib/events";
@@ -30,6 +31,10 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		listVisibleMembers(context.cloudflare.env, user),
 		listAvailablePostAffiliations(context.cloudflare.env, user),
 	]);
+	const mentionTargets: MentionTarget[] = [
+		...visibleMembers.map((member) => ({ id: member.id, type: "person" as const, label: member.name || "Member", detail: member.profileTitle || member.organizationNames, href: `/members/${member.id}` })),
+		...visibleOrganizations.map((organization) => ({ id: organization.id, type: "organization" as const, label: organization.name, detail: organization.summary, href: `/organizations/${organization.slug}` })),
+	];
 	return {
 		sectionKey: params.section,
 		section,
@@ -40,6 +45,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		canModerateEvents: user.siteRole === "site_admin" || authoringOrganizations.some((organization) => organization.role === "org_admin"),
 		filters: { tag, organizationId, affiliationIds, eventTiming },
 		visibleMemberIds: visibleMembers.map((member) => member.id),
+		mentionTargets,
 	};
 }
 
@@ -102,7 +108,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 								<div>{loaderData.visibleMemberIds.includes(post.authorUserId) ? <Link className="identity-name-link" to={`/members/${post.authorUserId}`}><strong>{post.authorName || "Member"}</strong></Link> : <strong>{post.authorName || "Member"}</strong>}<p>{post.organizationName ? <Link to={`/organizations/${post.organizationSlug}`}>{post.organizationName}</Link> : "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div>
 								<span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>
 							</div>
-							<Link className="content-card-link" to={`/posts/${post.id}`}><h2>{post.title}</h2><p>{post.body}</p></Link>
+							<div className="content-card-link"><h2><Link to={`/posts/${post.id}`}>{post.title}</Link></h2><MentionText targets={loaderData.mentionTargets} text={post.body} /></div>
 							{post.affiliations.length > 0 && <div className="content-affiliation-row" aria-label="Affiliations">{post.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}
 							{post.tags.length > 0 && <div className="content-tag-row">{post.tags.map((tag) => <Link key={tag} to={pageUrl(sectionKey, 1, tag, filters.organizationId, filters.affiliationIds, filters.eventTiming)}>#{tag}</Link>)}</div>}
 							<footer><span><Icon name="message" size={15} /> {post.commentCount} comments</span><span><Icon name="heart" size={15} /> {post.supportCount} supports</span>{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>Open <Icon name="chevron-right" size={15} /></Link></footer>

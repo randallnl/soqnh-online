@@ -11,8 +11,18 @@ export type OrganizationRecord = {
 	slug: string;
 	summary: string | null;
 	description: string | null;
+	category: string | null;
 	websiteUrl: string | null;
 	contactEmail: string | null;
+	contactPhone: string | null;
+	townCity: string | null;
+	region: string | null;
+	socialPlatform: string | null;
+	socialHandle: string | null;
+	listingRationale: string | null;
+	leadershipIdentity: string | null;
+	sourceImageUrls: string | null;
+	operatesStatewide: number | null;
 	logoObjectKey: string | null;
 	status: OrganizationStatus;
 	directoryStatus: DirectoryStatus;
@@ -132,8 +142,18 @@ export async function listOrganizations(env: Env, includeInactive = false) {
 		        o.slug,
 		        o.summary,
 		        o.description,
+		        o.category,
 		        o.website_url AS websiteUrl,
 		        o.contact_email AS contactEmail,
+		        o.contact_phone AS contactPhone,
+		        o.town_city AS townCity,
+		        o.region,
+		        o.social_platform AS socialPlatform,
+		        o.social_handle AS socialHandle,
+		        o.listing_rationale AS listingRationale,
+		        o.leadership_identity AS leadershipIdentity,
+		        o.source_image_urls AS sourceImageUrls,
+		        o.operates_statewide AS operatesStatewide,
 		        o.logo_object_key AS logoObjectKey,
 		        o.status,
 		        o.directory_status AS directoryStatus,
@@ -175,9 +195,15 @@ export async function listVisibleOrganizations(
 		     ON oa.organization_id = membership.organization_id
 		   WHERE membership.user_id = ?1
 		 )
-		 SELECT o.id, o.name, o.slug, o.summary, o.description,
+		 SELECT o.id, o.name, o.slug, o.summary, o.description, o.category,
 		        o.website_url AS websiteUrl,
 		        o.contact_email AS contactEmail,
+		        o.contact_phone AS contactPhone, o.town_city AS townCity, o.region,
+		        o.social_platform AS socialPlatform, o.social_handle AS socialHandle,
+		        o.listing_rationale AS listingRationale,
+		        o.leadership_identity AS leadershipIdentity,
+		        o.source_image_urls AS sourceImageUrls,
+		        o.operates_statewide AS operatesStatewide,
 		        o.logo_object_key AS logoObjectKey,
 		        o.status,
 		        o.directory_status AS directoryStatus,
@@ -241,8 +267,18 @@ export async function getOrganizationBySlug(
 		        o.slug,
 		        o.summary,
 		        o.description,
+		        o.category,
 		        o.website_url AS websiteUrl,
 		        o.contact_email AS contactEmail,
+		        o.contact_phone AS contactPhone,
+		        o.town_city AS townCity,
+		        o.region,
+		        o.social_platform AS socialPlatform,
+		        o.social_handle AS socialHandle,
+		        o.listing_rationale AS listingRationale,
+		        o.leadership_identity AS leadershipIdentity,
+		        o.source_image_urls AS sourceImageUrls,
+		        o.operates_statewide AS operatesStatewide,
 		        o.logo_object_key AS logoObjectKey,
 		        o.status,
 		        o.directory_status AS directoryStatus,
@@ -356,8 +392,14 @@ export async function getOrganizationAdministrationData(env: Env) {
 
 export async function listDirectoryReviewQueue(env: Env) {
 	const result = await env.DB.prepare(
-		`SELECT o.id, o.name, o.slug, o.summary, o.description,
+		`SELECT o.id, o.name, o.slug, o.summary, o.description, o.category,
 		        o.website_url AS websiteUrl, o.contact_email AS contactEmail,
+		        o.contact_phone AS contactPhone, o.town_city AS townCity, o.region,
+		        o.social_platform AS socialPlatform, o.social_handle AS socialHandle,
+		        o.listing_rationale AS listingRationale,
+		        o.leadership_identity AS leadershipIdentity,
+		        o.source_image_urls AS sourceImageUrls,
+		        o.operates_statewide AS operatesStatewide,
 		        o.logo_object_key AS logoObjectKey, o.status,
 		        o.directory_status AS directoryStatus,
 		        o.directory_requested_at AS directoryRequestedAt,
@@ -551,8 +593,19 @@ export async function createOrganization(
 		name: string;
 		slug: string;
 		summary: string | null;
+		description?: string | null;
+		category?: string | null;
 		websiteUrl: string | null;
 		contactEmail: string | null;
+		contactPhone?: string | null;
+		townCity?: string | null;
+		region?: string | null;
+		socialPlatform?: string | null;
+		socialHandle?: string | null;
+		listingRationale?: string | null;
+		leadershipIdentity?: string | null;
+		sourceImageUrls?: string | null;
+		operatesStatewide?: number | null;
 	},
 ) {
 	if (actor.siteRole !== "site_admin") {
@@ -564,16 +617,30 @@ export async function createOrganization(
 		await env.DB.batch([
 			env.DB.prepare(
 				`INSERT INTO organizations
-				 (id, name, slug, summary, website_url, contact_email, status,
-				  created_at, updated_at, event_scraping_enabled)
-				 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7, ?7, 0)`,
+				 (id, name, slug, summary, description, category, website_url, contact_email,
+				  contact_phone, town_city, region, social_platform, social_handle,
+				  listing_rationale, leadership_identity, source_image_urls, operates_statewide,
+				  status, created_at, updated_at, event_scraping_enabled)
+				 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+				  ?14, ?15, ?16, ?17, 'active', ?18, ?18, 0)`,
 			).bind(
 				id,
 				input.name,
 				input.slug,
 				input.summary,
+				input.description ?? null,
+				input.category ?? null,
 				input.websiteUrl,
 				input.contactEmail,
+				input.contactPhone ?? null,
+				input.townCity ?? null,
+				input.region ?? null,
+				input.socialPlatform ?? null,
+				input.socialHandle ?? null,
+				input.listingRationale ?? null,
+				input.leadershipIdentity ?? null,
+				input.sourceImageUrls ?? null,
+				input.operatesStatewide ?? null,
 				now,
 			),
 			env.DB.prepare(
@@ -606,8 +673,18 @@ export async function updateOrganization(
 		slug: string;
 		summary: string | null;
 		description: string | null;
+		category?: string | null;
 		websiteUrl: string | null;
 		contactEmail: string | null;
+		contactPhone?: string | null;
+		townCity?: string | null;
+		region?: string | null;
+		socialPlatform?: string | null;
+		socialHandle?: string | null;
+		listingRationale?: string | null;
+		leadershipIdentity?: string | null;
+		sourceImageUrls?: string | null;
+		operatesStatewide?: number | null;
 		status: OrganizationStatus;
 	},
 ) {
@@ -617,16 +694,30 @@ export async function updateOrganization(
 		const results = await env.DB.batch([
 			env.DB.prepare(
 				`UPDATE organizations
-				 SET name = ?1, slug = ?2, summary = ?3, description = ?4,
-				     website_url = ?5, contact_email = ?6, status = ?7, updated_at = ?8
-				 WHERE id = ?9`,
+				 SET name = ?1, slug = ?2, summary = ?3, description = ?4, category = ?5,
+				     website_url = ?6, contact_email = ?7, contact_phone = ?8,
+				     town_city = ?9, region = ?10, social_platform = ?11, social_handle = ?12,
+				     listing_rationale = ?13, leadership_identity = ?14,
+				     source_image_urls = ?15, operates_statewide = ?16,
+				     status = ?17, updated_at = ?18
+				 WHERE id = ?19`,
 			).bind(
 				input.name,
 				input.slug,
 				input.summary,
 				input.description,
+				input.category ?? null,
 				input.websiteUrl,
 				input.contactEmail,
+				input.contactPhone ?? null,
+				input.townCity ?? null,
+				input.region ?? null,
+				input.socialPlatform ?? null,
+				input.socialHandle ?? null,
+				input.listingRationale ?? null,
+				input.leadershipIdentity ?? null,
+				input.sourceImageUrls ?? null,
+				input.operatesStatewide ?? null,
 				input.status,
 				now,
 				input.organizationId,
@@ -664,8 +755,18 @@ export async function updateManagedOrganizationProfile(
 		name: string;
 		summary: string | null;
 		description: string | null;
+		category?: string | null;
 		websiteUrl: string | null;
 		contactEmail: string | null;
+		contactPhone?: string | null;
+		townCity?: string | null;
+		region?: string | null;
+		socialPlatform?: string | null;
+		socialHandle?: string | null;
+		listingRationale?: string | null;
+		leadershipIdentity?: string | null;
+		sourceImageUrls?: string | null;
+		operatesStatewide?: number | null;
 	},
 ) {
 	await requireOrganizationManager(env, actor, input.organizationId);
@@ -673,15 +774,28 @@ export async function updateManagedOrganizationProfile(
 	const results = await env.DB.batch([
 		env.DB.prepare(
 			`UPDATE organizations
-			 SET name = ?1, summary = ?2, description = ?3,
-			     website_url = ?4, contact_email = ?5, updated_at = ?6
-			 WHERE id = ?7 AND status != 'archived'`,
+			 SET name = ?1, summary = ?2, description = ?3, category = ?4,
+			     website_url = ?5, contact_email = ?6, contact_phone = ?7,
+			     town_city = ?8, region = ?9, social_platform = ?10, social_handle = ?11,
+			     listing_rationale = ?12, leadership_identity = ?13,
+			     source_image_urls = ?14, operates_statewide = ?15, updated_at = ?16
+			 WHERE id = ?17 AND status != 'archived'`,
 		).bind(
 			input.name,
 			input.summary,
 			input.description,
+			input.category ?? null,
 			input.websiteUrl,
 			input.contactEmail,
+			input.contactPhone ?? null,
+			input.townCity ?? null,
+			input.region ?? null,
+			input.socialPlatform ?? null,
+			input.socialHandle ?? null,
+			input.listingRationale ?? null,
+			input.leadershipIdentity ?? null,
+			input.sourceImageUrls ?? null,
+			input.operatesStatewide ?? null,
 			now,
 			input.organizationId,
 		),

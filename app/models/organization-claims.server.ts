@@ -57,17 +57,7 @@ const claimSelection = `SELECT claim.id,
 
 export async function listClaimableOrganizations(env: Env, actor: AuthenticatedUser) {
 	const result = await env.DB.prepare(
-		`WITH actor_affiliations AS (
-		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
-		   UNION
-		   SELECT oa.affiliation_id
-		   FROM organization_memberships AS membership
-		   JOIN organizations AS member_organization
-		     ON member_organization.id = membership.organization_id AND member_organization.status != 'archived'
-		   JOIN organization_affiliations AS oa ON oa.organization_id = membership.organization_id
-		   WHERE membership.user_id = ?1
-		 )
-		 SELECT o.id, o.name, o.slug, o.logo_object_key AS logoObjectKey,
+		`SELECT o.id, o.name, o.slug, o.logo_object_key AS logoObjectKey,
 		        om.role AS currentRole,
 		        EXISTS (
 		          SELECT 1 FROM organization_membership_claims
@@ -77,14 +67,9 @@ export async function listClaimableOrganizations(env: Env, actor: AuthenticatedU
 		 LEFT JOIN organization_memberships AS om
 		   ON om.organization_id = o.id AND om.user_id = ?1
 		 WHERE o.status = 'active'
-		   AND (?2 = 1 OR om.user_id IS NOT NULL OR EXISTS (
-		     SELECT 1 FROM organization_affiliations AS organization_affiliation
-		     JOIN actor_affiliations ON actor_affiliations.affiliation_id = organization_affiliation.affiliation_id
-		     WHERE organization_affiliation.organization_id = o.id
-		   ))
 		 ORDER BY o.name COLLATE NOCASE`,
 	)
-		.bind(actor.id, actor.siteRole === "site_admin" ? 1 : 0)
+		.bind(actor.id)
 		.all<{
 			id: string;
 			name: string;
@@ -116,17 +101,7 @@ export async function submitOrganizationClaim(
 	input: { organizationId: string; requestedRole: OrganizationRole },
 ) {
 	const organization = await env.DB.prepare(
-		`WITH actor_affiliations AS (
-		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
-		   UNION
-		   SELECT oa.affiliation_id
-		   FROM organization_memberships AS membership
-		   JOIN organizations AS member_organization
-		     ON member_organization.id = membership.organization_id AND member_organization.status != 'archived'
-		   JOIN organization_affiliations AS oa ON oa.organization_id = membership.organization_id
-		   WHERE membership.user_id = ?1
-		 )
-		 SELECT o.id,
+		`SELECT o.id,
 		        (SELECT role FROM organization_memberships
 		         WHERE organization_id = o.id AND user_id = ?1) AS currentRole,
 		        EXISTS (
@@ -134,16 +109,9 @@ export async function submitOrganizationClaim(
 		          WHERE organization_id = o.id AND user_id = ?1 AND status = 'pending'
 		        ) AS hasPendingClaim
 		 FROM organizations AS o
-		 WHERE o.id = ?2 AND o.status = 'active'
-		   AND (?3 = 1 OR EXISTS (
-		     SELECT 1 FROM organization_memberships WHERE organization_id = o.id AND user_id = ?1
-		   ) OR EXISTS (
-		     SELECT 1 FROM organization_affiliations AS organization_affiliation
-		     JOIN actor_affiliations ON actor_affiliations.affiliation_id = organization_affiliation.affiliation_id
-		     WHERE organization_affiliation.organization_id = o.id
-		   ))`,
+		 WHERE o.id = ?2 AND o.status = 'active'`,
 	)
-		.bind(actor.id, input.organizationId, actor.siteRole === "site_admin" ? 1 : 0)
+		.bind(actor.id, input.organizationId)
 		.first<{ id: string; currentRole: OrganizationRole | null; hasPendingClaim: number }>();
 	if (!organization) throw new OrganizationClaimMutationError("organization-unavailable");
 	if (organization.currentRole === input.requestedRole) throw new OrganizationClaimMutationError("same-role");

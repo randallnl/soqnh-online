@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from "../lib/auth.server";
 import { getPostById } from "./posts.server";
+import { listVisibleMembers } from "./profiles.server";
 
 export type MentionableMember = {
 	id: string;
@@ -109,4 +110,52 @@ export async function getMentionRecipient(env: Env, actor: AuthenticatedUser, po
 	const visible = await getPostById(env, candidate, postId);
 	if (!visible || visible.status !== "published") throw new InteractionMutationError("member-unavailable");
 	return candidate;
+}
+
+export async function syncPostMentions(env: Env, actor: AuthenticatedUser, postId: string, userIds: string[], notifyExisting = false) {
+	const post = await getPostById(env, actor, postId);
+	if (!post) throw new InteractionMutationError("post-unavailable");
+	const existing = await env.DB.prepare(
+		"SELECT mentioned_user_id AS userId FROM post_mentions WHERE post_id = ?1",
+	).bind(postId).all<{ userId: string }>();
+	const existingIds = new Set(existing.results.map((row) => row.userId));
+	const requestedIds = [...new Set(userIds)].filter((userId) => userId !== actor.id).slice(0, 10);
+	const recipients: Array<{ id: string }> = post.status === "published" ? (await Promise.all(requestedIds.map(async (userId) => {
+		try {
+			return await getMentionRecipient(env, actor, postId, userId);
+		} catch (error) {
+			if (error instanceof InteractionMutationError) return null;
+			throw error;
+		}
+	}))).filter((recipient): recipient is AuthenticatedUser => recipient !== null) : [];
+	if (post.status !== "published") {
+		const visibleIds = new Set((await listVisibleMembers(env, actor)).map((member) => member.id));
+		recipients.push(...requestedIds.filter((userId) => visibleIds.has(userId)).map((id) => ({ id })));
+	}
+	const now = new Date().toISOString();
+	const actorName = actor.name || "A member";
+	await env.DB.batch([
+		env.DB.prepare("DELETE FROM post_mentions WHERE post_id = ?1").bind(postId),
+		...recipients.flatMap((recipient) => [
+			env.DB.prepare(
+				`INSERT INTO post_mentions
+				 (id, post_id, comment_id, mentioned_user_id, mentioned_by_user_id, created_at)
+				 VALUES (?1, ?2, NULL, ?3, ?4, ?5)`,
+			).bind(crypto.randomUUID(), postId, recipient.id, actor.id, now),
+			...((!notifyExisting && existingIds.has(recipient.id)) || post.status !== "published" ? [] : [env.DB.prepare(
+				`INSERT INTO notifications
+				 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
+				 VALUES (?1, ?2, ?3, ?4, NULL, 'mention', ?5, NULL, ?6)`,
+			).bind(crypto.randomUUID(), recipient.id, actor.id, postId, `${actorName} mentioned you in an update.`, now)]),
+		]),
+	]);
+}
+
+export async function listPostMentionUserIds(env: Env, actor: AuthenticatedUser, postId: string) {
+	const post = await getPostById(env, actor, postId);
+	if (!post) throw new InteractionMutationError("post-unavailable");
+	const result = await env.DB.prepare(
+		"SELECT mentioned_user_id AS userId FROM post_mentions WHERE post_id = ?1 ORDER BY created_at, id",
+	).bind(postId).all<{ userId: string }>();
+	return result.results.map((row) => row.userId);
 }

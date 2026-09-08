@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { Route } from "./+types/admin-organizations";
 import { Icon } from "~/components/icon";
+import { OrganizationProfileFields } from "~/components/organization-profile-fields";
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
@@ -37,19 +38,30 @@ const optionalEmail = z.preprocess(
 	z.email("Enter a valid contact email").max(320).nullable(),
 );
 const identifier = z.string().trim().min(1).max(100);
+const statewideValue = z.preprocess((value) => value === "yes" ? 1 : value === "no" ? 0 : null, z.union([z.literal(0), z.literal(1), z.null()]));
 const organizationFields = z.object({
 	name: z.string().trim().min(2, "Enter an organization name").max(120),
 	slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens").max(80),
 	summary: optionalText(240),
+	description: optionalText(4000),
+	category: optionalText(600),
 	websiteUrl: optionalUrl,
 	contactEmail: optionalEmail,
+	contactPhone: optionalText(80),
+	townCity: optionalText(200),
+	region: optionalText(120),
+	socialPlatform: optionalText(80),
+	socialHandle: optionalText(200),
+	listingRationale: optionalText(2000),
+	leadershipIdentity: optionalText(100),
+	sourceImageUrls: optionalText(4000),
+	operatesStatewide: statewideValue,
 });
 const actionSchema = z.discriminatedUnion("intent", [
 	organizationFields.extend({ intent: z.literal("create") }),
 	organizationFields.extend({
 		intent: z.literal("update"),
 		organizationId: identifier,
-		description: optionalText(4000),
 		status: z.enum(organizationStatuses),
 	}),
 	z.object({
@@ -182,11 +194,8 @@ export default function AdminOrganizations({ loaderData }: Route.ComponentProps)
 				<div className="panel-heading"><div><p className="eyebrow">New profile</p><h2>Add an organization</h2></div></div>
 				<Form className="organization-create-form" method="post">
 					<input name="intent" type="hidden" value="create" />
-					<label>Name<input name="name" required placeholder="Organization name" /></label>
+					<OrganizationProfileFields />
 					<label>URL slug<input name="slug" placeholder="generated-from-name" /></label>
-					<label className="wide-field">Short summary<input name="summary" maxLength={240} placeholder="What this organization does" /></label>
-					<label>Website<input name="websiteUrl" type="url" placeholder="https://example.org" /></label>
-					<label>Contact email<input name="contactEmail" type="email" placeholder="hello@example.org" /></label>
 					<button className="button button--primary" disabled={submitting} type="submit"><Icon name="plus" size={17} /> Create organization</button>
 				</Form>
 			</section>
@@ -205,13 +214,9 @@ export default function AdminOrganizations({ loaderData }: Route.ComponentProps)
 							<div className="organization-admin-body">
 								<Form className="organization-edit-form" method="post">
 									<input name="intent" type="hidden" value="update" /><input name="organizationId" type="hidden" value={organization.id} />
-									<label>Name<input defaultValue={organization.name} name="name" required /></label>
+									<OrganizationProfileFields organization={organization} />
 									<label>URL slug<input defaultValue={organization.slug} name="slug" required /></label>
 									<label>Status<select defaultValue={organization.status} name="status">{organizationStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
-									<label className="wide-field">Short summary<input defaultValue={organization.summary ?? ""} maxLength={240} name="summary" /></label>
-									<label className="wide-field">Full description<textarea defaultValue={organization.description ?? ""} maxLength={4000} name="description" rows={4} /></label>
-									<label>Website<input defaultValue={organization.websiteUrl ?? ""} name="websiteUrl" type="url" /></label>
-									<label>Contact email<input defaultValue={organization.contactEmail ?? ""} name="contactEmail" type="email" /></label>
 									<button className="button button--secondary" disabled={submitting} type="submit">Save profile</button>
 								</Form>
 

@@ -89,7 +89,7 @@ export async function listPostComments(env: Env, viewer: AuthenticatedUser, post
 export async function createComment(
 	env: Env,
 	actor: AuthenticatedUser,
-	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null },
+	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null; mentionUserIds?: string[] },
 ) {
 	const post = await requirePublishedPost(env, actor, input.postId);
 	let parentAuthorUserId: string | null = null;
@@ -104,11 +104,13 @@ export async function createComment(
 		if (!parent || parent.parentCommentId) throw new CommentMutationError("invalid-parent");
 		parentAuthorUserId = parent.authorUserId;
 	}
-	const mentioned = input.mentionUserId ? await getMentionRecipient(env, actor, input.postId, input.mentionUserId) : null;
+	const requestedMentionIds = [...new Set([...(input.mentionUserIds ?? []), ...(input.mentionUserId ? [input.mentionUserId] : [])])].slice(0, 10);
+	const mentioned = await Promise.all(requestedMentionIds.map((userId) => getMentionRecipient(env, actor, input.postId, userId)));
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
 	const actorName = actor.name || "A member";
-	const commentRecipients = new Set([post.authorUserId, parentAuthorUserId].filter((userId): userId is string => Boolean(userId) && userId !== actor.id && userId !== mentioned?.id));
+	const mentionedIds = new Set(mentioned.map((recipient) => recipient.id));
+	const commentRecipients = new Set([post.authorUserId, parentAuthorUserId].filter((userId): userId is string => typeof userId === "string" && userId !== actor.id && !mentionedIds.has(userId)));
 	await env.DB.batch([
 		env.DB.prepare(
 			`INSERT INTO comments
@@ -120,18 +122,18 @@ export async function createComment(
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'comment.created', 'comment', ?3, ?4, ?5)`,
 		).bind(crypto.randomUUID(), actor.id, id, JSON.stringify({ postId: input.postId, parentCommentId: input.parentCommentId }), now),
-		...(mentioned ? [
+		...mentioned.flatMap((recipient) => [
 			env.DB.prepare(
 				`INSERT INTO post_mentions
 				 (id, post_id, comment_id, mentioned_user_id, mentioned_by_user_id, created_at)
 				 VALUES (?1, NULL, ?2, ?3, ?4, ?5)`,
-			).bind(crypto.randomUUID(), id, mentioned.id, actor.id, now),
+			).bind(crypto.randomUUID(), id, recipient.id, actor.id, now),
 			env.DB.prepare(
 				`INSERT INTO notifications
 				 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
 				 VALUES (?1, ?2, ?3, ?4, ?5, 'mention', ?6, NULL, ?7)`,
-			).bind(crypto.randomUUID(), mentioned.id, actor.id, input.postId, id, `${actorName} mentioned you in a comment.`, now),
-		] : []),
+			).bind(crypto.randomUUID(), recipient.id, actor.id, input.postId, id, `${actorName} mentioned you in a comment.`, now),
+		]),
 		...[...commentRecipients].map((userId) => env.DB.prepare(
 			`INSERT INTO notifications
 			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)

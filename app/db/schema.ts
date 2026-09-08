@@ -92,8 +92,18 @@ export const organizations = sqliteTable(
 		slug: text("slug").notNull().unique(),
 		summary: text("summary"),
 		description: text("description"),
+		category: text("category"),
 		websiteUrl: text("website_url"),
 		contactEmail: text("contact_email"),
+		contactPhone: text("contact_phone"),
+		townCity: text("town_city"),
+		region: text("region"),
+		socialPlatform: text("social_platform"),
+		socialHandle: text("social_handle"),
+		listingRationale: text("listing_rationale"),
+		leadershipIdentity: text("leadership_identity"),
+		sourceImageUrls: text("source_image_urls"),
+		operatesStatewide: integer("operates_statewide", { mode: "boolean" }),
 		logoObjectKey: text("logo_object_key"),
 		status: text("status", { enum: ["active", "inactive", "archived"] })
 			.notNull()

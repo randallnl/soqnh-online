@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Route } from "./+types/organization-manage";
 import { Icon } from "~/components/icon";
 import { OrganizationIdentity } from "~/components/identity-avatar";
+import { OrganizationProfileFields } from "~/components/organization-profile-fields";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
@@ -32,6 +33,7 @@ const optionalEmail = z.preprocess(
 	z.email("Enter a valid contact email").max(320).nullable(),
 );
 const identifier = z.string().trim().min(1).max(100);
+const statewideValue = z.preprocess((value) => value === "yes" ? 1 : value === "no" ? 0 : null, z.union([z.literal(0), z.literal(1), z.null()]));
 const actionSchema = z.discriminatedUnion("intent", [
 	z.object({
 		intent: z.literal("update-profile"),
@@ -39,8 +41,18 @@ const actionSchema = z.discriminatedUnion("intent", [
 		name: z.string().trim().min(2, "Enter an organization name").max(120),
 		summary: optionalText(240),
 		description: optionalText(4000),
+		category: optionalText(600),
 		websiteUrl: optionalUrl,
 		contactEmail: optionalEmail,
+		contactPhone: optionalText(80),
+		townCity: optionalText(200),
+		region: optionalText(120),
+		socialPlatform: optionalText(80),
+		socialHandle: optionalText(200),
+		listingRationale: optionalText(2000),
+		leadershipIdentity: optionalText(100),
+		sourceImageUrls: optionalText(4000),
+		operatesStatewide: statewideValue,
 	}),
 	z.object({ intent: z.literal("set-membership"), organizationId: identifier, userId: identifier, role: z.enum(organizationRoles) }),
 	z.object({ intent: z.literal("remove-membership"), organizationId: identifier, userId: identifier }),
@@ -168,11 +180,7 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 				<Form className="organization-edit-form" encType="multipart/form-data" method="post">
 					<input name="intent" type="hidden" value="update-profile" /><input name="organizationId" type="hidden" value={organization.id} />
 					<label>Organization logo<input accept="image/png,image/jpeg,image/webp,image/gif" name="logo" type="file" /></label>
-					<label>Name<input defaultValue={organization.name} name="name" required /></label>
-					<label>Website<input defaultValue={organization.websiteUrl ?? ""} name="websiteUrl" type="url" /></label>
-					<label className="wide-field">Short summary<input defaultValue={organization.summary ?? ""} maxLength={240} name="summary" /></label>
-					<label className="wide-field">Full description<textarea defaultValue={organization.description ?? ""} maxLength={4000} name="description" rows={5} /></label>
-					<label>Contact email<input defaultValue={organization.contactEmail ?? ""} name="contactEmail" type="email" /></label>
+					<OrganizationProfileFields organization={organization} />
 					<button className="button button--primary" disabled={submitting} type="submit">Save profile</button>
 				</Form>
 				<div className="managed-affiliation-note"><div><p className="eyebrow">Visibility network</p><h3>Affiliations</h3></div>{organization.affiliations.length === 0 ? <p>No affiliations are assigned. A site administrator must connect this organization before it becomes discoverable through the network.</p> : <div className="affiliation-chip-row">{organization.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}<small>Affiliations control access and can only be changed by a site administrator.</small></div>

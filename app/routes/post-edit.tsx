@@ -8,6 +8,10 @@ import { normalizeTags, postStatuses, postVisibilities, routeSectionForDatabase 
 import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
 import { getPostById, listAvailablePostAffiliations, listPostOrganizations, PostMutationError, updatePost } from "~/models/posts.server";
+import { listVisibleMembers } from "~/models/profiles.server";
+import { listVisibleOrganizations } from "~/models/organizations.server";
+import { listPostMentionUserIds, syncPostMentions } from "~/models/interactions.server";
+import type { MentionTarget } from "~/components/mention-textarea";
 
 const optionalOrganization = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().max(100).nullable());
 const formSchema = z.object({
@@ -25,11 +29,18 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const post = await getPostById(context.cloudflare.env, user, params.postId);
 	if (!post) throw new Response("Post not found", { status: 404 });
 	if (!post.canEdit) throw new Response("Forbidden", { status: 403 });
-	const [organizations, affiliations] = await Promise.all([
+	const [organizations, affiliations, members, visibleOrganizations, mentionUserIds] = await Promise.all([
 		listPostOrganizations(context.cloudflare.env, user),
 		listAvailablePostAffiliations(context.cloudflare.env, user),
+		listVisibleMembers(context.cloudflare.env, user),
+		listVisibleOrganizations(context.cloudflare.env, user),
+		listPostMentionUserIds(context.cloudflare.env, user, post.id),
 	]);
-	return { post, section: routeSectionForDatabase(post.section), organizations, affiliations, allowEcosystemWide: user.siteRole === "site_admin" };
+	const mentionTargets: MentionTarget[] = [
+		...members.filter((member) => member.id !== user.id).map((member) => ({ id: member.id, type: "person" as const, label: member.name || "Member", detail: member.profileTitle || member.organizationNames, href: `/members/${member.id}` })),
+		...visibleOrganizations.map((organization) => ({ id: organization.id, type: "organization" as const, label: organization.name, detail: organization.summary, href: `/organizations/${organization.slug}` })),
+	];
+	return { post, section: routeSectionForDatabase(post.section), organizations, affiliations, mentionTargets, mentionUserIds, allowEcosystemWide: user.siteRole === "site_admin" };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -37,6 +48,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	const formData = await request.formData();
 	const affiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
+	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = formSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the post details" };
 	try {
@@ -45,6 +57,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const eventResult = existing.section === "event" ? parseEventDetails(formData) : null;
 		if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
 		await updatePost(context.cloudflare.env, user, { ...result.data, tags: normalizeTags(result.data.tags), affiliationIds, event: eventResult?.data });
+		if (existing.section === "update") await syncPostMentions(context.cloudflare.env, user, result.data.postId, mentionUserIds, existing.status !== "published" && result.data.status === "published");
 		throw redirect(`/posts/${result.data.postId}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
@@ -63,5 +76,5 @@ export function meta({ data }: Route.MetaArgs) {
 export default function PostEdit({ loaderData }: Route.ComponentProps) {
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
-	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">Content management</p><h1>Edit {loaderData.section === "events" ? "event" : "post"}</h1><p>{loaderData.section === "events" ? "Any saved event changes return it to the moderation queue." : "Update the content, audience, organization, tags, or publication state."}</p></div></section><PostEditor affiliations={loaderData.affiliations} allowEcosystemWide={loaderData.allowEcosystemWide} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} post={loaderData.post} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
+	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">Content management</p><h1>Edit {loaderData.section === "events" ? "event" : "post"}</h1><p>{loaderData.section === "events" ? "Any saved event changes return it to the moderation queue." : "Update the content, audience, organization, tags, or publication state."}</p></div></section><PostEditor affiliations={loaderData.affiliations} allowEcosystemWide={loaderData.allowEcosystemWide} mentionTargets={loaderData.mentionTargets} mentionUserIds={loaderData.mentionUserIds} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} post={loaderData.post} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
 }

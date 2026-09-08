@@ -14,6 +14,15 @@ import {
 
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
 
+function socialUrl(platform: string | null, handle: string) {
+	if (/^https?:\/\//i.test(handle)) return handle;
+	const account = handle.replace(/^@/, "").replace(/^\/+|\/+$/g, "");
+	if (platform?.toLowerCase() === "instagram") return `https://www.instagram.com/${account}`;
+	if (platform?.toLowerCase() === "facebook") return `https://www.facebook.com/${account}`;
+	if (platform?.toLowerCase() === "tiktok") return `https://www.tiktok.com/@${account}`;
+	return null;
+}
+
 export function meta({ data }: Route.MetaArgs) {
 	return [{ title: `${data?.organization.name ?? "Organization"} · State of Queer NH` }];
 }
@@ -65,6 +74,8 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 	const navigation = useNavigation();
 	const { organization, members } = loaderData;
 	const participating = organization.directoryStatus === "pending" || organization.directoryStatus === "published";
+	const organizationSocialUrl = organization.socialHandle ? socialUrl(organization.socialPlatform, organization.socialHandle) : null;
+	const sourceImageUrls = organization.sourceImageUrls?.split(/\n+/).map((url) => url.trim()).filter(Boolean) ?? [];
 	return (
 		<div className="organization-detail-page">
 			<div className="organization-detail-actions">
@@ -81,6 +92,14 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 					</div>
 				</div>
 				{organization.description && <p className="organization-description">{organization.description}</p>}
+				{(organization.category || organization.townCity || organization.region || organization.operatesStatewide !== null || organization.leadershipIdentity) && <dl className="organization-profile-facts">
+					{organization.category && <div><dt>Category</dt><dd>{organization.category}</dd></div>}
+					{organization.townCity && <div><dt>Town or city</dt><dd>{organization.townCity}</dd></div>}
+					{organization.region && <div><dt>Region</dt><dd>{organization.region}</dd></div>}
+					{organization.operatesStatewide !== null && <div><dt>Statewide services</dt><dd>{organization.operatesStatewide === 1 ? "Yes" : "No"}</dd></div>}
+					{organization.leadershipIdentity && <div><dt>Queer and/or BIPOC-led</dt><dd>{organization.leadershipIdentity}</dd></div>}
+				</dl>}
+				{organization.listingRationale && <div className="organization-profile-note"><p className="eyebrow">Why this resource is included</p><p>{organization.listingRationale}</p></div>}
 				{organization.affiliations.length > 0 && (
 					<div className="organization-affiliations">
 						<p className="eyebrow">Affiliations</p>
@@ -90,7 +109,10 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 				<div className="organization-contact-row">
 					{organization.websiteUrl && <a href={organization.websiteUrl} rel="noreferrer" target="_blank"><Icon name="activity" size={16} /> Visit website</a>}
 					{organization.contactEmail && <a href={`mailto:${organization.contactEmail}`}><Icon name="message" size={16} /> {organization.contactEmail}</a>}
+					{organization.contactPhone && <a href={`tel:${organization.contactPhone.replace(/[^+\d]/g, "")}`}><Icon name="activity" size={16} /> {organization.contactPhone}</a>}
+					{organization.socialHandle && (organizationSocialUrl ? <a href={organizationSocialUrl} rel="noreferrer" target="_blank"><Icon name="people" size={16} /> {organization.socialPlatform ? `${organization.socialPlatform}: ` : ""}{organization.socialHandle}</a> : <span><Icon name="people" size={16} /> {organization.socialPlatform ? `${organization.socialPlatform}: ` : ""}{organization.socialHandle}</span>)}
 				</div>
+				{sourceImageUrls.length > 0 && <div className="organization-source-images"><p className="eyebrow">Logo and photo sources</p><div>{sourceImageUrls.map((url, index) => <a href={url} key={`${index}-${url}`} rel="noreferrer" target="_blank">View source {index + 1}</a>)}</div></div>}
 				{loaderData.canManage && (
 					<Form className={`directory-profile-opt-in directory-profile-opt-in--${organization.directoryStatus}`} key={`${organization.directoryStatus}-${actionData ? (actionData.ok ? "success" : "error") : "idle"}`} method="post">
 						<label>

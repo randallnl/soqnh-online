@@ -50,6 +50,13 @@
       "when": 1788894635971,
       "tag": "0006_nebulous_cerise",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788896768650,
+      "tag": "0007_striped_jean_grey",
+      "breakpoints": true
     }
   ]
 }
