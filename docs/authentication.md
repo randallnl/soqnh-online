@@ -49,7 +49,7 @@ See [affiliations.md](affiliations.md) for the complete visibility and administr
 
 1. A site administrator opens `/admin/invitations` and enters an email address, an optional organization, and an organization role.
 2. The Worker creates an `invited` user when needed, expires any older pending invitation for the same address, and stores only the SHA-256 hash of a new one-time token.
-3. The invitation email is sent through the `EMAIL` binding with both text and HTML bodies. Delivery failure expires the link and creates an audit record.
+3. The invitation email is sent through the `EMAIL` binding with matching text and HTML bodies. It identifies the inviter, organization and requested role when applicable; explains the private workspace, profile onboarding, affiliation-aware access, and affiliation privacy; and warns that the seven-day link is single-use and must not be forwarded. Delivery failure expires the link and creates an audit record.
 4. The recipient opens `/invite/accept`, confirms their full name, and submits the same-origin form.
 5. A transactional D1 batch consumes the invitation, activates the user, applies the optional organization membership, and writes the acceptance audit event. Each write is conditional on that exact token being consumed in the batch.
 6. The Worker creates a secure session and redirects the new member to profile onboarding. Until they save the profile form, authenticated workspace routes redirect back to onboarding. The invitation cannot be reused.

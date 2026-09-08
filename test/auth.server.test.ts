@@ -4,6 +4,7 @@ import type { D1Migration } from "@cloudflare/vitest-pool-workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { sanitizeReturnTo } from "../app/lib/auth";
+import { createInvitationEmailContent } from "../app/lib/email.server";
 import {
 	consumeLoginToken,
 	createRandomSecret,
@@ -546,6 +547,41 @@ describe("partner event scraper imports", () => {
 		expect(result).toMatchObject({ imported: 0, new: 0, updated: 0, skipped: 1, duplicates: 1 });
 		await expect(env.DB.prepare("SELECT title FROM posts WHERE id = ?1").bind(postId).first<string>("title"))
 			.resolves.toBe("Queer Community Picnic");
+	});
+});
+
+describe("invitation email content", () => {
+	it("explains the invitation, onboarding, role, expiration, and privacy in both formats", () => {
+		const content = createInvitationEmailContent({
+			link: "https://soqnh.example/invite/accept?token=secure-token",
+			organizationName: "Community Center",
+			invitedRole: "contributor",
+			invitedByName: "Site Administrator",
+		});
+
+		expect(content.subject).toBe("You’re invited to State of Queer NH");
+		for (const body of [content.text, content.html]) {
+			expect(body).toContain("Site Administrator");
+			expect(body).toContain("Contributor");
+			expect(body).toContain("Community Center");
+			expect(body).toContain("Complete your member profile");
+			expect(body).toContain("expires in 7 days");
+			expect(body).toContain("affiliation assignments");
+		}
+	});
+
+	it("escapes personalized values and the invitation URL in HTML", () => {
+		const content = createInvitationEmailContent({
+			link: "https://soqnh.example/invite?token=a&next=\"profile\"",
+			organizationName: "Community <Center>",
+			invitedRole: "viewer",
+			invitedByName: "Alex & Taylor",
+		});
+
+		expect(content.html).toContain("Community &lt;Center&gt;");
+		expect(content.html).toContain("Alex &amp; Taylor");
+		expect(content.html).toContain("token=a&amp;next=&quot;profile&quot;");
+		expect(content.html).not.toContain("Community <Center>");
 	});
 });
 

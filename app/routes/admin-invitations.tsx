@@ -36,6 +36,8 @@ async function deliverInvitation(
 		email: string;
 		token: string;
 		organizationName: string | null;
+		invitedRole: "viewer" | "contributor" | "org_admin";
+		invitedByName: string | null;
 	},
 ) {
 	try {
@@ -43,6 +45,8 @@ async function deliverInvitation(
 			to: input.email,
 			token: input.token,
 			organizationName: input.organizationName,
+			invitedRole: input.invitedRole,
+			invitedByName: input.invitedByName,
 		});
 	} catch (error) {
 		try {
@@ -129,6 +133,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				email: invitation.email,
 				token: invitation.token,
 				organizationName: organization?.name ?? null,
+				invitedRole: result.data.invitedRole,
+				invitedByName: admin.name,
 			}),
 		);
 
