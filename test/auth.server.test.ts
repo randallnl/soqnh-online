@@ -281,6 +281,7 @@ beforeEach(async () => {
 describe("member profiles", () => {
 	it("limits the directory and profile assets to shared affiliations", async () => {
 		await Promise.all([seedUser(), seedSecondMember(), seedThirdMember()]);
+		await seedSiteAdmin();
 		await seedAffiliation();
 		await seedAffiliation("aff-other", "Other Coalition", "other-coalition");
 		const now = new Date().toISOString();
@@ -291,9 +292,19 @@ describe("member profiles", () => {
 			env.DB.prepare("UPDATE users SET avatar_object_key = 'profile-photos/second.jpg' WHERE id = ?1").bind(secondMember.id),
 		]);
 
-		await expect(listVisibleMembers(env, activeUser)).resolves.toSatisfy((members: Awaited<ReturnType<typeof listVisibleMembers>>) =>
+		const memberDirectory = await listVisibleMembers(env, activeUser);
+		expect(memberDirectory).toSatisfy((members: Awaited<ReturnType<typeof listVisibleMembers>>) =>
 			members.map((member) => member.id).sort().join(",") === "user-active,user-second",
 		);
+		expect(memberDirectory.find((member) => member.id === activeUser.id)?.affiliationNames).toBe("Shared Coalition");
+		expect(memberDirectory.find((member) => member.id === secondMember.id)?.affiliationNames).toBeNull();
+
+		const privateMemberProfile = await getVisibleMemberProfile(env, activeUser, secondMember.id);
+		expect(privateMemberProfile).toMatchObject({ affiliationNames: null, affiliations: [] });
+		const ownProfile = await getVisibleMemberProfile(env, activeUser, activeUser.id);
+		expect(ownProfile?.affiliations.map((affiliation) => affiliation.id)).toEqual(["aff-shared"]);
+		const adminProfile = await getVisibleMemberProfile(env, siteAdmin, secondMember.id);
+		expect(adminProfile?.affiliations.map((affiliation) => affiliation.id)).toEqual(["aff-shared"]);
 		await expect(getVisibleMemberProfile(env, activeUser, thirdMember.id)).resolves.toBeNull();
 		await expect(canReadIdentityObject(env, activeUser, "profile-photos/second.jpg")).resolves.toBe(true);
 		await expect(canReadIdentityObject(env, thirdMember, "profile-photos/second.jpg")).resolves.toBe(false);

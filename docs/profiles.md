@@ -8,6 +8,9 @@ New members who accept an invitation are taken directly to profile onboarding. W
 
 - Members can find active, directory-visible people who share at least one effective affiliation.
 - Effective affiliations include both direct user affiliations and affiliations inherited from active or inactive organization memberships. Archived organizations do not confer access.
+- A person's affiliation assignments are private authorization data. Only that member and site administrators can see the affiliation names on member directory cards and profiles.
+- Private affiliation assignments still determine directory and content access, and still populate the member's own feed and publishing controls.
+- Affiliation tags on visible posts and events describe that content's audience; they do not expose the affiliation's member roster.
 - Members can always view and edit their own profile. Site administrators can view every active member profile.
 - A hidden profile is absent for other members, even when they share an affiliation.
 - Member profile pages show every non-archived organization membership and its approved role.
@@ -16,7 +19,7 @@ New members who accept an invitation are taken directly to profile onboarding. W
 ## Routes
 
 - `/members` — affiliation-aware member directory
-- `/members/:memberId` — member profile, affiliations, and organization roles
+- `/members/:memberId` — member profile and organization roles; affiliation names are included only for the member or a site administrator
 - `/profile` — self-service profile, visibility, affiliation, and photo editing
 - `/media/*` — authenticated R2 identity assets
 - `/organizations/:slug/manage` — organization profile and logo editing for authorized managers

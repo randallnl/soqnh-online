@@ -2,6 +2,8 @@
 
 Affiliations connect people, organizations, and shared content. `user_affiliations` stores direct member links, `organization_affiliations` stores organization links, and `post_affiliations` attributes shared posts and events to their intended affiliation audiences.
 
+Individual affiliation assignments are private. A member can see their own assignments and site administrators can see all assignments, but other members do not receive affiliation names from member directory or profile queries. This does not hide affiliation tags on content the viewer may read or an organization's network affiliations from members who may view that organization.
+
 ## Effective affiliations
 
 An active member's effective affiliations are the union of:

@@ -51,11 +51,11 @@ export async function listVisibleMembers(env: Env, viewer: AuthenticatedUser) {
 		          FROM organization_memberships AS om JOIN organizations AS o ON o.id = om.organization_id
 		          WHERE om.user_id = u.id AND o.status != 'archived' ORDER BY o.name COLLATE NOCASE
 		        )) AS organizationNames,
-		        (SELECT group_concat(name, ', ') FROM (
+		        CASE WHEN (?2 = 1 OR u.id = ?1) THEN (SELECT group_concat(name, ', ') FROM (
 		          SELECT DISTINCT a.name
 		          FROM effective_affiliations AS ea JOIN affiliations AS a ON a.id = ea.affiliation_id
 		          WHERE ea.user_id = u.id ORDER BY a.name COLLATE NOCASE
-		        )) AS affiliationNames
+		        )) ELSE NULL END AS affiliationNames
 		 FROM users AS u
 		 WHERE u.status = 'active' AND u.id != 'system:event-scraper' AND ${visiblePerson}
 		 ORDER BY coalesce(u.name, u.email) COLLATE NOCASE`,
@@ -77,11 +77,11 @@ export async function getVisibleMemberProfile(env: Env, viewer: AuthenticatedUse
 		          JOIN organizations AS o ON o.id = om.organization_id
 		          WHERE om.user_id = u.id AND o.status != 'archived' ORDER BY o.name COLLATE NOCASE
 		        )) AS organizationNames,
-		        (SELECT group_concat(name, ', ') FROM (
+		        CASE WHEN (?2 = 1 OR u.id = ?1) THEN (SELECT group_concat(name, ', ') FROM (
 		          SELECT DISTINCT a.name FROM effective_affiliations AS ea
 		          JOIN affiliations AS a ON a.id = ea.affiliation_id
 		          WHERE ea.user_id = u.id ORDER BY a.name COLLATE NOCASE
-		        )) AS affiliationNames
+		        )) ELSE NULL END AS affiliationNames
 		 FROM users AS u
 		 WHERE u.id = ?3 AND u.status = 'active' AND u.id != 'system:event-scraper' AND ${visiblePerson}
 		 LIMIT 1`,
@@ -95,12 +95,12 @@ export async function getVisibleMemberProfile(env: Env, viewer: AuthenticatedUse
 			 FROM organization_memberships AS om JOIN organizations AS o ON o.id = om.organization_id
 			 WHERE om.user_id = ?1 AND o.status != 'archived' ORDER BY o.name COLLATE NOCASE`,
 		).bind(member.id).all<MemberProfileRecord["organizations"][number]>(),
-		env.DB.prepare(
+		viewer.siteRole === "site_admin" || viewer.id === member.id ? env.DB.prepare(
 			`WITH ${effectiveAffiliations}
 			 SELECT DISTINCT a.id, a.name, a.slug FROM effective_affiliations AS ea
 			 JOIN affiliations AS a ON a.id = ea.affiliation_id
 			 WHERE ea.user_id = ?1 ORDER BY a.name COLLATE NOCASE`,
-		).bind(member.id).all<MemberProfileRecord["affiliations"][number]>(),
+		).bind(member.id).all<MemberProfileRecord["affiliations"][number]>() : Promise.resolve({ results: [] as MemberProfileRecord["affiliations"] }),
 	]);
 	return { ...member, organizations: organizations.results, affiliations: affiliations.results };
 }
