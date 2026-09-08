@@ -4212,39 +4212,28 @@ h3 {
 
 /* State of Queer Digital opt-in workflow */
 
-.directory-opt-in-panel {
+.directory-profile-opt-in {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 18px 28px;
-	align-items: center;
-	padding: 26px;
-	border-top: 5px solid var(--plum-700);
-	scroll-margin-top: calc(var(--topbar-height) + 20px);
+	gap: 11px;
+	padding: 18px;
+	margin-top: 28px;
+	border: 1px solid var(--plum-200);
+	border-left: 5px solid var(--plum-700);
+	border-radius: 12px;
+	background: var(--plum-50);
 }
 
-.directory-opt-in-panel--published { border-top-color: var(--green-600); }
-.directory-opt-in-panel--pending { border-top-color: var(--gold-600); }
-.directory-opt-in-panel--rejected { border-top-color: var(--danger); }
-
-.directory-opt-in-copy {
-	display: flex;
-	align-items: flex-start;
-	gap: 16px;
-}
-
-.directory-opt-in-copy h2 { margin-top: 5px; font-size: 1.25rem; }
-.directory-opt-in-copy h2 + p { max-width: 760px; margin-top: 7px; color: var(--ink-600); font-size: .76rem; line-height: 1.6; }
-.directory-opt-in-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
-.directory-opt-in-actions form { margin: 0; }
-.directory-opt-in-note,
-.directory-opt-in-panel > .form-message { grid-column: 1 / -1; margin: 0; }
-.directory-opt-in-note { color: var(--ink-500); font-size: .7rem; }
-
-.status-pill--directory-not_listed,
-.status-pill--directory-opted_out { color: var(--ink-600); background: var(--ink-100); }
-.status-pill--directory-pending { color: #865d13; background: var(--gold-50); }
-.status-pill--directory-published { color: var(--green-800); background: var(--green-50); }
-.status-pill--directory-rejected { color: var(--danger); background: var(--danger-bg); }
+.directory-profile-opt-in--published { border-left-color: var(--green-600); background: var(--green-50); }
+.directory-profile-opt-in--pending { border-left-color: var(--gold-600); background: var(--gold-50); }
+.directory-profile-opt-in--rejected { border-left-color: var(--danger); background: var(--danger-bg); }
+.directory-profile-opt-in label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 12px; cursor: pointer; }
+.directory-profile-opt-in input { width: 21px; height: 21px; margin-top: 1px; accent-color: var(--plum-700); cursor: pointer; }
+.directory-profile-opt-in input:disabled { cursor: wait; opacity: .65; }
+.directory-profile-opt-in span { display: grid; gap: 5px; }
+.directory-profile-opt-in strong { color: var(--ink-950); font-size: .82rem; }
+.directory-profile-opt-in small { max-width: 78ch; color: var(--ink-600); font-size: .69rem; font-weight: 500; line-height: 1.55; }
+.directory-profile-opt-in > p { margin: 0 0 0 33px; color: var(--ink-600); font-size: .66rem; line-height: 1.45; }
+.directory-profile-opt-in > .form-message { margin-left: 33px; }
 
 .directory-review-panel { overflow: hidden; }
 .directory-review-list { display: grid; }
@@ -4258,15 +4247,12 @@ h3 {
 .directory-review-reject input { min-width: 210px; height: 38px; padding: 0 10px; border: 1px solid var(--ink-200); border-radius: 8px; background: var(--surface); font: inherit; font-size: .66rem; }
 
 @media (max-width: 900px) {
-	.directory-opt-in-panel { grid-template-columns: 1fr; }
-	.directory-opt-in-actions { justify-content: flex-start; }
 	.directory-review-list article { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 620px) {
-	.directory-opt-in-copy { flex-direction: column; }
-	.directory-opt-in-actions { align-items: stretch; flex-direction: column; }
-	.directory-opt-in-actions .button { width: 100%; }
+	.directory-profile-opt-in > p,
+	.directory-profile-opt-in > .form-message { margin-left: 0; }
 	.directory-review-actions,
 	.directory-review-reject { align-items: stretch; flex-direction: column; }
 	.directory-review-reject input { width: 100%; min-width: 0; }

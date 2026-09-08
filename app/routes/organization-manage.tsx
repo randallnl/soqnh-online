@@ -14,11 +14,9 @@ import {
 	getOrganizationManagementData,
 	OrganizationMutationError,
 	removeOrganizationMembership,
-	requestDirectoryParticipation,
 	setOrganizationMembership,
 	updateManagedOrganizationProfile,
 	updateOrganizationLogo,
-	withdrawDirectoryParticipation,
 } from "~/models/organizations.server";
 
 const optionalText = (maximum: number) => z.preprocess(
@@ -47,8 +45,6 @@ const actionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("set-membership"), organizationId: identifier, userId: identifier, role: z.enum(organizationRoles) }),
 	z.object({ intent: z.literal("remove-membership"), organizationId: identifier, userId: identifier }),
 	z.object({ intent: z.literal("remove-logo"), organizationId: identifier }),
-	z.object({ intent: z.literal("request-directory"), organizationId: identifier }),
-	z.object({ intent: z.literal("withdraw-directory"), organizationId: identifier }),
 ]);
 
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
@@ -105,14 +101,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	try {
-		if (result.data.intent === "request-directory") {
-			await requestDirectoryParticipation(context.cloudflare.env, user, result.data.organizationId);
-			return { ok: true as const, message: "State of Queer Digital opt-in request submitted." };
-		}
-		if (result.data.intent === "withdraw-directory") {
-			await withdrawDirectoryParticipation(context.cloudflare.env, user, result.data.organizationId);
-			return { ok: true as const, message: "This organization has been removed from State of Queer Digital." };
-		}
 		if (result.data.intent === "update-profile") {
 			const newLogoKey = await uploadIdentityImage(context.cloudflare.env, formData.get("logo"), "org-logos", result.data.organizationId);
 			try {
@@ -165,7 +153,6 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 	const navigation = useNavigation();
 	const submitting = navigation.state === "submitting";
 	const { organization, memberships } = loaderData;
-	const directoryStatusLabels = { not_listed: "Not participating", pending: "Pending review", published: "Participating", rejected: "Changes needed", opted_out: "Opted out" } as const;
 
 	return (
 		<div className="organization-manage-page">
@@ -174,13 +161,6 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 				<Link className="button button--secondary heading-action" to={`/organizations/${organization.slug}`}><Icon name="building" size={17} /> View profile</Link>
 			</section>
 			{actionData && <p className={`admin-notice form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}
-
-			<section className={`panel directory-opt-in-panel directory-opt-in-panel--${organization.directoryStatus}`} id="digital-directory">
-				<div className="directory-opt-in-copy"><span className="section-hero-icon section-hero-icon--plum"><Icon name="sparkles" size={22} /></span><div><p className="eyebrow">State of Queer Digital</p><h2>Opt in to State of Queer Digital</h2><p>This records permission to include the organization in State of Queer Digital and enables statewide collaboration posts with other participating organizations. Members and affiliations remain private.</p></div></div>
-				<div className="directory-opt-in-actions"><span className={`status-pill status-pill--directory-${organization.directoryStatus}`}>{directoryStatusLabels[organization.directoryStatus]}</span>{["not_listed", "rejected", "opted_out"].includes(organization.directoryStatus) && <Form method="post"><input name="intent" type="hidden" value="request-directory" /><input name="organizationId" type="hidden" value={organization.id} /><button className="button button--primary" disabled={submitting} type="submit">Opt in to State of Queer Digital</button></Form>}{["pending", "published", "rejected"].includes(organization.directoryStatus) && <Form method="post" onSubmit={(event) => { if (!window.confirm("Withdraw this organization from State of Queer Digital? Its member and affiliation data will remain private and unchanged.")) event.preventDefault(); }}><input name="intent" type="hidden" value="withdraw-directory" /><input name="organizationId" type="hidden" value={organization.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">{organization.directoryStatus === "pending" ? "Cancel request" : "Opt out"}</button></Form>}</div>
-				{organization.directoryStatus === "pending" && <p className="directory-opt-in-note">Submitted {organization.directoryRequestedAt ? new Date(organization.directoryRequestedAt).toLocaleDateString() : "for review"}. A site administrator will review the request.</p>}
-				{organization.directoryStatus === "rejected" && organization.directoryReviewNote && <p className="form-message form-message--error"><strong>Changes requested:</strong> {organization.directoryReviewNote}</p>}
-			</section>
 
 			<section className="panel managed-profile-panel">
 				<div className="panel-heading"><div><p className="eyebrow">Organization information</p><h2>Organization profile</h2></div><span className={`status-pill status-pill--${organization.status}`}>{organization.status}</span></div>
