@@ -2,15 +2,15 @@ import type { AuditEntityType } from "../lib/admin";
 
 export type AdminOperationsMetrics = {
 	activeMembers: number;
-	invitedMembers: number;
 	suspendedMembers: number;
 	activeOrganizations: number;
-	organizationsWithoutAffiliations: number;
 	affiliations: number;
-	publishedPosts: number;
-	draftPosts: number;
+	publishedUpdates: number;
+	publishedProjects: number;
+	publishedEvents: number;
 	pendingEvents: number;
 	pendingOrganizationClaims: number;
+	pendingDirectoryOptIns: number;
 	activeInvitations: number;
 	enabledScraperSources: number;
 };
@@ -72,17 +72,15 @@ export async function getAdminOperationsData(env: Env) {
 		env.DB.prepare(
 			`SELECT
 			 (SELECT count(*) FROM users WHERE status = 'active' AND id != 'system:event-scraper') AS activeMembers,
-			 (SELECT count(*) FROM users WHERE status = 'invited') AS invitedMembers,
 			 (SELECT count(*) FROM users WHERE status = 'suspended') AS suspendedMembers,
 			 (SELECT count(*) FROM organizations WHERE status = 'active') AS activeOrganizations,
-			 (SELECT count(*) FROM organizations AS o WHERE o.status = 'active' AND NOT EXISTS (
-			    SELECT 1 FROM organization_affiliations WHERE organization_id = o.id
-			  )) AS organizationsWithoutAffiliations,
 			 (SELECT count(*) FROM affiliations) AS affiliations,
-			 (SELECT count(*) FROM posts WHERE status = 'published') AS publishedPosts,
-			 (SELECT count(*) FROM posts WHERE status = 'draft') AS draftPosts,
+			 (SELECT count(*) FROM posts WHERE section = 'update' AND status = 'published') AS publishedUpdates,
+			 (SELECT count(*) FROM posts WHERE section = 'project' AND status = 'published') AS publishedProjects,
+			 (SELECT count(*) FROM posts AS p JOIN events AS e ON e.post_id = p.id WHERE p.section = 'event' AND p.status = 'published' AND e.moderation_status = 'approved') AS publishedEvents,
 			 (SELECT count(*) FROM events WHERE moderation_status = 'pending') AS pendingEvents,
 			 (SELECT count(*) FROM organization_membership_claims WHERE status = 'pending') AS pendingOrganizationClaims,
+			 (SELECT count(*) FROM organizations WHERE status = 'active' AND directory_status = 'pending') AS pendingDirectoryOptIns,
 			 (SELECT count(*) FROM invitations WHERE accepted_at IS NULL AND expires_at > ?1) AS activeInvitations,
 			 (SELECT count(*) FROM organizations WHERE status = 'active' AND event_scraping_enabled = 1) AS enabledScraperSources`,
 		).bind(now).first<AdminOperationsMetrics>(),
@@ -99,15 +97,15 @@ export async function getAdminOperationsData(env: Env) {
 	return {
 		metrics: metrics ?? {
 			activeMembers: 0,
-			invitedMembers: 0,
 			suspendedMembers: 0,
 			activeOrganizations: 0,
-			organizationsWithoutAffiliations: 0,
 			affiliations: 0,
-			publishedPosts: 0,
-			draftPosts: 0,
+			publishedUpdates: 0,
+			publishedProjects: 0,
+			publishedEvents: 0,
 			pendingEvents: 0,
 			pendingOrganizationClaims: 0,
+			pendingDirectoryOptIns: 0,
 			activeInvitations: 0,
 			enabledScraperSources: 0,
 		},

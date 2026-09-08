@@ -20,6 +20,7 @@
 	--gold-100: #f9dfad;
 	--gold-50: #fff3d8;
 	--plum-700: #9f2d69;
+	--plum-200: #e8a9c7;
 	--plum-100: #f4cadd;
 	--plum-50: #fff0f6;
 	--blue-700: #335b87;
@@ -1546,6 +1547,25 @@ h3 {
 .content-card footer a {
 	color: var(--green-700);
 	font-weight: 720;
+}
+
+.update-delete-button {
+	padding: 0;
+	border: 0;
+	color: var(--danger);
+	background: transparent;
+	cursor: pointer;
+	font: inherit;
+	font-weight: 720;
+}
+
+.update-delete-button:hover:not(:disabled) {
+	text-decoration: underline;
+}
+
+.update-delete-button:disabled {
+	cursor: wait;
+	opacity: 0.55;
 }
 
 .content-pagination {
@@ -4517,6 +4537,7 @@ h3 {
 .admin-health-card strong { display: block; margin: 3px 0 4px; font-size: 1.15rem; }
 .admin-health-card p { margin: 0; color: var(--ink-500); line-height: 1.5; }
 .admin-health-card .eyebrow { color: var(--green-700); }
+.admin-health-copy { min-width: 0; }
 .admin-health-indicator {
 	display: grid;
 	place-items: center;
@@ -4528,6 +4549,28 @@ h3 {
 	color: var(--green-700);
 }
 .admin-health-indicator--attention { background: var(--gold-50); color: var(--gold-600); }
+
+.admin-attention-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+	margin-top: 13px;
+}
+
+.admin-attention-links a {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 9px;
+	border-radius: 999px;
+	color: var(--plum-700);
+	background: var(--plum-100);
+	font-size: .72rem;
+	font-weight: 760;
+}
+
+.admin-attention-links a:hover { background: var(--plum-200); }
+.admin-attention-links a span { font-weight: 850; }
 
 .admin-content-card,
 .admin-scraper-health {
@@ -4542,6 +4585,22 @@ h3 {
 .admin-content-card span,
 .admin-scraper-health span,
 .admin-scraper-health small { margin-top: 7px; color: var(--ink-500); font-size: .75rem; line-height: 1.4; }
+.admin-content-card { justify-content: flex-start; }
+.admin-content-links { display: grid; gap: 6px; }
+.admin-content-links a {
+	display: grid;
+	grid-template-columns: 32px minmax(0, 1fr);
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	color: inherit;
+}
+.admin-content-links a:hover { background: var(--ink-50); }
+.admin-content-links a strong { font-size: 1.15rem; text-align: right; }
+.admin-content-links a span { margin: 0; font-weight: 720; }
+.admin-scraper-health { color: inherit; text-decoration: none; }
+.admin-scraper-health:hover { border-color: var(--green-600); }
 .scraper-health { text-transform: capitalize; }
 .scraper-health--succeeded { color: var(--green-700); }
 .scraper-health--failed { color: var(--danger); }

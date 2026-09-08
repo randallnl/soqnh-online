@@ -68,6 +68,7 @@ import { eventReviewSchema } from "../app/lib/event-review";
 import {
 	archivePost,
 	createPost,
+	deleteCommunityUpdate,
 	getPostById,
 	listPostOrganizations,
 	listSectionPosts,
@@ -434,6 +435,7 @@ describe("admin operations", () => {
 		const now = new Date().toISOString();
 		const future = new Date(Date.now() + 86_400_000).toISOString();
 		await env.DB.batch([
+			env.DB.prepare("UPDATE organizations SET directory_status = 'pending' WHERE id = 'org-one'"),
 			env.DB.prepare(
 				`INSERT INTO organization_membership_claims
 				 (id, organization_id, user_id, requested_role, status, created_at, updated_at)
@@ -454,6 +456,18 @@ describe("admin operations", () => {
 				 VALUES ('00000000-0000-4000-8000-000000000099', ?1, 'pending')`,
 			).bind(future),
 			env.DB.prepare(
+				`INSERT INTO posts
+				 (id, author_user_id, section, title, body, visibility, status, created_at, updated_at)
+				 VALUES
+				 ('00000000-0000-4000-8000-000000000100', ?1, 'update', 'Published update', 'Community news', 'members', 'published', ?2, ?2),
+				 ('00000000-0000-4000-8000-000000000101', ?1, 'project', 'Published project', 'Collaboration details', 'members', 'published', ?2, ?2),
+				 ('00000000-0000-4000-8000-000000000102', ?1, 'event', 'Published event', 'Event details', 'members', 'published', ?2, ?2)`,
+			).bind(siteAdmin.id, now),
+			env.DB.prepare(
+				`INSERT INTO events (post_id, starts_at, moderation_status)
+				 VALUES ('00000000-0000-4000-8000-000000000102', ?1, 'approved')`,
+			).bind(future),
+			env.DB.prepare(
 				`INSERT INTO scraper_runs
 				 (id, trigger_type, status, failure_count, error_message, started_at, created_at, updated_at)
 				 VALUES ('run-ops', 'manual', 'failed', 1, 'Partner timeout', ?1, ?1, ?1)`,
@@ -469,11 +483,13 @@ describe("admin operations", () => {
 		expect(data.metrics).toMatchObject({
 			activeMembers: 3,
 			activeOrganizations: 1,
-			organizationsWithoutAffiliations: 1,
 			affiliations: 1,
-			draftPosts: 1,
-				pendingEvents: 1,
-				pendingOrganizationClaims: 1,
+			publishedUpdates: 1,
+			publishedProjects: 1,
+			publishedEvents: 1,
+			pendingEvents: 1,
+			pendingOrganizationClaims: 1,
+			pendingDirectoryOptIns: 1,
 			activeInvitations: 1,
 		});
 		expect(data.latestScraperRun).toMatchObject({ status: "failed", errorMessage: "Partner timeout" });
@@ -1533,6 +1549,29 @@ describe("content feeds and post permissions", () => {
 		expect(afterArchive.posts).toEqual([]);
 		const auditCount = await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('post.created', 'post.archived')").first<number>("count");
 		expect(auditCount).toBe(12);
+	});
+
+	it("only lets site administrators permanently delete community updates", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		const created = await createPost(env, activeUser, {
+			organizationId: null,
+			section: "update",
+			title: "Community update to remove",
+			body: "This update and its conversation should be permanently removed.",
+			visibility: "members",
+			status: "published",
+			tags: ["community"],
+		});
+		await createComment(env, activeUser, { postId: created.id, parentCommentId: null, body: "A linked comment." });
+
+		await expect(deleteCommunityUpdate(env, activeUser, created.id)).rejects.toMatchObject({ reason: "forbidden" });
+		await deleteCommunityUpdate(env, siteAdmin, created.id);
+
+		await expect(env.DB.prepare("SELECT id FROM posts WHERE id = ?1").bind(created.id).first()).resolves.toBeNull();
+		await expect(env.DB.prepare("SELECT id FROM comments WHERE post_id = ?1").bind(created.id).first()).resolves.toBeNull();
+		const audit = await env.DB.prepare("SELECT metadata_json AS metadataJson FROM audit_log WHERE action = 'post.deleted' AND entity_id = ?1").bind(created.id).first<{ metadataJson: string }>();
+		expect(JSON.parse(audit!.metadataJson)).toMatchObject({ section: "update", title: "Community update to remove", authorUserId: activeUser.id });
 	});
 });
 

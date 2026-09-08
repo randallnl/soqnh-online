@@ -12,13 +12,14 @@ import { requireSameOrigin } from "~/lib/http.server";
 import { CommentMutationError, createComment, listFeedCommentPreviews } from "~/models/comments.server";
 import { InteractionMutationError, listMentionableMembers, syncPostMentions } from "~/models/interactions.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
-import { createPost, getPostById, listAvailablePostAffiliations, listPostOrganizations, listSectionPosts, PostMutationError } from "~/models/posts.server";
+import { createPost, deleteCommunityUpdate, getPostById, listAvailablePostAffiliations, listPostOrganizations, listSectionPosts, PostMutationError } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 
 const optionalOrganization = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().max(100).nullable());
 const updateActionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("create-update"), body: z.string().trim().min(2, "Write a community update").max(12000), organizationId: optionalOrganization, tags: z.string().max(320) }),
 	z.object({ intent: z.literal("create-feed-comment"), postId: z.string().uuid(), body: z.string().trim().min(2, "Write a comment").max(4000) }),
+	z.object({ intent: z.literal("delete-update"), postId: z.string().uuid() }),
 ]);
 
 function updateErrorMessage(error: PostMutationError) {
@@ -76,6 +77,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		authoringOrganizations,
 		allowEcosystemWide: user.siteRole === "site_admin",
 		canCreate: params.section === "updates" || user.siteRole === "site_admin" || authoringOrganizations.length > 0,
+		canDeleteUpdates: user.siteRole === "site_admin",
 		canModerateEvents: user.siteRole === "site_admin" || authoringOrganizations.some((organization) => organization.role === "org_admin"),
 		filters: { tag, organizationId, affiliationIds, eventTiming },
 		visibleMemberIds: visibleMembers.map((member) => member.id),
@@ -95,6 +97,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	const result = updateActionSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check your update" };
 	try {
+		if (result.data.intent === "delete-update") {
+			await deleteCommunityUpdate(context.cloudflare.env, user, result.data.postId);
+			throw redirect("/updates");
+		}
 		if (result.data.intent === "create-update") {
 			const created = await createPost(context.cloudflare.env, user, {
 				organizationId: result.data.organizationId,
@@ -115,7 +121,12 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw redirect(`/updates#comment-${created.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
-		if (error instanceof PostMutationError) return { ok: false as const, error: updateErrorMessage(error) };
+		if (error instanceof PostMutationError) return {
+			ok: false as const,
+			error: result.data.intent === "delete-update" && error.reason === "forbidden"
+				? "Only site administrators can delete community updates."
+				: updateErrorMessage(error),
+		};
 		if (error instanceof CommentMutationError) return { ok: false as const, error: error.reason === "post-unavailable" ? "That update is no longer available for comments." : "Your comment could not be posted." };
 		if (error instanceof InteractionMutationError) return { ok: false as const, error: error.reason === "member-unavailable" ? "One of the tagged members cannot be mentioned in this conversation." : "Your update could not be posted." };
 		console.error(JSON.stringify({ message: "inline update action failed", actorUserId: user.id, error: error instanceof Error ? error.message : String(error) }));
@@ -220,7 +231,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 								{commentPreviews.length > 0 && <div className="update-comment-preview-list">{commentPreviews.map((comment) => <article className="update-comment-preview-item" id={`comment-${comment.id}`} key={comment.id}><IdentityAvatar name={comment.authorName || "Member"} objectKey={comment.authorAvatarObjectKey} /><div><p><strong>{comment.authorName || "Member"}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt)}</time></p><MentionText targets={loaderData.mentionTargets} text={comment.body} /></div></article>)}</div>}
 								<Form className="update-feed-comment-form" method="post"><input name="intent" type="hidden" value="create-feed-comment" /><input name="postId" type="hidden" value={post.id} /><label className="sr-only" htmlFor={`feed-comment-${post.id}`}>Comment on this update</label><MentionTextarea id={`feed-comment-${post.id}`} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={commentMentionTargets} /><button className="button button--secondary button--compact" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Comment</button></Form>
 							</section>}
-							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span><span><Icon name="heart" size={15} /> {post.supportCount} supports</span>{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link></footer>
+							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span><span><Icon name="heart" size={15} /> {post.supportCount} supports</span>{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link>{post.section === "update" && loaderData.canDeleteUpdates && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="update-delete-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Delete</button></Form>}</footer>
 						</article>;
 					})}
 				</section>

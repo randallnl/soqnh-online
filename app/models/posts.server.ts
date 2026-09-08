@@ -659,3 +659,25 @@ export async function archivePost(env: Env, actor: AuthenticatedUser, postId: st
 	]);
 	if (results[0]?.meta.changes !== 1) throw new PostMutationError("not-found");
 }
+
+export async function deleteCommunityUpdate(env: Env, actor: AuthenticatedUser, postId: string) {
+	if (actor.siteRole !== "site_admin") throw new PostMutationError("forbidden");
+	const existing = await getPostById(env, actor, postId);
+	if (!existing) throw new PostMutationError("not-found");
+	if (existing.section !== "update") throw new PostMutationError("forbidden");
+	const now = new Date().toISOString();
+	const results = await env.DB.batch([
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 VALUES (?1, ?2, 'post.deleted', 'post', ?3, ?4, ?5)`,
+		).bind(crypto.randomUUID(), actor.id, postId, JSON.stringify({
+			section: existing.section,
+			title: existing.title,
+			authorUserId: existing.authorUserId,
+			organizationId: existing.organizationId,
+		}), now),
+		env.DB.prepare("DELETE FROM posts WHERE id = ?1 AND section = 'update'").bind(postId),
+	]);
+	if (!results[1]?.meta.changes) throw new PostMutationError("not-found");
+}

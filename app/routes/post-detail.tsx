@@ -11,7 +11,7 @@ import { requireSameOrigin } from "~/lib/http.server";
 import { routeSectionForDatabase, sectionDefinitions } from "~/lib/content";
 import { eventPostIdSchema } from "~/lib/event-review";
 import { formatEventDateTime } from "~/lib/events";
-import { archivePost, getPostById, PostMutationError } from "~/models/posts.server";
+import { archivePost, deleteCommunityUpdate, getPostById, PostMutationError } from "~/models/posts.server";
 import { EventMutationError, removeEvent } from "~/models/events.server";
 import { archiveComment, CommentMutationError, createComment, listPostComments, updateComment } from "~/models/comments.server";
 import { InteractionMutationError, listMentionableMembers, togglePostSupport } from "~/models/interactions.server";
@@ -20,6 +20,7 @@ import { listVisibleOrganizations } from "~/models/organizations.server";
 
 const actionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("archive-post"), postId: z.string().uuid() }),
+	z.object({ intent: z.literal("delete-update"), postId: z.string().uuid() }),
 	z.object({ intent: z.literal("remove-event"), postId: eventPostIdSchema }),
 	z.object({ intent: z.literal("toggle-support"), postId: z.string().uuid() }),
 	z.object({ intent: z.literal("create-comment"), postId: z.string().uuid(), parentCommentId: z.preprocess((value) => typeof value === "string" && value ? value : null, z.string().uuid().nullable()), body: z.string().trim().min(2).max(4000) }),
@@ -54,6 +55,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		visibleMemberIds: visibleMembers.map((member) => member.id),
 		section: routeSectionForDatabase(post.section),
 		canRemoveEvent: post.section === "event" && (post.authorUserId === user.id || post.canModerateEvent),
+		canDeleteUpdate: post.section === "update" && user.siteRole === "site_admin",
 	};
 }
 
@@ -66,6 +68,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	if (!result.success) return { ok: false as const, error: "That request is invalid." };
 	if (result.data.postId !== params.postId) return { ok: false as const, error: "That request is invalid." };
 	try {
+		if (result.data.intent === "delete-update") {
+			await deleteCommunityUpdate(context.cloudflare.env, user, result.data.postId);
+			throw redirect("/updates");
+		}
 		if (result.data.intent === "remove-event") {
 			await removeEvent(context.cloudflare.env, user, result.data.postId);
 			throw redirect("/events");
@@ -92,7 +98,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (error instanceof EventMutationError) return { ok: false as const, error: error.reason === "forbidden" ? "You cannot remove this event." : "That event is no longer available." };
-		if (error instanceof PostMutationError) return { ok: false as const, error: error.reason === "forbidden" ? "You cannot archive this post." : "That post is no longer available." };
+		if (error instanceof PostMutationError) return { ok: false as const, error: error.reason === "forbidden" ? result.data.intent === "delete-update" ? "Only site administrators can delete community updates." : "You cannot archive this post." : "That post is no longer available." };
 		if (error instanceof CommentMutationError) {
 			const messages = { "not-found": "That comment is no longer available.", forbidden: "You cannot change that comment.", "post-unavailable": "Comments are only available on published posts you can view.", "invalid-parent": "That conversation can no longer accept replies." };
 			return { ok: false as const, error: messages[error.reason] };
@@ -116,7 +122,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 	const navigation = useNavigation();
 	return (
 		<div className="post-detail-page">
-			<div className="organization-detail-actions"><Link className="back-link" to={`/${section}`}>← {sectionDefinitions[section].title}</Link><div>{post.canModerateEvent && <Link className="button button--secondary button--compact" to="/events/moderation"><Icon name="settings" size={16} /> Moderation queue</Link>}{post.canEdit && <Link className="button button--secondary button--compact" to={`/posts/${post.id}/edit`}><Icon name="settings" size={16} /> Edit {post.section === "event" ? "event" : "post"}</Link>}{loaderData.canRemoveEvent && post.status !== "archived" && <Form method="post" onSubmit={(event) => { if (!window.confirm("Remove this event? It will leave the event feed and moderation queue.")) event.preventDefault(); }}><input name="intent" type="hidden" value="remove-event" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Remove event</button></Form>}</div></div>
+			<div className="organization-detail-actions"><Link className="back-link" to={`/${section}`}>← {sectionDefinitions[section].title}</Link><div>{post.canModerateEvent && <Link className="button button--secondary button--compact" to="/events/moderation"><Icon name="settings" size={16} /> Moderation queue</Link>}{post.canEdit && <Link className="button button--secondary button--compact" to={`/posts/${post.id}/edit`}><Icon name="settings" size={16} /> Edit {post.section === "event" ? "event" : "post"}</Link>}{loaderData.canRemoveEvent && post.status !== "archived" && <Form method="post" onSubmit={(event) => { if (!window.confirm("Remove this event? It will leave the event feed and moderation queue.")) event.preventDefault(); }}><input name="intent" type="hidden" value="remove-event" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Remove event</button></Form>}{loaderData.canDeleteUpdate && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--delete" disabled={navigation.state === "submitting"} type="submit">Delete update</button></Form>}</div></div>
 			{post.section === "event" && post.eventModerationStatus !== "approved" && <div className={`event-review-banner event-review-banner--${post.eventModerationStatus}`}><strong>{post.eventModerationStatus === "rejected" ? "Changes requested" : "Pending approval"}</strong><span>{post.eventModerationStatus === "rejected" ? post.eventRejectionReason || "Edit the event and resubmit it for review." : "This event is visible only to its author and moderators until approved."}</span></div>}
 			<article className="panel post-detail-card">
 				{post.eventImageUrl && <img alt="" className="event-detail-image" referrerPolicy="no-referrer" src={post.eventImageUrl} />}

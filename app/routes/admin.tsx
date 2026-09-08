@@ -27,11 +27,17 @@ function actionLabel(action: string) {
 
 export default function AdminOperations({ loaderData }: Route.ComponentProps) {
 	const { metrics, latestScraperRun } = loaderData;
-	const attentionCount = metrics.pendingEvents + metrics.pendingOrganizationClaims + metrics.invitedMembers + metrics.suspendedMembers + metrics.organizationsWithoutAffiliations + (latestScraperRun?.status === "failed" ? 1 : 0);
+	const attentionItems = [
+		{ label: "Events awaiting review", count: metrics.pendingEvents, to: "/events/moderation" },
+		{ label: "Membership claims", count: metrics.pendingOrganizationClaims, to: "/admin/organizations#membership-claims" },
+		{ label: "Directory opt-ins", count: metrics.pendingDirectoryOptIns, to: "/admin/organizations#directory-opt-in-requests" },
+		{ label: "Failed scraper run", count: latestScraperRun?.status === "failed" ? 1 : 0, to: "/admin/scraper" },
+	].filter((item) => item.count > 0);
+	const attentionCount = attentionItems.reduce((total, item) => total + item.count, 0);
 	const tools: Array<{ title: string; copy: string; to: string; icon: IconName; count?: number; tone: string }> = [
-		{ title: "Member access", copy: `${metrics.activeMembers} active · ${metrics.suspendedMembers} suspended`, to: "/admin/members", icon: "people", count: metrics.suspendedMembers, tone: "green" },
-		{ title: "Invitations", copy: `${metrics.activeInvitations} active invitations`, to: "/admin/invitations", icon: "user", count: metrics.invitedMembers, tone: "blue" },
-		{ title: "Organizations", copy: `${metrics.activeOrganizations} active · ${metrics.pendingOrganizationClaims} claims pending`, to: "/admin/organizations", icon: "building", count: metrics.organizationsWithoutAffiliations + metrics.pendingOrganizationClaims, tone: "gold" },
+		{ title: "Member access", copy: `${metrics.activeMembers} active · ${metrics.suspendedMembers} suspended`, to: "/admin/members", icon: "people", tone: "green" },
+		{ title: "Invitations", copy: `${metrics.activeInvitations} awaiting acceptance`, to: "/admin/invitations", icon: "user", tone: "blue" },
+		{ title: "Organizations", copy: `${metrics.activeOrganizations} active · ${metrics.pendingOrganizationClaims + metrics.pendingDirectoryOptIns} awaiting review`, to: "/admin/organizations", icon: "building", count: metrics.pendingOrganizationClaims + metrics.pendingDirectoryOptIns, tone: "gold" },
 		{ title: "Affiliations", copy: `${metrics.affiliations} networks controlling visibility`, to: "/admin/affiliations", icon: "activity", tone: "plum" },
 		{ title: "Event moderation", copy: `${metrics.pendingEvents} events awaiting review`, to: "/events/moderation", icon: "calendar", count: metrics.pendingEvents, tone: "gold" },
 		{ title: "Event scraper", copy: `${metrics.enabledScraperSources} enabled partner sources`, to: "/admin/scraper", icon: "sparkles", count: latestScraperRun?.status === "failed" ? 1 : 0, tone: "blue" },
@@ -40,9 +46,9 @@ export default function AdminOperations({ loaderData }: Route.ComponentProps) {
 		<section className="page-heading"><div><p className="eyebrow">Site administration</p><h1>Operations center</h1><p>Run the member network, resolve pending work, and inspect system activity from one place.</p></div><Link className="button button--secondary heading-action" to="/admin/audit"><Icon name="activity" size={17} /> View audit log</Link></section>
 
 		<section className="admin-operations-summary" aria-label="Operations summary">
-			<div className="panel admin-health-card"><span className={`admin-health-indicator${attentionCount ? " admin-health-indicator--attention" : ""}`}><Icon name={attentionCount ? "bell" : "activity"} size={22} /></span><div><p className="eyebrow">Operational status</p><strong>{attentionCount ? `${attentionCount} items need attention` : "All queues are clear"}</strong><p>{attentionCount ? "Open the relevant workspace below to take action." : "No moderation, access, affiliation, or scraper issues are waiting."}</p></div></div>
-			<div className="panel admin-content-card"><p className="eyebrow">Published content</p><strong>{metrics.publishedPosts}</strong><span>{metrics.draftPosts} drafts in progress</span></div>
-			<div className="panel admin-scraper-health"><p className="eyebrow">Latest scraper run</p>{latestScraperRun ? <><strong className={`scraper-health scraper-health--${latestScraperRun.status}`}>{latestScraperRun.status}</strong><span>{formatDateTime(latestScraperRun.startedAt)} · {latestScraperRun.importedCount} imported</span>{latestScraperRun.errorMessage && <small>{latestScraperRun.errorMessage}</small>}</> : <><strong>Not run yet</strong><span>No execution history recorded</span></>}</div>
+			<div className="panel admin-health-card"><span className={`admin-health-indicator${attentionCount ? " admin-health-indicator--attention" : ""}`}><Icon name={attentionCount ? "bell" : "activity"} size={22} /></span><div className="admin-health-copy"><p className="eyebrow">Operational status</p><strong>{attentionCount ? `${attentionCount} ${attentionCount === 1 ? "item needs" : "items need"} attention` : "All queues are clear"}</strong><p>{attentionCount ? "Choose a queue to review the outstanding work." : "No moderation, directory, membership, or scraper issues are waiting."}</p>{attentionItems.length > 0 && <div className="admin-attention-links">{attentionItems.map((item) => <Link key={item.label} to={item.to}><span>{item.count}</span>{item.label}<Icon name="chevron-right" size={14} /></Link>)}</div>}</div></div>
+			<div className="panel admin-content-card"><p className="eyebrow">Published content</p><div className="admin-content-links"><Link to="/updates"><strong>{metrics.publishedUpdates}</strong><span>Community Feed</span></Link><Link to="/projects"><strong>{metrics.publishedProjects}</strong><span>Projects</span></Link><Link to="/events?when=all"><strong>{metrics.publishedEvents}</strong><span>Events</span></Link></div></div>
+			<Link className="panel admin-scraper-health" to="/admin/scraper"><p className="eyebrow">Latest scraper run</p>{latestScraperRun ? <><strong className={`scraper-health scraper-health--${latestScraperRun.status}`}>{latestScraperRun.status}</strong><span>{formatDateTime(latestScraperRun.startedAt)} · {latestScraperRun.importedCount} imported</span>{latestScraperRun.errorMessage && <small>{latestScraperRun.errorMessage}</small>}</> : <><strong>Not run yet</strong><span>No execution history recorded</span></>}</Link>
 		</section>
 
 		<section className="admin-tool-grid" aria-label="Administration tools">{tools.map((tool) => <Link className="panel admin-tool-card" key={tool.to} to={tool.to}><span className={`section-hero-icon section-hero-icon--${tool.tone}`}><Icon name={tool.icon} size={21} /></span><div><h2>{tool.title}</h2><p>{tool.copy}</p></div>{Boolean(tool.count) && <span className="admin-tool-count">{tool.count}</span>}<Icon className="admin-tool-arrow" name="chevron-right" size={18} /></Link>)}</section>
