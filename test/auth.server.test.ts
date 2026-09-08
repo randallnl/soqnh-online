@@ -468,6 +468,15 @@ describe("admin operations", () => {
 				 VALUES ('00000000-0000-4000-8000-000000000102', ?1, 'approved')`,
 			).bind(future),
 			env.DB.prepare(
+				`INSERT INTO posts
+				 (id, author_user_id, section, title, body, visibility, status, created_at, updated_at)
+				 VALUES ('00000000-0000-4000-8000-000000000103', ?1, 'event', 'Stale pending event', 'Already published and not actionable', 'members', 'published', ?2, ?2)`,
+			).bind(siteAdmin.id, now),
+			env.DB.prepare(
+				`INSERT INTO events (post_id, starts_at, moderation_status)
+				 VALUES ('00000000-0000-4000-8000-000000000103', ?1, 'pending')`,
+			).bind(future),
+			env.DB.prepare(
 				`INSERT INTO scraper_runs
 				 (id, trigger_type, status, failure_count, error_message, started_at, created_at, updated_at)
 				 VALUES ('run-ops', 'manual', 'failed', 1, 'Partner timeout', ?1, ?1, ?1)`,
@@ -492,6 +501,9 @@ describe("admin operations", () => {
 			pendingDirectoryOptIns: 1,
 			activeInvitations: 1,
 		});
+		expect((await listPendingEvents(env, siteAdmin)).map((event) => event.postId)).toEqual([
+			"00000000-0000-4000-8000-000000000099",
+		]);
 		expect(data.latestScraperRun).toMatchObject({ status: "failed", errorMessage: "Partner timeout" });
 		expect(data.recentAuditEvents[0]).toMatchObject({ action: "organization.updated", entityLabel: "Community Center" });
 	});

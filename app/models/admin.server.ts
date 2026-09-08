@@ -78,7 +78,14 @@ export async function getAdminOperationsData(env: Env) {
 			 (SELECT count(*) FROM posts WHERE section = 'update' AND status = 'published') AS publishedUpdates,
 			 (SELECT count(*) FROM posts WHERE section = 'project' AND status = 'published') AS publishedProjects,
 			 (SELECT count(*) FROM posts AS p JOIN events AS e ON e.post_id = p.id WHERE p.section = 'event' AND p.status = 'published' AND e.moderation_status = 'approved') AS publishedEvents,
-			 (SELECT count(*) FROM events WHERE moderation_status = 'pending') AS pendingEvents,
+			 (SELECT count(*)
+			  FROM events AS pending_event
+			  JOIN posts AS pending_post
+			    ON pending_post.id = pending_event.post_id
+			   AND pending_post.section = 'event'
+			   AND pending_post.status = 'draft'
+			  JOIN users AS pending_author ON pending_author.id = pending_post.author_user_id
+			  WHERE pending_event.moderation_status = 'pending') AS pendingEvents,
 			 (SELECT count(*) FROM organization_membership_claims WHERE status = 'pending') AS pendingOrganizationClaims,
 			 (SELECT count(*) FROM organizations WHERE status = 'active' AND directory_status = 'pending') AS pendingDirectoryOptIns,
 			 (SELECT count(*) FROM invitations WHERE accepted_at IS NULL AND expires_at > ?1) AS activeInvitations,
