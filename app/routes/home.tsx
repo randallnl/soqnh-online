@@ -8,6 +8,7 @@ import {
 	sectionDefinitions,
 } from "~/lib/content";
 import { getDashboardData } from "~/models/dashboard.server";
+import { canModerateEvents } from "~/models/events.server";
 
 export function meta(_args: Route.MetaArgs) {
 	return [
@@ -21,8 +22,11 @@ export function meta(_args: Route.MetaArgs) {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const dashboard = await getDashboardData(context.cloudflare.env, user);
-	return { user, dashboard, generatedAt: new Date().toISOString() };
+	const [dashboard, eventModerator] = await Promise.all([
+		getDashboardData(context.cloudflare.env, user),
+		canModerateEvents(context.cloudflare.env, user),
+	]);
+	return { user, dashboard, eventModerator, generatedAt: new Date().toISOString() };
 }
 
 const services: Array<{
@@ -138,6 +142,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		note: string;
 		icon: IconName;
 		color: string;
+		to: string;
 	}> = [
 		{
 			label: "Active members",
@@ -145,6 +150,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			note: "People in the network",
 			icon: "people",
 			color: "green",
+			to: "/members",
 		},
 		{
 			label: "Organizations",
@@ -152,6 +158,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			note: "Partners and coalitions",
 			icon: "building",
 			color: "blue",
+			to: "/organizations",
 		},
 		{
 			label: "Upcoming events",
@@ -159,6 +166,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			note: "Visible to you",
 			icon: "calendar",
 			color: "gold",
+			to: "/events",
 		},
 		{
 			label: "Pending review",
@@ -166,6 +174,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 			note: "Events you can moderate",
 			icon: "clipboard",
 			color: "plum",
+			to: loaderData.eventModerator ? "/events/moderation" : "/events",
 		},
 	];
 
@@ -191,7 +200,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
 			<section aria-label="Ecosystem summary" className="stat-grid">
 				{stats.map((stat) => (
-					<article className="stat-card" key={stat.label}>
+					<Link className="stat-card" key={stat.label} to={stat.to}>
 						<span className={`stat-icon stat-icon--${stat.color}`}>
 							<Icon name={stat.icon} size={21} />
 						</span>
@@ -200,7 +209,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<p>{stat.label}</p>
 							<small>{stat.note}</small>
 						</div>
-					</article>
+						<Icon className="stat-card-arrow" name="chevron-right" size={17} />
+					</Link>
 				))}
 			</section>
 

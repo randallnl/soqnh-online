@@ -679,6 +679,26 @@ p {
 	border-radius: var(--radius-md);
 	background: var(--surface);
 	box-shadow: var(--shadow-sm);
+	transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.stat-card:hover {
+	border-color: var(--green-600);
+	box-shadow: var(--shadow-md);
+	transform: translateY(-2px);
+}
+
+.stat-card-arrow {
+	flex: 0 0 auto;
+	align-self: center;
+	margin-left: auto;
+	color: var(--ink-300);
+	transition: color 160ms ease, transform 160ms ease;
+}
+
+.stat-card:hover .stat-card-arrow {
+	color: var(--green-700);
+	transform: translateX(2px);
 }
 
 .stat-icon {
