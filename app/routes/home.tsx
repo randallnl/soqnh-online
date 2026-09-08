@@ -258,24 +258,26 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						)}
 					</section>
 
-					<section className="panel service-panel">
-						<div className="panel-heading">
-							<div>
-								<p className="eyebrow">Foundation status</p>
-								<h2>Cloudflare services</h2>
-							</div>
-							<a href="/health">Open health check</a>
-						</div>
-						<div className="service-grid">
-							{services.map((service) => (
-								<div className="service-item" key={service.label}>
-									<span><Icon name={service.icon} size={18} /></span>
-									<div><strong>{service.label}</strong><small>{service.status}</small></div>
-									<i aria-label="Ready" />
+					{loaderData.user.siteRole === "site_admin" && (
+						<section className="panel service-panel">
+							<div className="panel-heading">
+								<div>
+									<p className="eyebrow">Foundation status</p>
+									<h2>Cloudflare services</h2>
 								</div>
-							))}
-						</div>
-					</section>
+								<a href="/health">Open health check</a>
+							</div>
+							<div className="service-grid">
+								{services.map((service) => (
+									<div className="service-item" key={service.label}>
+										<span><Icon name={service.icon} size={18} /></span>
+										<div><strong>{service.label}</strong><small>{service.status}</small></div>
+										<i aria-label="Ready" />
+									</div>
+								))}
+							</div>
+						</section>
+					)}
 				</div>
 
 				<aside className="dashboard-secondary">
