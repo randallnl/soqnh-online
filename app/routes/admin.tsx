@@ -27,11 +27,11 @@ function actionLabel(action: string) {
 
 export default function AdminOperations({ loaderData }: Route.ComponentProps) {
 	const { metrics, latestScraperRun } = loaderData;
-	const attentionCount = metrics.pendingEvents + metrics.invitedMembers + metrics.suspendedMembers + metrics.organizationsWithoutAffiliations + (latestScraperRun?.status === "failed" ? 1 : 0);
+	const attentionCount = metrics.pendingEvents + metrics.pendingOrganizationClaims + metrics.invitedMembers + metrics.suspendedMembers + metrics.organizationsWithoutAffiliations + (latestScraperRun?.status === "failed" ? 1 : 0);
 	const tools: Array<{ title: string; copy: string; to: string; icon: IconName; count?: number; tone: string }> = [
 		{ title: "Member access", copy: `${metrics.activeMembers} active · ${metrics.suspendedMembers} suspended`, to: "/admin/members", icon: "people", count: metrics.suspendedMembers, tone: "green" },
 		{ title: "Invitations", copy: `${metrics.activeInvitations} active invitations`, to: "/admin/invitations", icon: "user", count: metrics.invitedMembers, tone: "blue" },
-		{ title: "Organizations", copy: `${metrics.activeOrganizations} active organizations`, to: "/admin/organizations", icon: "building", count: metrics.organizationsWithoutAffiliations, tone: "gold" },
+		{ title: "Organizations", copy: `${metrics.activeOrganizations} active · ${metrics.pendingOrganizationClaims} claims pending`, to: "/admin/organizations", icon: "building", count: metrics.organizationsWithoutAffiliations + metrics.pendingOrganizationClaims, tone: "gold" },
 		{ title: "Affiliations", copy: `${metrics.affiliations} networks controlling visibility`, to: "/admin/affiliations", icon: "activity", tone: "plum" },
 		{ title: "Event moderation", copy: `${metrics.pendingEvents} events awaiting review`, to: "/events/moderation", icon: "calendar", count: metrics.pendingEvents, tone: "gold" },
 		{ title: "Event scraper", copy: `${metrics.enabledScraperSources} enabled partner sources`, to: "/admin/scraper", icon: "sparkles", count: latestScraperRun?.status === "failed" ? 1 : 0, tone: "blue" },

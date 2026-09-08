@@ -1,6 +1,7 @@
 export const auditEntityTypes = [
 	"user",
 	"organization",
+	"organization_claim",
 	"affiliation",
 	"invitation",
 	"post",

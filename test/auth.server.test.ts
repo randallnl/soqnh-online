@@ -47,6 +47,14 @@ import {
 	updateOrganization,
 	updateManagedOrganizationProfile,
 } from "../app/models/organizations.server";
+import {
+	cancelOrganizationClaim,
+	listClaimableOrganizations,
+	listOwnOrganizationClaims,
+	listReviewableOrganizationClaims,
+	reviewOrganizationClaim,
+	submitOrganizationClaim,
+} from "../app/models/organization-claims.server";
 import { normalizeTags } from "../app/lib/content";
 import { eventReviewSchema } from "../app/lib/event-review";
 import {
@@ -260,6 +268,7 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM auth_tokens"),
 		env.DB.prepare("DELETE FROM organization_affiliations"),
 		env.DB.prepare("DELETE FROM user_affiliations"),
+		env.DB.prepare("DELETE FROM organization_membership_claims"),
 		env.DB.prepare("DELETE FROM organization_memberships"),
 		env.DB.prepare("DELETE FROM invitations"),
 		env.DB.prepare("DELETE FROM users"),
@@ -314,6 +323,68 @@ describe("member profiles", () => {
 	});
 });
 
+describe("organization membership claims", () => {
+	it("keeps a self-selected role pending until a site administrator approves it", async () => {
+		await Promise.all([seedUser(), seedSiteAdmin()]);
+		await seedOrganization();
+		expect(await listClaimableOrganizations(env, activeUser)).toEqual([]);
+		await expect(submitOrganizationClaim(env, activeUser, { organizationId: "org-one", requestedRole: "viewer" })).rejects.toMatchObject({ reason: "organization-unavailable" });
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+
+		const claimable = await listClaimableOrganizations(env, activeUser);
+		expect(claimable).toEqual([expect.objectContaining({ id: "org-one", currentRole: null, hasPendingClaim: false })]);
+		const claim = await submitOrganizationClaim(env, activeUser, {
+			organizationId: "org-one",
+			requestedRole: "contributor",
+		});
+		expect(await env.DB.prepare("SELECT role FROM organization_memberships WHERE organization_id = 'org-one' AND user_id = ?1").bind(activeUser.id).first()).toBeNull();
+		expect(await listOwnOrganizationClaims(env, activeUser)).toEqual([
+			expect.objectContaining({ id: claim.id, status: "pending", requestedRole: "contributor" }),
+		]);
+		expect(await listReviewableOrganizationClaims(env, siteAdmin)).toEqual([
+			expect.objectContaining({ id: claim.id, userId: activeUser.id }),
+		]);
+
+		await reviewOrganizationClaim(env, siteAdmin, { claimId: claim.id, decision: "approve", reason: null });
+		expect(await env.DB.prepare("SELECT role FROM organization_memberships WHERE organization_id = 'org-one' AND user_id = ?1").bind(activeUser.id).first<string>("role")).toBe("contributor");
+		expect((await listOwnOrganizationClaims(env, activeUser))[0]).toMatchObject({ status: "approved" });
+		expect(await listNotifications(env, activeUser)).toEqual([expect.objectContaining({ type: "approval", body: expect.stringContaining("approved") })]);
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('organization.claim_submitted', 'organization.claim_approved')").first<number>("count")).toBe(2);
+	});
+
+	it("scopes review to the organization and prevents self-approval", async () => {
+		await Promise.all([seedUser(), seedSiteAdmin(), seedSecondMember(), seedThirdMember()]);
+		await seedOrganization();
+		await seedSecondOrganization();
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "org_admin" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-two", userId: thirdMember.id, role: "org_admin" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "viewer" });
+		const claim = await submitOrganizationClaim(env, activeUser, { organizationId: "org-one", requestedRole: "org_admin" });
+
+		expect((await listReviewableOrganizationClaims(env, secondMember)).map((item) => item.id)).toEqual([claim.id]);
+		expect(await listReviewableOrganizationClaims(env, thirdMember)).toEqual([]);
+		await expect(reviewOrganizationClaim(env, thirdMember, { claimId: claim.id, decision: "approve", reason: null })).rejects.toMatchObject({ reason: "forbidden" });
+		await expect(reviewOrganizationClaim(env, activeUser, { claimId: claim.id, decision: "approve", reason: null })).rejects.toMatchObject({ reason: "self-review" });
+	});
+
+	it("supports cancellation and resubmission after a rejected claim", async () => {
+		await Promise.all([seedUser(), seedSiteAdmin()]);
+		await seedOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+		const first = await submitOrganizationClaim(env, activeUser, { organizationId: "org-one", requestedRole: "viewer" });
+		await expect(submitOrganizationClaim(env, activeUser, { organizationId: "org-one", requestedRole: "contributor" })).rejects.toMatchObject({ reason: "already-pending" });
+		await cancelOrganizationClaim(env, activeUser, first.id);
+		const second = await submitOrganizationClaim(env, activeUser, { organizationId: "org-one", requestedRole: "contributor" });
+		await reviewOrganizationClaim(env, siteAdmin, { claimId: second.id, decision: "reject", reason: "Please confirm your role with the organization." });
+		const third = await submitOrganizationClaim(env, activeUser, { organizationId: "org-one", requestedRole: "viewer" });
+		expect(third.id).not.toBe(second.id);
+	});
+});
+
 describe("admin operations", () => {
 	it("summarizes pending work and recent system activity", async () => {
 		await Promise.all([seedUser(), seedSiteAdmin(), seedSecondMember()]);
@@ -322,6 +393,11 @@ describe("admin operations", () => {
 		const now = new Date().toISOString();
 		const future = new Date(Date.now() + 86_400_000).toISOString();
 		await env.DB.batch([
+			env.DB.prepare(
+				`INSERT INTO organization_membership_claims
+				 (id, organization_id, user_id, requested_role, status, created_at, updated_at)
+				 VALUES ('claim-ops', 'org-one', ?1, 'viewer', 'pending', ?2, ?2)`,
+			).bind(activeUser.id, now),
 			env.DB.prepare(
 				`INSERT INTO invitations
 				 (id, email, invited_role, token_hash, invited_by_user_id, expires_at, created_at)
@@ -355,7 +431,8 @@ describe("admin operations", () => {
 			organizationsWithoutAffiliations: 1,
 			affiliations: 1,
 			draftPosts: 1,
-			pendingEvents: 1,
+				pendingEvents: 1,
+				pendingOrganizationClaims: 1,
 			activeInvitations: 1,
 		});
 		expect(data.latestScraperRun).toMatchObject({ status: "failed", errorMessage: "Partner timeout" });

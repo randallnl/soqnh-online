@@ -654,7 +654,37 @@ export async function setOrganizationMembership(
 			 SELECT ?1, ?2, ?3, ?4
 			 WHERE EXISTS (SELECT 1 FROM organizations WHERE id = ?1 AND status != 'archived')
 			 ON CONFLICT(organization_id, user_id) DO UPDATE SET role = excluded.role`,
-		).bind(input.organizationId, input.userId, input.role, now),
+			).bind(input.organizationId, input.userId, input.role, now),
+		env.DB.prepare(
+			`UPDATE organization_membership_claims
+			 SET status = 'approved', reviewed_by_user_id = ?1, reviewed_at = ?2,
+			     review_reason = 'Resolved through direct membership management.', updated_at = ?2
+			 WHERE organization_id = ?3 AND user_id = ?4 AND status = 'pending'`,
+		).bind(actor.id, now, input.organizationId, input.userId),
+		env.DB.prepare(
+			`INSERT INTO notifications
+			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
+			 SELECT ?1, claim.user_id, ?2, NULL, NULL, 'approval',
+			        'Your ' || o.name || ' membership claim was approved.', NULL, ?3
+			 FROM organization_membership_claims AS claim
+			 JOIN organizations AS o ON o.id = claim.organization_id
+			 WHERE claim.organization_id = ?4 AND claim.user_id = ?5
+			   AND claim.status = 'approved' AND claim.reviewed_by_user_id = ?2 AND claim.reviewed_at = ?3`,
+		).bind(crypto.randomUUID(), actor.id, now, input.organizationId, input.userId),
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'organization.claim_approved', 'organization_claim', claim.id, ?3, ?4
+			 FROM organization_membership_claims AS claim
+			 WHERE claim.organization_id = ?5 AND claim.user_id = ?6
+			   AND claim.status = 'approved' AND claim.reviewed_by_user_id = ?2 AND claim.reviewed_at = ?4`,
+		).bind(crypto.randomUUID(), actor.id, JSON.stringify({
+			organizationId: input.organizationId,
+			userId: input.userId,
+			previousRole: existing?.role ?? null,
+			requestedRole: input.role,
+			directMembershipManagement: true,
+		}), now, input.organizationId, input.userId),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)

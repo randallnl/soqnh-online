@@ -42,6 +42,8 @@ Affiliation mutations write audit events. Affiliations are not deletable in this
 
 Organization administrators cannot change lifecycle status, URL slugs, or affiliation links. They also cannot demote or remove their own administrator role. Site administrators retain those recovery controls and can assign any active member during onboarding.
 
+Members may also request a new organization membership or role change from their own profile. These claims grant no access until a site administrator or an administrator for that organization approves them. Reviewers cannot moderate their own claims.
+
 ## Routes
 
 - `/organizations` — affiliation-filtered active organization directory

@@ -10,6 +10,7 @@ export type AdminOperationsMetrics = {
 	publishedPosts: number;
 	draftPosts: number;
 	pendingEvents: number;
+	pendingOrganizationClaims: number;
 	activeInvitations: number;
 	enabledScraperSources: number;
 };
@@ -47,6 +48,11 @@ const auditSelection = `SELECT a.id, a.action,
 	           WHEN 'invitation' THEN (SELECT email FROM invitations WHERE id = a.entity_id)
 	           WHEN 'post' THEN (SELECT title FROM posts WHERE id = a.entity_id)
 	           WHEN 'event' THEN (SELECT title FROM posts WHERE id = a.entity_id)
+	           WHEN 'organization_claim' THEN (
+	             SELECT o.name FROM organization_membership_claims AS claim
+	             JOIN organizations AS o ON o.id = claim.organization_id
+	             WHERE claim.id = a.entity_id
+	           )
 	           WHEN 'comment' THEN (
 	             SELECT p.title FROM comments AS c JOIN posts AS p ON p.id = c.post_id
 	             WHERE c.id = a.entity_id
@@ -76,6 +82,7 @@ export async function getAdminOperationsData(env: Env) {
 			 (SELECT count(*) FROM posts WHERE status = 'published') AS publishedPosts,
 			 (SELECT count(*) FROM posts WHERE status = 'draft') AS draftPosts,
 			 (SELECT count(*) FROM events WHERE moderation_status = 'pending') AS pendingEvents,
+			 (SELECT count(*) FROM organization_membership_claims WHERE status = 'pending') AS pendingOrganizationClaims,
 			 (SELECT count(*) FROM invitations WHERE accepted_at IS NULL AND expires_at > ?1) AS activeInvitations,
 			 (SELECT count(*) FROM organizations WHERE status = 'active' AND event_scraping_enabled = 1) AS enabledScraperSources`,
 		).bind(now).first<AdminOperationsMetrics>(),
@@ -100,6 +107,7 @@ export async function getAdminOperationsData(env: Env) {
 			publishedPosts: 0,
 			draftPosts: 0,
 			pendingEvents: 0,
+			pendingOrganizationClaims: 0,
 			activeInvitations: 0,
 			enabledScraperSources: 0,
 		},

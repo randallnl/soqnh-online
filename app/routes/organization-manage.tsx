@@ -7,7 +7,9 @@ import { OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
+import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import { organizationRoles } from "~/lib/organizations";
+import { listReviewableOrganizationClaims, OrganizationClaimMutationError, reviewOrganizationClaim } from "~/models/organization-claims.server";
 import {
 	getOrganizationManagementData,
 	OrganizationMutationError,
@@ -56,7 +58,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	try {
 		const data = await getOrganizationManagementData(context.cloudflare.env, user, params.slug);
 		if (!data) throw new Response("Organization not found", { status: 404 });
-		return data;
+		return { ...data, pendingClaims: await listReviewableOrganizationClaims(context.cloudflare.env, user, data.organization.id) };
 	} catch (error) {
 		if (error instanceof OrganizationMutationError) {
 			throw new Response(error.reason === "not-found" ? "Organization not found" : "Forbidden", {
@@ -77,7 +79,23 @@ export async function action({ request, context }: Route.ActionArgs) {
 		throw error;
 	}
 	const formData = await request.formData();
-	const result = actionSchema.safeParse(Object.fromEntries(formData));
+	const raw = Object.fromEntries(formData);
+	if (raw.intent === "review-organization-claim") {
+		const review = reviewOrganizationClaimSchema.safeParse(raw);
+		if (!review.success) return { ok: false as const, error: review.error.issues[0]?.message ?? "Check the claim decision" };
+		try {
+			await reviewOrganizationClaim(context.cloudflare.env, user, review.data);
+			return { ok: true as const, message: review.data.decision === "approve" ? "Membership claim approved." : "Membership claim rejected." };
+		} catch (error) {
+			if (error instanceof OrganizationClaimMutationError) {
+				const messages = { "organization-unavailable": "That organization is unavailable.", "same-role": "The member already has that role.", "already-pending": "That claim is already pending.", "claim-unavailable": "That claim is no longer available.", "already-reviewed": "Another administrator already reviewed that claim.", forbidden: "You cannot review that claim.", "self-review": "You cannot approve your own claim.", "member-unavailable": "The member or organization is no longer active." };
+				return { ok: false as const, error: messages[error.reason] };
+			}
+			console.error(JSON.stringify({ message: "organization claim review failed", actorUserId: user.id, error: error instanceof Error ? error.message : String(error) }));
+			return { ok: false as const, error: "The membership claim could not be reviewed." };
+		}
+	}
+	const result = actionSchema.safeParse(raw);
 	if (!result.success) {
 		return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the organization details" };
 	}
@@ -161,6 +179,7 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 
 			<section className="panel managed-members-panel">
 				<div className="panel-heading"><div><p className="eyebrow">Participation</p><h2>Organization members</h2></div><span>{memberships.length}</span></div>
+				<div className="managed-claim-queue"><div className="subsection-heading"><div><p className="eyebrow">Membership moderation</p><h3>Pending claims</h3></div><span>{loaderData.pendingClaims.length}</span></div>{loaderData.pendingClaims.length === 0 ? <p className="muted-empty">No membership claims are awaiting review.</p> : <div className="organization-claim-review-list">{loaderData.pendingClaims.map((claim) => <article key={claim.id}><div><strong>{claim.userName || claim.userEmail}</strong><p>Requests {organizationRoleLabels[claim.requestedRole]}{claim.currentRole ? ` · currently ${organizationRoleLabels[claim.currentRole]}` : ""}</p></div><div className="organization-claim-actions"><Form method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary button--compact" disabled={submitting} type="submit">Approve</button></Form><Form className="organization-claim-reject-form" method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="reject" /><input aria-label={`Reason for rejecting ${claim.userName || claim.userEmail}`} maxLength={500} name="reason" placeholder="Reason for rejection" required /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Reject</button></Form></div></article>)}</div>}</div>
 				<div className="organization-membership-manager">
 					<Form className="membership-add-form" method="post">
 						<input name="intent" type="hidden" value="set-membership" /><input name="organizationId" type="hidden" value={organization.id} />

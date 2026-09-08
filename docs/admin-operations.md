@@ -24,11 +24,12 @@ The overview reads a bounded set of aggregate values directly through the D1 bin
 - affiliation count
 - published and draft content counts
 - pending event moderation count
+- pending organization membership claim count
 - active invitation count
 - enabled scraper-source count
 - latest scraper run status, imported count, and failure message
 
-An attention total combines the queues that require human action: invited accounts, suspended accounts, pending events, active organizations missing affiliations, and a failed latest scraper run. Counts link to the existing workspace where the administrator can resolve them.
+An attention total combines the queues that require human action: invited accounts, suspended accounts, pending events, pending organization membership claims, active organizations missing affiliations, and a failed latest scraper run. Counts link to the existing workspace where the administrator can resolve them.
 
 ## Audit viewer
 

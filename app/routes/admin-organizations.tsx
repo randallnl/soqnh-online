@@ -5,6 +5,7 @@ import type { Route } from "./+types/admin-organizations";
 import { Icon } from "~/components/icon";
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
+import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import {
 	organizationRoles,
 	organizationStatuses,
@@ -18,6 +19,7 @@ import {
 	setOrganizationMembership,
 	updateOrganization,
 } from "~/models/organizations.server";
+import { listReviewableOrganizationClaims, OrganizationClaimMutationError, reviewOrganizationClaim } from "~/models/organization-claims.server";
 
 const optionalText = (maximum: number) =>
 	z.preprocess(
@@ -68,8 +70,12 @@ export function meta(_args: Route.MetaArgs) {
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	await requireSiteAdmin(request, context.cloudflare.env);
-	return getOrganizationAdministrationData(context.cloudflare.env);
+	const admin = await requireSiteAdmin(request, context.cloudflare.env);
+	const [data, pendingClaims] = await Promise.all([
+		getOrganizationAdministrationData(context.cloudflare.env),
+		listReviewableOrganizationClaims(context.cloudflare.env, admin),
+	]);
+	return { ...data, pendingClaims };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -77,6 +83,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const admin = await requireSiteAdmin(request, context.cloudflare.env);
 	const formData = await request.formData();
 	const raw = Object.fromEntries(formData);
+	if (raw.intent === "review-organization-claim") {
+		const review = reviewOrganizationClaimSchema.safeParse(raw);
+		if (!review.success) return { ok: false as const, error: review.error.issues[0]?.message ?? "Check the claim decision" };
+		try {
+			await reviewOrganizationClaim(context.cloudflare.env, admin, review.data);
+			return { ok: true as const, message: review.data.decision === "approve" ? "Membership claim approved." : "Membership claim rejected." };
+		} catch (error) {
+			if (error instanceof OrganizationClaimMutationError) {
+				const messages = { "organization-unavailable": "That organization is unavailable.", "same-role": "The member already has that role.", "already-pending": "That claim is already pending.", "claim-unavailable": "That claim is no longer available.", "already-reviewed": "Another administrator already reviewed that claim.", forbidden: "You cannot review that claim.", "self-review": "You cannot approve your own claim.", "member-unavailable": "The member or organization is no longer active." };
+				return { ok: false as const, error: messages[error.reason] };
+			}
+			throw error;
+		}
+	}
 	if (raw.intent === "create" && !raw.slug && typeof raw.name === "string") {
 		raw.slug = slugifyOrganizationName(raw.name);
 	}
@@ -125,6 +145,11 @@ export default function AdminOrganizations({ loaderData }: Route.ComponentProps)
 		<div className="admin-page organization-admin-page">
 			<section className="page-heading"><div><p className="eyebrow">Site administration</p><h1>Organizations</h1><p>Manage organization profiles and the people who can view, contribute, or administer them.</p></div><Link className="button button--secondary heading-action" to="/organizations"><Icon name="building" size={17} /> View directory</Link></section>
 			{actionData && <p className={`admin-notice form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}
+
+			<section className="panel organization-claim-review-panel">
+				<div className="panel-heading"><div><p className="eyebrow">Membership moderation</p><h2>Pending organization claims</h2></div><span>{loaderData.pendingClaims.length}</span></div>
+				{loaderData.pendingClaims.length === 0 ? <p className="muted-empty">No organization membership claims are awaiting review.</p> : <div className="organization-claim-review-list">{loaderData.pendingClaims.map((claim) => <article key={claim.id}><div><strong>{claim.userName || claim.userEmail}</strong><p>{claim.organizationName} · {organizationRoleLabels[claim.requestedRole]}{claim.currentRole ? ` · currently ${organizationRoleLabels[claim.currentRole]}` : ""}</p></div><div className="organization-claim-actions"><Form method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary button--compact" disabled={submitting} type="submit">Approve</button></Form><Form className="organization-claim-reject-form" method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="reject" /><input aria-label={`Reason for rejecting ${claim.userName || claim.userEmail}`} maxLength={500} name="reason" placeholder="Reason for rejection" required /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Reject</button></Form></div></article>)}</div>}
+			</section>
 
 			<section className="panel organization-create-panel">
 				<div className="panel-heading"><div><p className="eyebrow">New profile</p><h2>Add an organization</h2></div></div>

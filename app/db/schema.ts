@@ -141,6 +141,44 @@ export const organizationMemberships = sqliteTable(
 	],
 );
 
+export const organizationMembershipClaims = sqliteTable(
+	"organization_membership_claims",
+	{
+		id: text("id").primaryKey(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organizations.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		requestedRole: text("requested_role", { enum: ["viewer", "contributor", "org_admin"] })
+			.notNull(),
+		status: text("status", { enum: ["pending", "approved", "rejected", "cancelled"] })
+			.notNull()
+			.default("pending"),
+		reviewedByUserId: text("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+		reviewedAt: text("reviewed_at"),
+		reviewReason: text("review_reason"),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		check(
+			"organization_membership_claims_role_check",
+			sql`${table.requestedRole} in ('viewer', 'contributor', 'org_admin')`,
+		),
+		check(
+			"organization_membership_claims_status_check",
+			sql`${table.status} in ('pending', 'approved', 'rejected', 'cancelled')`,
+		),
+		uniqueIndex("idx_organization_membership_claims_pending")
+			.on(table.organizationId, table.userId)
+			.where(sql`${table.status} = 'pending'`),
+		index("idx_organization_membership_claims_user_created").on(table.userId, desc(table.createdAt)),
+		index("idx_organization_membership_claims_org_status").on(table.organizationId, table.status, desc(table.createdAt)),
+	],
+);
+
 export const invitations = sqliteTable(
 	"invitations",
 	{
