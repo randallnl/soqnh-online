@@ -26,6 +26,12 @@ export type PostOrganizationOption = {
 	role: "contributor" | "org_admin" | null;
 };
 
+export type PostAffiliationOption = {
+	id: string;
+	name: string;
+	slug: string;
+};
+
 export type PostRecord = {
 	id: string;
 	organizationId: string | null;
@@ -46,6 +52,7 @@ export type PostRecord = {
 	supportCount: number;
 	viewerSupported: boolean;
 	tags: string[];
+	affiliations: PostAffiliationOption[];
 	canEdit: boolean;
 	canModerateEvent: boolean;
 	eventStartsAt: string | null;
@@ -69,8 +76,9 @@ export type EventDetailsInput = {
 	imageUrl: string | null;
 };
 
-type PostRow = Omit<PostRecord, "tags" | "canEdit" | "canModerateEvent" | "viewerSupported"> & {
+type PostRow = Omit<PostRecord, "tags" | "affiliations" | "canEdit" | "canModerateEvent" | "viewerSupported"> & {
 	tagList: string | null;
+	affiliationJson: string;
 	canEdit: number;
 	canModerateEvent: number;
 	viewerSupported: number;
@@ -83,6 +91,8 @@ export class PostMutationError extends Error {
 			| "forbidden"
 			| "organization-required"
 			| "organization-unavailable"
+			| "affiliation-required"
+			| "affiliation-unavailable"
 			| "event-details-required",
 	) {
 		super(reason);
@@ -91,13 +101,79 @@ export class PostMutationError extends Error {
 }
 
 function mapPost(row: PostRow): PostRecord {
+	const affiliations = JSON.parse(row.affiliationJson) as PostAffiliationOption[];
 	return {
 		...row,
 		tags: row.tagList ? row.tagList.split(",") : [],
+		affiliations,
 		canEdit: row.canEdit === 1,
 		canModerateEvent: row.canModerateEvent === 1,
 		viewerSupported: row.viewerSupported === 1,
 	};
+}
+
+export async function listAvailablePostAffiliations(env: Env, actor: AuthenticatedUser) {
+	const result = await env.DB.prepare(
+		`WITH actor_affiliations AS (
+		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
+		   UNION
+		   SELECT oa.affiliation_id
+		   FROM organization_memberships AS membership
+		   JOIN organizations AS member_organization
+		     ON member_organization.id = membership.organization_id
+		    AND member_organization.status != 'archived'
+		   JOIN organization_affiliations AS oa ON oa.organization_id = membership.organization_id
+		   WHERE membership.user_id = ?1
+		 )
+		 SELECT a.id, a.name, a.slug
+		 FROM affiliations AS a
+		 WHERE ?2 = 1 OR EXISTS (
+		   SELECT 1 FROM actor_affiliations WHERE affiliation_id = a.id
+		 )
+		 ORDER BY a.name COLLATE NOCASE`,
+	)
+		.bind(actor.id, actor.siteRole === "site_admin" ? 1 : 0)
+		.all<PostAffiliationOption>();
+	return result.results;
+}
+
+async function requirePostAffiliations(
+	env: Env,
+	actor: AuthenticatedUser,
+	visibility: PostVisibility,
+	affiliationIds: string[] | undefined,
+) {
+	if (visibility === "organization") return [];
+	// Older internal callers and pre-migration records retain their prior visibility;
+	// every user-facing create/edit route supplies this field explicitly.
+	if (affiliationIds === undefined) return [];
+	const uniqueIds = [...new Set(affiliationIds)];
+	if (uniqueIds.length === 0) throw new PostMutationError("affiliation-required");
+	if (uniqueIds.length > 20) throw new PostMutationError("affiliation-unavailable");
+	const placeholders = uniqueIds.map((_, index) => `?${index + 3}`).join(", ");
+	const result = await env.DB.prepare(
+		`WITH actor_affiliations AS (
+		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
+		   UNION
+		   SELECT oa.affiliation_id
+		   FROM organization_memberships AS membership
+		   JOIN organizations AS member_organization
+		     ON member_organization.id = membership.organization_id
+		    AND member_organization.status != 'archived'
+		   JOIN organization_affiliations AS oa ON oa.organization_id = membership.organization_id
+		   WHERE membership.user_id = ?1
+		 )
+		 SELECT a.id
+		 FROM affiliations AS a
+		 WHERE a.id IN (${placeholders})
+		   AND (?2 = 1 OR EXISTS (
+		     SELECT 1 FROM actor_affiliations WHERE affiliation_id = a.id
+		   ))`,
+	)
+		.bind(actor.id, actor.siteRole === "site_admin" ? 1 : 0, ...uniqueIds)
+		.all<{ id: string }>();
+	if (result.results.length !== uniqueIds.length) throw new PostMutationError("affiliation-unavailable");
+	return uniqueIds;
 }
 
 export async function listPostOrganizations(env: Env, actor: AuthenticatedUser) {
@@ -147,6 +223,7 @@ export async function listSectionPosts(
 		section: DatabaseSection;
 		tag: string | null;
 		organizationId: string | null;
+		affiliationIds?: string[] | null;
 		eventTiming?: EventTiming;
 		page: number;
 	},
@@ -154,6 +231,16 @@ export async function listSectionPosts(
 	const offset = (input.page - 1) * PAGE_SIZE;
 	const eventTiming = input.section === "event" ? input.eventTiming ?? "upcoming" : "all";
 	const today = todayInNewHampshire();
+	const affiliationIds = input.affiliationIds ?? null;
+	const affiliationFilter = affiliationIds === null
+		? ""
+		: affiliationIds.length === 0
+			? " AND 0"
+			: ` AND EXISTS (
+			     SELECT 1 FROM post_affiliations AS selected_affiliation
+			     WHERE selected_affiliation.post_id = p.id
+			       AND selected_affiliation.affiliation_id IN (${affiliationIds.map((_, index) => `?${index + 8}`).join(", ")})
+			   )`;
 	const viewerCte = `viewer_affiliations AS (
 		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
 		   UNION
@@ -177,25 +264,34 @@ export async function listSectionPosts(
 		   ))
 		   AND (p.section != 'event' OR ?6 = 'all'
 		     OR (?6 = 'upcoming' AND substr(e.starts_at, 1, 10) >= ?7)
-		     OR (?6 = 'past' AND substr(e.starts_at, 1, 10) < ?7))
+		     OR (?6 = 'past' AND substr(e.starts_at, 1, 10) < ?7))${affiliationFilter}
 		   AND (
 		     ?5 = 1
-		     OR p.organization_id IS NULL
+		     OR p.author_user_id = ?1
 		     OR EXISTS (
 		       SELECT 1 FROM organization_memberships
+		       WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
+		     )
+		     OR (p.visibility = 'organization' AND EXISTS (
+		       SELECT 1 FROM organization_memberships
 		       WHERE organization_id = p.organization_id AND user_id = ?1
-		     )
-		     OR (
-		       p.visibility = 'members'
-		       AND o.status = 'active'
-		       AND EXISTS (
-		         SELECT 1 FROM organization_affiliations AS organization_affiliation
-		         JOIN viewer_affiliations
-		           ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-		         WHERE organization_affiliation.organization_id = p.organization_id
-		       )
-		     )
-		   )`;
+		     ))
+		     OR (p.visibility = 'members'
+		       AND (p.organization_id IS NULL OR o.status = 'active')
+		       AND (EXISTS (
+		         SELECT 1 FROM post_affiliations AS post_affiliation
+		         JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
+		         WHERE post_affiliation.post_id = p.id
+		       ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
+		         p.organization_id IS NULL
+		         OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+		         OR EXISTS (
+		           SELECT 1 FROM organization_affiliations AS legacy_affiliation
+		           JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
+		           WHERE legacy_affiliation.organization_id = p.organization_id
+		         )
+			       ))))
+			   )`;
 
 	const bindings = [
 		viewer.id,
@@ -205,7 +301,8 @@ export async function listSectionPosts(
 		viewer.siteRole === "site_admin" ? 1 : 0,
 		eventTiming,
 		today,
-	] as const;
+		...(affiliationIds ?? []),
+	];
 	const [postResult, countResult, tagResult] = await Promise.all([
 		env.DB.prepare(
 			`WITH viewer_affiliations AS (
@@ -235,6 +332,10 @@ export async function listSectionPosts(
 			        (SELECT count(*) FROM post_reactions WHERE post_id = p.id AND reaction = 'support') AS supportCount,
 			        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
 			        (SELECT group_concat(tag, ',') FROM (SELECT tag FROM post_tags WHERE post_id = p.id ORDER BY tag)) AS tagList,
+			        coalesce((SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'slug', a.slug))
+			          FROM post_affiliations AS pa
+			          JOIN affiliations AS a ON a.id = pa.affiliation_id
+			          WHERE pa.post_id = p.id), '[]') AS affiliationJson,
 			        CASE WHEN ?5 = 1 OR EXISTS (
 			          SELECT 1 FROM organization_memberships
 			          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
@@ -256,19 +357,30 @@ export async function listSectionPosts(
 			   AND (?4 IS NULL OR EXISTS (SELECT 1 FROM post_tags WHERE post_id = p.id AND tag = ?4))
 			   AND (p.section != 'event' OR ?6 = 'all'
 			     OR (?6 = 'upcoming' AND substr(e.starts_at, 1, 10) >= ?7)
-			     OR (?6 = 'past' AND substr(e.starts_at, 1, 10) < ?7))
+			     OR (?6 = 'past' AND substr(e.starts_at, 1, 10) < ?7))${affiliationFilter}
 			   AND (
-			     ?5 = 1 OR p.organization_id IS NULL
-			     OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
-			     OR (p.visibility = 'members' AND o.status = 'active' AND EXISTS (
-			       SELECT 1 FROM organization_affiliations AS organization_affiliation
-			       JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-			       WHERE organization_affiliation.organization_id = p.organization_id
+			     ?5 = 1 OR p.author_user_id = ?1
+			     OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin')
+			     OR (p.visibility = 'organization' AND EXISTS (
+			       SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1
 			     ))
+			     OR (p.visibility = 'members' AND (p.organization_id IS NULL OR o.status = 'active') AND (EXISTS (
+			       SELECT 1 FROM post_affiliations AS post_affiliation
+			       JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
+			       WHERE post_affiliation.post_id = p.id
+			     ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
+			       p.organization_id IS NULL
+			       OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+			       OR EXISTS (
+			         SELECT 1 FROM organization_affiliations AS legacy_affiliation
+			         JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
+			         WHERE legacy_affiliation.organization_id = p.organization_id
+			       )
+			     ))))
 			   )
 			 ORDER BY CASE WHEN p.section = 'event' THEN e.starts_at END ASC,
 			          p.created_at DESC, p.id DESC
-			 LIMIT ?8 OFFSET ?9`,
+			 LIMIT ?${8 + (affiliationIds?.length ?? 0)} OFFSET ?${9 + (affiliationIds?.length ?? 0)}`,
 		)
 			.bind(...bindings, PAGE_SIZE, offset)
 			.all<PostRow>(),
@@ -316,8 +428,12 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		        e.rejection_reason AS eventRejectionReason,
 		        (SELECT count(*) FROM comments WHERE post_id = p.id AND status = 'published') AS commentCount,
 		        (SELECT count(*) FROM post_reactions WHERE post_id = p.id AND reaction = 'support') AS supportCount,
-		        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
-		        (SELECT group_concat(tag, ',') FROM (SELECT tag FROM post_tags WHERE post_id = p.id ORDER BY tag)) AS tagList,
+			        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
+			        (SELECT group_concat(tag, ',') FROM (SELECT tag FROM post_tags WHERE post_id = p.id ORDER BY tag)) AS tagList,
+			        coalesce((SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'slug', a.slug))
+			          FROM post_affiliations AS pa
+			          JOIN affiliations AS a ON a.id = pa.affiliation_id
+			          WHERE pa.post_id = p.id), '[]') AS affiliationJson,
 		        CASE WHEN ?3 = 1 OR EXISTS (
 		          SELECT 1 FROM organization_memberships
 		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
@@ -334,20 +450,29 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		 LEFT JOIN organizations AS o ON o.id = p.organization_id
 		 LEFT JOIN events AS e ON e.post_id = p.id
 		 WHERE p.id = ?2
-		   AND (
-		     ?3 = 1
-		     OR p.author_user_id = ?1
-		     OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin')
-		     OR (p.status = 'published' AND p.organization_id IS NULL)
-		     OR (p.status = 'published' AND EXISTS (
-		       SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1
-		     ))
-		     OR (p.status = 'published' AND p.visibility = 'members' AND o.status = 'active' AND EXISTS (
-		       SELECT 1 FROM organization_affiliations AS organization_affiliation
-		       JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-		       WHERE organization_affiliation.organization_id = p.organization_id
-		     ))
-		   )
+			   AND (
+			     ?3 = 1
+			     OR p.author_user_id = ?1
+			     OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin')
+			     OR (p.status = 'published' AND p.visibility = 'organization' AND EXISTS (
+			       SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1
+			     ))
+			     OR (p.status = 'published' AND p.visibility = 'members'
+			       AND (p.organization_id IS NULL OR o.status = 'active')
+			       AND (EXISTS (
+			         SELECT 1 FROM post_affiliations AS post_affiliation
+			         JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
+			         WHERE post_affiliation.post_id = p.id
+			       ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
+			         p.organization_id IS NULL
+			         OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+			         OR EXISTS (
+			           SELECT 1 FROM organization_affiliations AS legacy_affiliation
+			           JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
+			           WHERE legacy_affiliation.organization_id = p.organization_id
+			         )
+			       ))))
+			   )
 		 LIMIT 1`,
 	)
 		.bind(viewer.id, postId, viewer.siteRole === "site_admin" ? 1 : 0)
@@ -366,6 +491,7 @@ export async function createPost(
 		visibility: PostVisibility;
 		status: EditablePostStatus;
 		tags: string[];
+		affiliationIds?: string[];
 		event?: EventDetailsInput;
 	},
 ) {
@@ -376,6 +502,7 @@ export async function createPost(
 	if (input.section === "event" && !input.event) {
 		throw new PostMutationError("event-details-required");
 	}
+	const affiliationIds = await requirePostAffiliations(env, actor, input.visibility, input.affiliationIds);
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
 	const status = input.section === "event" ? "draft" : input.status;
@@ -392,11 +519,14 @@ export async function createPost(
 			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', NULL, NULL, NULL)`,
 		).bind(id, input.event.startsAt, input.event.endsAt, input.event.locationName, input.event.locationUrl, input.event.registrationUrl, input.event.sourceUrl, input.event.imageUrl)] : []),
 		...input.tags.map((tag) => env.DB.prepare("INSERT INTO post_tags (post_id, tag) VALUES (?1, ?2)").bind(id, tag)),
+		...affiliationIds.map((affiliationId) => env.DB.prepare(
+			"INSERT INTO post_affiliations (post_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)",
+		).bind(id, affiliationId, now)),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'post.created', 'post', ?3, ?4, ?5)`,
-		).bind(crypto.randomUUID(), actor.id, id, JSON.stringify({ section: input.section, status, visibility: input.visibility, organizationId: input.organizationId }), now),
+		).bind(crypto.randomUUID(), actor.id, id, JSON.stringify({ section: input.section, status, visibility: input.visibility, organizationId: input.organizationId, affiliationIds }), now),
 		...(input.event ? [env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
@@ -417,6 +547,7 @@ export async function updatePost(
 		visibility: PostVisibility;
 		status: EditablePostStatus;
 		tags: string[];
+		affiliationIds?: string[];
 		event?: EventDetailsInput;
 	},
 ) {
@@ -430,6 +561,7 @@ export async function updatePost(
 	if (existing.section === "event" && !input.event) {
 		throw new PostMutationError("event-details-required");
 	}
+	const affiliationIds = await requirePostAffiliations(env, actor, input.visibility, input.affiliationIds);
 	const now = new Date().toISOString();
 	const status = existing.section === "event" ? "draft" : input.status;
 	const statements = [
@@ -446,11 +578,15 @@ export async function updatePost(
 		).bind(input.event.startsAt, input.event.endsAt, input.event.locationName, input.event.locationUrl, input.event.registrationUrl, input.event.sourceUrl, input.event.imageUrl, input.postId)] : []),
 		env.DB.prepare("DELETE FROM post_tags WHERE post_id = ?1").bind(input.postId),
 		...input.tags.map((tag) => env.DB.prepare("INSERT INTO post_tags (post_id, tag) VALUES (?1, ?2)").bind(input.postId, tag)),
+		env.DB.prepare("DELETE FROM post_affiliations WHERE post_id = ?1").bind(input.postId),
+		...affiliationIds.map((affiliationId) => env.DB.prepare(
+			"INSERT INTO post_affiliations (post_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)",
+		).bind(input.postId, affiliationId, now)),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'post.updated', 'post', ?3, ?4, ?5)`,
-		).bind(crypto.randomUUID(), actor.id, input.postId, JSON.stringify({ status, visibility: input.visibility, organizationId: input.organizationId }), now),
+		).bind(crypto.randomUUID(), actor.id, input.postId, JSON.stringify({ status, visibility: input.visibility, organizationId: input.organizationId, affiliationIds }), now),
 		...(input.event ? [env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)

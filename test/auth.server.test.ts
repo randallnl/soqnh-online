@@ -251,6 +251,7 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM comments"),
 		env.DB.prepare("DELETE FROM post_reactions"),
 		env.DB.prepare("DELETE FROM post_tags"),
+		env.DB.prepare("DELETE FROM post_affiliations"),
 		env.DB.prepare("DELETE FROM events"),
 		env.DB.prepare("DELETE FROM projects"),
 		env.DB.prepare("DELETE FROM video_embeds"),
@@ -1090,13 +1091,40 @@ describe("content feeds and post permissions", () => {
 			visibility: "members",
 			status: "published",
 			tags: ["network"],
+			affiliationIds: ["aff-shared"],
 		});
 		const authorFeed = await listSectionPosts(env, activeUser, { section: "update", tag: null, organizationId: null, page: 1 });
 		const sharedFeed = await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, page: 1 });
 		const unrelatedFeed = await listSectionPosts(env, thirdMember, { section: "update", tag: null, organizationId: null, page: 1 });
 		expect(authorFeed.posts.map((post) => post.id)).toContain(created.id);
+		expect(authorFeed.posts[0]?.affiliations).toEqual([{ id: "aff-shared", name: "Shared Coalition", slug: "shared-coalition" }]);
 		expect(sharedFeed.posts.map((post) => post.id)).toContain(created.id);
 		expect(unrelatedFeed.posts).toEqual([]);
+		expect((await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, affiliationIds: ["aff-shared"], page: 1 })).posts).toHaveLength(1);
+		expect((await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, affiliationIds: [], page: 1 })).posts).toEqual([]);
+	});
+
+	it("requires shared content to use affiliations available to the author", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		await seedAffiliation();
+		await seedAffiliation("aff-other", "Other Coalition", "other-coalition");
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
+		const input = {
+			organizationId: "org-one",
+			section: "update" as const,
+			title: "Affiliation-scoped update",
+			body: "This update must have an authorized affiliation audience.",
+			visibility: "members" as const,
+			status: "published" as const,
+			tags: [],
+		};
+
+		await expect(createPost(env, activeUser, { ...input, affiliationIds: [] })).rejects.toMatchObject({ reason: "affiliation-required" });
+		await expect(createPost(env, activeUser, { ...input, affiliationIds: ["aff-other"] })).rejects.toMatchObject({ reason: "affiliation-unavailable" });
+		await expect(createPost(env, activeUser, { ...input, affiliationIds: ["aff-shared"] })).resolves.toHaveProperty("id");
 	});
 
 	it("requires direct membership for organization-only posts", async () => {

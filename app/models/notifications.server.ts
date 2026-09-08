@@ -24,16 +24,28 @@ const viewerAffiliationsCte = `viewer_affiliations AS (
 
 const visibleNotificationWhere = `n.user_id = ?1
   AND (n.post_id IS NULL OR ?2 = 1 OR p.author_user_id = ?1
-    OR (p.status = 'published' AND p.organization_id IS NULL)
-    OR (p.status = 'published' AND EXISTS (
+    OR EXISTS (
+      SELECT 1 FROM organization_memberships
+      WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
+    )
+    OR (p.status = 'published' AND p.visibility = 'organization' AND EXISTS (
       SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1
     ))
-    OR (p.status = 'published' AND p.visibility = 'members' AND o.status = 'active' AND EXISTS (
-      SELECT 1 FROM organization_affiliations AS organization_affiliation
-      JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-      WHERE organization_affiliation.organization_id = p.organization_id
-    ))
-  )`;
+    OR (p.status = 'published' AND p.visibility = 'members'
+      AND (p.organization_id IS NULL OR o.status = 'active') AND (EXISTS (
+      SELECT 1 FROM post_affiliations AS post_affiliation
+      JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
+      WHERE post_affiliation.post_id = p.id
+    ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
+      p.organization_id IS NULL
+      OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+      OR EXISTS (
+        SELECT 1 FROM organization_affiliations AS legacy_affiliation
+        JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
+        WHERE legacy_affiliation.organization_id = p.organization_id
+      )
+	    ))))
+	  )`;
 
 export async function countUnreadNotifications(env: Env, viewer: AuthenticatedUser) {
 	return await env.DB.prepare(

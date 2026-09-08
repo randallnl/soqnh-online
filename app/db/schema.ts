@@ -477,6 +477,23 @@ export const affiliations = sqliteTable("affiliations", {
 	createdAt: createdAt(),
 });
 
+export const postAffiliations = sqliteTable(
+	"post_affiliations",
+	{
+		postId: text("post_id")
+			.notNull()
+			.references(() => posts.id, { onDelete: "cascade" }),
+		affiliationId: text("affiliation_id")
+			.notNull()
+			.references(() => affiliations.id, { onDelete: "cascade" }),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.postId, table.affiliationId] }),
+		index("idx_post_affiliations_affiliation_id").on(table.affiliationId),
+	],
+);
+
 export const organizationAffiliations = sqliteTable(
 	"organization_affiliations",
 	{

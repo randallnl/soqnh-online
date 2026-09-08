@@ -1,6 +1,6 @@
 # Affiliations and organization access
 
-Phase 3 uses the existing `affiliations`, `organization_affiliations`, and `user_affiliations` tables. No D1 migration is required.
+Affiliations connect people, organizations, and shared content. `user_affiliations` stores direct member links, `organization_affiliations` stores organization links, and `post_affiliations` attributes shared posts and events to their intended affiliation audiences.
 
 ## Effective affiliations
 
@@ -21,7 +21,7 @@ Visibility is fail-closed for ordinary members.
 - An organization with no affiliations is not discoverable through shared-network access. A direct member and site administrators can still reach it.
 - Organization member lists include only active accounts whose `profile_visibility` is `members`. A member can still see their own row, and site administrators can see hidden rows for administration.
 
-Organization-scoped content in Phase 4 should reuse the same organization visibility predicate. Content marked `organization` should be narrower and require direct membership in the owning organization.
+Shared-network content is visible when one of its `post_affiliations` matches one of the viewer's effective affiliations. Content marked `organization` is narrower and requires direct membership in the owning organization. Feed filters never expose affiliation choices outside the viewer's effective affiliations.
 
 ## Administration boundaries
 

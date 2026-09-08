@@ -56,21 +56,33 @@ const viewerAffiliations = `viewer_affiliations AS (
 
 const visiblePostPredicate = `(
 	?2 = 1
-	OR p.organization_id IS NULL
+	OR p.author_user_id = ?1
 	OR EXISTS (
 		SELECT 1 FROM organization_memberships
-		WHERE organization_id = p.organization_id AND user_id = ?1
+		WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
 	)
+	OR (p.visibility = 'organization' AND EXISTS (
+		SELECT 1 FROM organization_memberships
+		WHERE organization_id = p.organization_id AND user_id = ?1
+	))
 	OR (
 		p.visibility = 'members'
-		AND o.status = 'active'
-		AND EXISTS (
+		AND (p.organization_id IS NULL OR o.status = 'active')
+		AND (EXISTS (
 			SELECT 1
-			FROM organization_affiliations AS organization_affiliation
+			FROM post_affiliations AS post_affiliation
 			JOIN viewer_affiliations
-			  ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-			WHERE organization_affiliation.organization_id = p.organization_id
-		)
+			  ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
+			WHERE post_affiliation.post_id = p.id
+		) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
+			p.organization_id IS NULL
+			OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
+			OR EXISTS (
+				SELECT 1 FROM organization_affiliations AS legacy_affiliation
+				JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
+				WHERE legacy_affiliation.organization_id = p.organization_id
+			)
+		)))
 	)
 )`;
 

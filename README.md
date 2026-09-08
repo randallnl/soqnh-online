@@ -83,7 +83,7 @@ See [docs/production-database.md](docs/production-database.md) for the baseline 
 The production schema contains:
 
 - identity: `users`, `sessions`, `auth_tokens`, `invitations`
-- community graph: `organizations`, `organization_memberships`, `affiliations`, `organization_affiliations`, `user_affiliations`
+- community graph: `organizations`, `organization_memberships`, `affiliations`, `organization_affiliations`, `user_affiliations`, `post_affiliations`
 - content: `posts`, `post_tags`, `comments`, `post_reactions`, `post_mentions`
 - structured content: `events`, `projects`, `attachments`, `video_embeds`
 - operations: `notifications`, `audit_log`, `scraper_runs`, `scraper_imports`

@@ -245,6 +245,12 @@ export async function importScraperRecords(
 					 WHERE post_id = ?9`,
 				).bind(startsAt, endsAt, record.location || null, externalUrl, sourceUrl,
 					externalUrl, record.scraped_at || now, imageUrl, exact.postId),
+				env.DB.prepare("DELETE FROM post_affiliations WHERE post_id = ?1").bind(exact.postId),
+				env.DB.prepare(
+					`INSERT INTO post_affiliations (post_id, affiliation_id, created_at)
+					 SELECT ?1, affiliation_id, ?2 FROM organization_affiliations
+					 WHERE organization_id = ?3`,
+				).bind(exact.postId, now, organization.id),
 			]);
 			counts.updated += 1;
 			await recordImport(env, {
@@ -297,6 +303,11 @@ export async function importScraperRecords(
 				         'pending', NULL, NULL, NULL)`,
 			).bind(postId, startsAt, endsAt, record.location || null, externalUrl,
 				sourceUrl, externalUrl, externalId, record.scraped_at || now, imageUrl),
+			env.DB.prepare(
+				`INSERT INTO post_affiliations (post_id, affiliation_id, created_at)
+				 SELECT ?1, affiliation_id, ?2 FROM organization_affiliations
+				 WHERE organization_id = ?3`,
+			).bind(postId, now, organization.id),
 		]);
 		counts.imported += 1;
 		await recordImport(env, {
