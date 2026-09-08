@@ -1,42 +1,45 @@
 :root {
-	--ink-950: #14231f;
-	--ink-800: #29403a;
-	--ink-600: #5a6f68;
-	--ink-500: #74867f;
-	--ink-300: #bac6c1;
-	--ink-200: #d8e0dc;
-	--ink-100: #e9eeeb;
-	--ink-50: #f6f8f6;
-	--paper: #fffefa;
-	--surface: #ffffff;
-	--green-950: #103c35;
-	--green-900: #17483f;
-	--green-800: #1d5a4e;
-	--green-700: #266d5e;
-	--green-600: #338573;
-	--green-100: #dcece6;
-	--green-50: #edf6f2;
-	--gold-600: #b87522;
-	--gold-100: #f9e8c7;
-	--gold-50: #fdf7ea;
-	--plum-700: #70485f;
-	--plum-100: #eadde5;
-	--plum-50: #f7eff4;
-	--blue-700: #42667d;
-	--blue-100: #dce9ef;
-	--blue-50: #eef5f8;
-	--rose-100: #f4dfe1;
-	--danger: #a44141;
-	--danger-bg: #fbefed;
+	--ink-950: #121212;
+	--ink-800: #242833;
+	--ink-600: #5d5963;
+	--ink-500: #77717d;
+	--ink-300: #c9c0b4;
+	--ink-200: #dfd7c9;
+	--ink-100: #eee7da;
+	--ink-50: #fff9ed;
+	--paper: #fffcea;
+	--surface: #fffef7;
+	--green-950: #211333;
+	--green-900: #302044;
+	--green-800: #44275f;
+	--green-700: #5b3178;
+	--green-600: #754595;
+	--green-100: #eadcf1;
+	--green-50: #f7effa;
+	--gold-600: #c66b18;
+	--gold-100: #f9dfad;
+	--gold-50: #fff3d8;
+	--plum-700: #9f2d69;
+	--plum-100: #f4cadd;
+	--plum-50: #fff0f6;
+	--blue-700: #335b87;
+	--blue-100: #cfe4f2;
+	--blue-50: #edf7fb;
+	--rose-100: #ffd8d2;
+	--danger: #b7261e;
+	--danger-bg: #fff0ed;
+	--coral-700: #b92720;
+	--coral-600: #d93428;
+	--coral-100: #ffd8d2;
 	--sidebar-width: 232px;
 	--topbar-height: 72px;
 	--radius-sm: 8px;
-	--radius-md: 12px;
-	--radius-lg: 18px;
-	--shadow-sm: 0 1px 2px rgba(20, 35, 31, 0.05);
-	--shadow-md: 0 12px 30px rgba(20, 35, 31, 0.08);
+	--radius-md: 14px;
+	--radius-lg: 22px;
+	--shadow-sm: 0 2px 0 rgba(18, 18, 18, 0.05);
+	--shadow-md: 0 16px 34px rgba(36, 40, 51, 0.12);
 	font-family:
-		Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+		"Fira Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	font-synthesis: none;
 	color: var(--ink-950);
 	background: var(--ink-50);
@@ -50,7 +53,7 @@
 
 html {
 	min-width: 320px;
-	background: var(--ink-50);
+	background: var(--paper);
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
 }
@@ -58,7 +61,10 @@ html {
 body {
 	margin: 0;
 	min-height: 100vh;
-	background: var(--ink-50);
+	background:
+		radial-gradient(circle at 96% 8%, rgba(244, 202, 221, 0.42), transparent 27rem),
+		radial-gradient(circle at 20% 100%, rgba(234, 220, 241, 0.55), transparent 28rem),
+		var(--paper);
 }
 
 button,
@@ -85,6 +91,13 @@ h2,
 h3,
 p {
 	margin: 0;
+}
+
+h1,
+h2,
+h3 {
+	font-family: Nunito, ui-rounded, sans-serif;
+	font-weight: 900;
 }
 
 .sr-only {
@@ -117,14 +130,14 @@ p {
 }
 
 :focus-visible {
-	outline: 3px solid rgba(51, 133, 115, 0.35);
+	outline: 3px solid rgba(240, 54, 42, 0.32);
 	outline-offset: 2px;
 }
 
 .eyebrow {
-	color: var(--green-700);
+	color: var(--plum-700);
 	font-size: 0.72rem;
-	font-weight: 760;
+	font-weight: 800;
 	letter-spacing: 0.1em;
 	line-height: 1.2;
 	text-transform: uppercase;
@@ -138,9 +151,9 @@ p {
 	min-height: 42px;
 	padding: 0 16px;
 	border: 1px solid transparent;
-	border-radius: 9px;
+	border-radius: 8px;
 	font-size: 0.84rem;
-	font-weight: 720;
+	font-weight: 800;
 	line-height: 1;
 	cursor: pointer;
 	transition:
@@ -156,25 +169,25 @@ p {
 
 .button--primary {
 	color: #fff;
-	background: var(--green-800);
-	box-shadow: 0 6px 16px rgba(29, 90, 78, 0.18);
+	background: var(--coral-600);
+	box-shadow: 0 7px 0 rgba(183, 38, 30, 0.16);
 }
 
 .button--primary:hover {
-	background: var(--green-900);
-	box-shadow: 0 9px 20px rgba(29, 90, 78, 0.22);
+	background: var(--coral-700);
+	box-shadow: 0 9px 0 rgba(183, 38, 30, 0.18);
 }
 
 .button--secondary {
-	color: var(--ink-800);
-	border-color: var(--ink-200);
+	color: var(--ink-950);
+	border-color: var(--ink-950);
 	background: var(--surface);
 	box-shadow: var(--shadow-sm);
 }
 
 .button--secondary:hover {
-	border-color: var(--ink-300);
-	background: var(--paper);
+	border-color: var(--ink-950);
+	background: var(--gold-50);
 }
 
 .button--compact {
@@ -224,9 +237,10 @@ p {
 	padding: 20px 14px 16px;
 	color: rgba(255, 255, 255, 0.78);
 	background:
-		radial-gradient(circle at 18% 3%, rgba(95, 163, 144, 0.18), transparent 30%),
-		linear-gradient(180deg, var(--green-900), var(--green-950));
-	box-shadow: 4px 0 20px rgba(16, 60, 53, 0.08);
+		radial-gradient(circle at 15% 4%, rgba(244, 154, 199, 0.25), transparent 31%),
+		radial-gradient(circle at 86% 92%, rgba(105, 55, 139, 0.55), transparent 42%),
+		var(--ink-800);
+	box-shadow: 5px 0 0 rgba(18, 18, 18, 0.06);
 }
 
 .sidebar-header {
@@ -249,8 +263,9 @@ p {
 }
 
 .brand-lockup strong {
-	font-size: 0.9rem;
-	font-weight: 750;
+	font-family: Nunito, ui-rounded, sans-serif;
+	font-size: 0.94rem;
+	font-weight: 900;
 	letter-spacing: -0.015em;
 }
 
@@ -276,10 +291,10 @@ p {
 	place-items: center;
 	width: 34px;
 	height: 34px;
-	border: 1px solid rgba(255, 255, 255, 0.14);
-	border-radius: 50% 50% 45% 55%;
-	background: rgba(255, 255, 255, 0.1);
-	transform: rotate(-8deg);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 9px;
+	background: var(--plum-700);
+	transform: rotate(-3deg);
 }
 
 .brand-mark span {
@@ -334,7 +349,7 @@ p {
 	border-radius: 8px;
 	color: rgba(255, 255, 255, 0.66);
 	font-size: 0.82rem;
-	font-weight: 580;
+	font-weight: 700;
 	transition:
 		background 150ms ease,
 		color 150ms ease;
@@ -361,8 +376,8 @@ p {
 }
 
 .nav-item--active {
-	color: #fff;
-	background: rgba(255, 255, 255, 0.1);
+	color: var(--ink-950);
+	background: var(--paper);
 }
 
 .nav-item--active::before {
@@ -376,7 +391,11 @@ p {
 
 .nav-item--active svg,
 .nav-item:hover svg {
-	color: #a9d5c6;
+	color: #f39ac7;
+}
+
+.nav-item--active svg {
+	color: var(--plum-700);
 }
 
 .nav-badge {
@@ -399,9 +418,9 @@ p {
 	gap: 10px;
 	padding: 12px;
 	margin: 12px 2px 10px;
-	border: 1px solid rgba(255, 255, 255, 0.09);
+	border: 1px solid rgba(255, 255, 255, 0.16);
 	border-radius: 10px;
-	background: rgba(255, 255, 255, 0.05);
+	background: rgba(255, 252, 234, 0.08);
 }
 
 .callout-icon {
@@ -410,8 +429,8 @@ p {
 	width: 31px;
 	height: 31px;
 	border-radius: 8px;
-	color: #e1bd77;
-	background: rgba(224, 186, 112, 0.11);
+	color: #ffd5e7;
+	background: rgba(244, 154, 199, 0.14);
 }
 
 .sidebar-callout strong {
@@ -507,8 +526,8 @@ p {
 	align-items: center;
 	height: var(--topbar-height);
 	padding: 0 32px;
-	border-bottom: 1px solid rgba(216, 224, 220, 0.9);
-	background: rgba(255, 255, 252, 0.9);
+	border-bottom: 1px solid rgba(18, 18, 18, 0.11);
+	background: rgba(255, 252, 234, 0.92);
 	backdrop-filter: blur(14px);
 }
 
@@ -540,9 +559,9 @@ p {
 }
 
 .search-box:focus-within {
-	border-color: #8ebbad;
+	border-color: var(--green-600);
 	background: var(--surface);
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .search-box input {
@@ -620,9 +639,9 @@ p {
 
 .page-heading h1,
 .section-hero h1 {
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: clamp(1.9rem, 3vw, 2.55rem);
-	font-weight: 540;
+	font-weight: 900;
 	letter-spacing: -0.035em;
 	line-height: 1.05;
 }
@@ -659,7 +678,7 @@ p {
 
 .data-mode--live span {
 	background: var(--green-600);
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.12);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.14);
 }
 
 .stat-grid {
@@ -675,12 +694,17 @@ p {
 	gap: 13px;
 	min-height: 118px;
 	padding: 18px;
-	border: 1px solid var(--ink-100);
+	border: 1px solid rgba(18, 18, 18, 0.09);
+	border-top: 5px solid var(--plum-700);
 	border-radius: var(--radius-md);
 	background: var(--surface);
 	box-shadow: var(--shadow-sm);
 	transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
+
+.stat-card:nth-child(2) { border-top-color: var(--blue-700); }
+.stat-card:nth-child(3) { border-top-color: var(--gold-600); }
+.stat-card:nth-child(4) { border-top-color: var(--coral-600); }
 
 .stat-card:hover {
 	border-color: var(--green-600);
@@ -737,9 +761,9 @@ p {
 .stat-copy strong {
 	display: block;
 	margin-top: -3px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.8rem;
-	font-weight: 600;
+	font-weight: 900;
 	line-height: 1;
 }
 
@@ -770,10 +794,31 @@ p {
 }
 
 .panel {
-	border: 1px solid var(--ink-100);
+	border: 1px solid rgba(18, 18, 18, 0.09);
 	border-radius: var(--radius-md);
 	background: var(--surface);
 	box-shadow: var(--shadow-sm);
+}
+
+.content-card,
+.organization-card,
+.member-profile-card,
+.admin-tool-card {
+	border-top: 4px solid var(--plum-700);
+}
+
+.content-feed > :nth-child(3n + 2),
+.organization-card-grid > :nth-child(3n + 2),
+.member-card-grid > :nth-child(3n + 2),
+.admin-tool-grid > :nth-child(3n + 2) {
+	border-top-color: var(--gold-600);
+}
+
+.content-feed > :nth-child(3n),
+.organization-card-grid > :nth-child(3n),
+.member-card-grid > :nth-child(3n),
+.admin-tool-grid > :nth-child(3n) {
+	border-top-color: var(--blue-700);
 }
 
 .panel-heading {
@@ -785,9 +830,9 @@ p {
 }
 
 .panel-heading h2 {
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.18rem;
-	font-weight: 600;
+	font-weight: 900;
 	letter-spacing: -0.02em;
 }
 
@@ -934,8 +979,8 @@ p {
 	height: 7px;
 	margin-left: auto;
 	border-radius: 50%;
-	background: #4fa289;
-	box-shadow: 0 0 0 3px rgba(79, 162, 137, 0.1);
+	background: var(--green-600);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .compact-panel .panel-heading {
@@ -979,7 +1024,7 @@ p {
 
 .event-row time strong {
 	margin-top: -5px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.15rem;
 }
 
@@ -1120,6 +1165,12 @@ p {
 	cursor: pointer;
 }
 
+.content-affiliation-filter > div label:has(input:checked) {
+	border-color: var(--green-700);
+	color: var(--green-800);
+	background: var(--green-50);
+}
+
 .content-affiliation-filter input {
 	accent-color: var(--green-700);
 }
@@ -1151,8 +1202,8 @@ p {
 .post-editor-grid input:focus,
 .post-editor-grid select:focus,
 .post-editor-grid textarea:focus {
-	border-color: #8ebbad;
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+	border-color: var(--green-600);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .content-clear-link {
@@ -1226,7 +1277,7 @@ p {
 
 .content-card-link h2,
 .post-detail-card h1 {
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.35rem;
 	font-weight: 570;
 	letter-spacing: -0.02em;
@@ -1476,7 +1527,7 @@ p {
 
 .conversation-heading h2 {
 	margin-top: 5px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.25rem;
 	font-weight: 570;
 }
@@ -1517,8 +1568,8 @@ p {
 
 .comment-compose-form textarea:focus,
 .comment-inline-form textarea:focus {
-	border-color: #8ebbad;
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+	border-color: var(--green-600);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .comment-mention-field {
@@ -1542,8 +1593,8 @@ p {
 }
 
 .comment-mention-field select:focus {
-	border-color: #8ebbad;
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+	border-color: var(--green-600);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .comment-compose-form > div {
@@ -1773,7 +1824,7 @@ p {
 .content-coming-next h2 {
 	margin-top: 5px;
 	color: var(--ink-950);
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1rem;
 }
 
@@ -1964,7 +2015,7 @@ p {
 }
 
 .moderation-card h2 {
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.35rem;
 	font-weight: 570;
 }
@@ -2042,7 +2093,7 @@ p {
 	gap: 14px;
 	padding: 25px;
 	background:
-		radial-gradient(circle at 90% 15%, rgba(51, 133, 115, 0.12), transparent 30%),
+		radial-gradient(circle at 90% 15%, rgba(117, 69, 149, 0.14), transparent 30%),
 		linear-gradient(135deg, var(--green-50), #fbfcfa);
 }
 
@@ -2059,7 +2110,7 @@ p {
 
 .foundation-intro h2 {
 	margin-top: 5px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.3rem;
 	font-weight: 600;
 	letter-spacing: -0.02em;
@@ -2093,7 +2144,7 @@ p {
 	display: inline-block;
 	margin-bottom: 25px;
 	color: var(--green-600);
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 0.8rem;
 	font-weight: 700;
 }
@@ -2143,9 +2194,9 @@ p {
 	overflow: hidden;
 	color: #fff;
 	background:
-		radial-gradient(circle at 15% 18%, rgba(136, 199, 179, 0.18), transparent 28%),
-		radial-gradient(circle at 82% 80%, rgba(208, 168, 101, 0.13), transparent 28%),
-		linear-gradient(155deg, var(--green-800), var(--green-950));
+		radial-gradient(circle at 15% 18%, rgba(244, 154, 199, 0.32), transparent 28%),
+		radial-gradient(circle at 82% 80%, rgba(255, 183, 68, 0.22), transparent 30%),
+		linear-gradient(155deg, #48245f, var(--ink-800) 72%);
 }
 
 .auth-story::after {
@@ -2154,8 +2205,8 @@ p {
 	bottom: -80px;
 	width: 340px;
 	height: 340px;
-	border: 1px solid rgba(255, 255, 255, 0.08);
-	border-radius: 48% 52% 60% 40%;
+	border: 18px solid rgba(244, 154, 199, 0.09);
+	border-radius: 44% 56% 58% 42%;
 	content: "";
 	transform: rotate(20deg);
 }
@@ -2183,19 +2234,19 @@ p {
 	margin-bottom: 24px;
 	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 14px;
-	color: #efd49e;
-	background: rgba(255, 255, 255, 0.07);
+	color: #fff0f7;
+	background: rgba(244, 154, 199, 0.18);
 }
 
 .auth-quote .eyebrow {
-	color: #b8dfd2;
+	color: #f7b8d7;
 }
 
 .auth-quote h1 {
 	margin-top: 13px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: clamp(2.2rem, 4.2vw, 4.3rem);
-	font-weight: 500;
+	font-weight: 900;
 	letter-spacing: -0.045em;
 	line-height: 1.02;
 }
@@ -2218,6 +2269,9 @@ p {
 	display: grid;
 	place-items: center;
 	padding: 50px;
+	background:
+		radial-gradient(circle at 90% 8%, rgba(244, 202, 221, 0.5), transparent 19rem),
+		var(--paper);
 }
 
 .auth-form-card {
@@ -2226,9 +2280,9 @@ p {
 
 .auth-form-card h2 {
 	margin-top: 10px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 2.3rem;
-	font-weight: 560;
+	font-weight: 900;
 	letter-spacing: -0.035em;
 }
 
@@ -2263,8 +2317,8 @@ p {
 }
 
 .input-with-icon:focus-within {
-	border-color: #8ebbad;
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+	border-color: var(--green-600);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .input-with-icon input {
@@ -2350,7 +2404,7 @@ p {
 }
 
 .scraper-summary-grid strong {
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.65rem;
 }
 
@@ -2463,8 +2517,8 @@ p {
 
 .admin-form input:focus,
 .admin-form select:focus {
-	border-color: #8ebbad;
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+	border-color: var(--green-600);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .admin-form .button {
@@ -2623,8 +2677,8 @@ p {
 }
 
 .member-search:focus-within {
-	border-color: #8ebbad;
-	box-shadow: 0 0 0 3px rgba(51, 133, 115, 0.1);
+	border-color: var(--green-600);
+	box-shadow: 0 0 0 3px rgba(117, 69, 149, 0.12);
 }
 
 .member-search input {
@@ -2872,14 +2926,14 @@ p {
 	border-radius: 12px;
 	color: var(--green-800);
 	background: var(--green-100);
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 0.88rem;
 	font-weight: 700;
 }
 
 .organization-card h2 {
 	margin-top: 20px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 1.28rem;
 	font-weight: 570;
 }
@@ -2953,7 +3007,7 @@ p {
 
 .organization-profile h1 {
 	margin-top: 7px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 2.25rem;
 	font-weight: 560;
 }
@@ -3246,7 +3300,7 @@ p {
 	justify-content: space-between;
 }
 
-.subsection-heading h3 { margin-top: 5px; font-family: Georgia, "Times New Roman", serif; }
+.subsection-heading h3 { margin-top: 5px; font-family: Nunito, ui-rounded, sans-serif; }
 .subsection-heading > a { color: var(--green-700); font-size: 0.62rem; font-weight: 720; }
 
 .membership-add-form {
@@ -3314,7 +3368,7 @@ p {
 
 .error-card h1 {
 	margin-top: 9px;
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: 2.3rem;
 	font-weight: 550;
 }
@@ -3431,7 +3485,7 @@ p {
 
 	.mobile-page-title {
 		display: block;
-		font-family: Georgia, "Times New Roman", serif;
+		font-family: Nunito, ui-rounded, sans-serif;
 	}
 
 	.search-box {
