@@ -25,6 +25,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<meta name="theme-color" content="#f7b7cd" />
+				<link rel="icon" href="/favicon.ico" sizes="any" />
+				<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+				<link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png" />
+				<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
 				<link rel="preconnect" href="https://fonts.googleapis.com" />
 				<link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 				<link
@@ -67,10 +72,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 		<main className="error-page">
 			<div className="error-card">
 				<a className="brand-lockup brand-lockup--dark" href="/">
-					<span className="brand-mark" aria-hidden="true">
-						<span />
-						<span />
-					</span>
+					<img alt="" className="brand-logo" src="/brand/queerlective-round.png" />
 					<span>State of Queer NH</span>
 				</a>
 				<p className="eyebrow">{isRouteErrorResponse(error) ? error.status : "Error"}</p>

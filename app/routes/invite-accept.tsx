@@ -88,7 +88,7 @@ export default function InviteAccept({ loaderData }: Route.ComponentProps) {
 			<section className="auth-story">
 				<div className="auth-story-inner">
 					<Link className="brand-lockup" to="/">
-						<span className="brand-mark" aria-hidden="true"><span /><span /></span>
+						<img alt="" className="brand-logo" src="/brand/queerlective-round.png" />
 						<span><strong>State of Queer</strong><small>New Hampshire</small></span>
 					</Link>
 					<div className="auth-quote">

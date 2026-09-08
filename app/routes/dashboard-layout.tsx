@@ -108,7 +108,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	if (!loaderData.profileComplete) {
 		return <div className="onboarding-frame">
 			<header className="onboarding-header">
-				<span className="brand-lockup"><span className="brand-mark" aria-hidden="true"><span /><span /></span><span><strong>State of Queer</strong><small>New Hampshire</small></span></span>
+				<span className="brand-lockup brand-lockup--dark"><img alt="" className="brand-logo" src="/brand/queerlective-round.png" /><span><strong>State of Queer</strong><small>New Hampshire</small></span></span>
 				<Form action="/logout" method="post"><button className="button button--secondary button--compact" type="submit">Sign out</button></Form>
 			</header>
 			<main className="onboarding-main" id="main-content"><Outlet /></main>
@@ -131,10 +131,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 			<aside className={`sidebar${menuOpen ? " sidebar--open" : ""}`}>
 				<div className="sidebar-header">
 					<Link className="brand-lockup" to="/" onClick={() => setMenuOpen(false)}>
-						<span className="brand-mark" aria-hidden="true">
-							<span />
-							<span />
-						</span>
+						<img alt="" className="brand-logo" src="/brand/queerlective-round.png" />
 						<span>
 							<strong>State of Queer</strong>
 							<small>New Hampshire</small>
