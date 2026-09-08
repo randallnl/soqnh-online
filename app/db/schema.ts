@@ -40,6 +40,7 @@ export const users = sqliteTable(
 		bio: text("bio"),
 		location: text("location"),
 		websiteUrl: text("website_url"),
+		profileCompletedAt: text("profile_completed_at"),
 		profileVisibility: text("profile_visibility", {
 			enum: ["members", "hidden"],
 		})

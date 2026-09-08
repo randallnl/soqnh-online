@@ -91,6 +91,7 @@ import {
 	canReadIdentityObject,
 	getVisibleMemberProfile,
 	listVisibleMembers,
+	isOwnProfileComplete,
 	updateOwnProfile,
 } from "../app/models/profiles.server";
 import {
@@ -301,6 +302,7 @@ describe("member profiles", () => {
 	it("updates a member's own directory profile and direct affiliations", async () => {
 		await seedUser();
 		await seedAffiliation();
+		await expect(isOwnProfileComplete(env, activeUser)).resolves.toBe(false);
 		await updateOwnProfile(env, activeUser, {
 			name: "Updated Member",
 			profileTitle: "Community organizer",
@@ -320,6 +322,7 @@ describe("member profiles", () => {
 			avatarObjectKey: "profile-photos/user-active.jpg",
 		});
 		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first<string>("affiliation_id")).resolves.toBe("aff-shared");
+		await expect(isOwnProfileComplete(env, activeUser)).resolves.toBe(true);
 	});
 });
 
@@ -689,6 +692,7 @@ describe("member invitations", () => {
 			siteRole: "member",
 			status: "active",
 		});
+		await expect(isOwnProfileComplete(env, accepted!)).resolves.toBe(false);
 		await expect(
 			acceptInvitation(env, {
 				token: invitation.token,

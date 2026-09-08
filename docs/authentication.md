@@ -52,7 +52,8 @@ See [affiliations.md](affiliations.md) for the complete visibility and administr
 3. The invitation email is sent through the `EMAIL` binding with both text and HTML bodies. Delivery failure expires the link and creates an audit record.
 4. The recipient opens `/invite/accept`, confirms their full name, and submits the same-origin form.
 5. A transactional D1 batch consumes the invitation, activates the user, applies the optional organization membership, and writes the acceptance audit event. Each write is conditional on that exact token being consumed in the batch.
-6. The Worker creates a secure session and redirects the new member to the dashboard. The invitation cannot be reused.
+6. The Worker creates a secure session and redirects the new member to profile onboarding. Until they save the profile form, authenticated workspace routes redirect back to onboarding. The invitation cannot be reused.
+7. Saving the profile records completion and opens the dashboard. Existing active members were marked complete when this requirement was introduced, so the gate applies only to newly accepted invitations.
 
 Invitation links expire after seven days. Reissuing an invitation immediately expires all older pending links for that email address. Active accounts cannot be reinvited, and suspended accounts must be restored through member management rather than invitation.
 

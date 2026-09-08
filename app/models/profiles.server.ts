@@ -114,6 +114,13 @@ export async function getOwnProfileEditorData(env: Env, actor: AuthenticatedUser
 	return { profile, affiliations: affiliations.results, directAffiliationIds: direct.results.map((row) => row.affiliationId) };
 }
 
+export async function isOwnProfileComplete(env: Env, actor: AuthenticatedUser) {
+	const row = await env.DB.prepare(
+		"SELECT profile_completed_at AS profileCompletedAt FROM users WHERE id = ?1 AND status = 'active'",
+	).bind(actor.id).first<{ profileCompletedAt: string | null }>();
+	return Boolean(row?.profileCompletedAt);
+}
+
 export async function updateOwnProfile(
 	env: Env,
 	actor: AuthenticatedUser,
@@ -138,7 +145,8 @@ export async function updateOwnProfile(
 		env.DB.prepare(
 			`UPDATE users SET name = ?1, profile_title = ?2, pronouns = ?3, bio = ?4,
 			 location = ?5, website_url = ?6, profile_visibility = ?7,
-			 avatar_object_key = ?8, updated_at = ?9 WHERE id = ?10 AND status = 'active'`,
+			 avatar_object_key = ?8, profile_completed_at = coalesce(profile_completed_at, ?9),
+			 updated_at = ?9 WHERE id = ?10 AND status = 'active'`,
 		).bind(input.name, input.profileTitle, input.pronouns, input.bio, input.location,
 			input.websiteUrl, input.profileVisibility, input.avatarObjectKey, now, actor.id),
 		env.DB.prepare("DELETE FROM user_affiliations WHERE user_id = ?1").bind(actor.id),

@@ -4135,3 +4135,26 @@ p {
 @media (max-width: 480px) {
 	.audit-log-table article { grid-template-columns: 1fr; }
 }
+.onboarding-frame {
+	min-height: 100vh;
+	background: var(--ink-50);
+}
+
+.onboarding-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 1rem clamp(1rem, 4vw, 3rem);
+	border-bottom: 1px solid var(--ink-200);
+	background: var(--surface);
+}
+
+.onboarding-main {
+	width: min(960px, calc(100% - 2rem));
+	margin: 0 auto;
+	padding: clamp(2rem, 5vw, 4rem) 0;
+}
+
+.profile-edit-page--onboarding .profile-editor-panel {
+	box-shadow: 0 20px 50px rgb(34 48 43 / 8%);
+}

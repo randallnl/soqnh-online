@@ -1,4 +1,4 @@
-import { Form, Link, useActionData, useNavigation } from "react-router";
+import { Form, Link, redirect, useActionData, useNavigation } from "react-router";
 import { z } from "zod";
 
 import type { Route } from "./+types/profile";
@@ -9,7 +9,7 @@ import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, upload
 import { cancelOrganizationClaimSchema, organizationRoleLabels, submitOrganizationClaimSchema } from "~/lib/organization-claims";
 import { organizationRoles } from "~/lib/organizations";
 import { cancelOrganizationClaim, listClaimableOrganizations, listOwnOrganizationClaims, OrganizationClaimMutationError, submitOrganizationClaim } from "~/models/organization-claims.server";
-import { getOwnProfileEditorData, updateOwnProfile } from "~/models/profiles.server";
+import { getOwnProfileEditorData, isOwnProfileComplete, updateOwnProfile } from "~/models/profiles.server";
 
 const optionalText = (maximum: number) => z.preprocess(
 	(value) => typeof value === "string" && value.trim() ? value.trim() : null,
@@ -41,10 +41,11 @@ export function meta() {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const [data, claimableOrganizations, organizationClaims] = await Promise.all([
+	const [data, claimableOrganizations, organizationClaims, profileComplete] = await Promise.all([
 		getOwnProfileEditorData(context.cloudflare.env, user),
 		listClaimableOrganizations(context.cloudflare.env, user),
 		listOwnOrganizationClaims(context.cloudflare.env, user),
+		isOwnProfileComplete(context.cloudflare.env, user),
 	]);
 	if (!data.profile) throw new Response("Profile not found", { status: 404 });
 	return {
@@ -54,6 +55,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		directAffiliationIds: data.directAffiliationIds,
 		claimableOrganizations,
 		organizationClaims,
+		onboarding: !profileComplete,
 	};
 }
 
@@ -79,6 +81,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 		const editor = await getOwnProfileEditorData(context.cloudflare.env, user);
 		if (!editor.profile) throw new Response("Profile not found", { status: 404 });
 		const intent = formData.get("intent");
+		const profileComplete = await isOwnProfileComplete(context.cloudflare.env, user);
+		if (!profileComplete && intent !== "update-profile") {
+			return { ok: false as const, error: "Complete your profile before continuing." };
+		}
 		if (intent === "submit-organization-claim") {
 			const parsed = submitOrganizationClaimSchema.safeParse(Object.fromEntries(formData));
 			if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Check the organization claim." };
@@ -121,6 +127,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw error;
 		}
 		if (newAvatarKey && editor.profile.avatarObjectKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, editor.profile.avatarObjectKey));
+		if (!profileComplete) throw redirect("/");
 		return { ok: true as const, message: "Profile updated." };
 	} catch (error) {
 		if (error instanceof Response) throw error;
@@ -136,16 +143,16 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
 	const submitting = navigation.state === "submitting";
-	return <div className="profile-edit-page"><section className="page-heading"><div><p className="eyebrow">Your profile</p><h1>Edit profile</h1><p>Choose how you appear to collaborators across the member network.</p></div><Link className="button button--secondary" to={`/members/${profile.id}`}>View profile</Link></section>
+	return <div className={`profile-edit-page${loaderData.onboarding ? " profile-edit-page--onboarding" : ""}`}><section className="page-heading"><div><p className="eyebrow">{loaderData.onboarding ? "Welcome to the community" : "Your profile"}</p><h1>{loaderData.onboarding ? "Complete your profile" : "Edit profile"}</h1><p>{loaderData.onboarding ? "Tell other members a little about you before entering the workspace. You can change these details at any time." : "Choose how you appear to collaborators across the member network."}</p></div>{!loaderData.onboarding && <Link className="button button--secondary" to={`/members/${profile.id}`}>View profile</Link>}</section>
 		{actionData && <p className={`form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}
 		<section className="panel profile-editor-panel"><div className="profile-photo-editor"><IdentityAvatar name={profile.name} objectKey={profile.avatarObjectKey} size="large" /><div><strong>Profile photo</strong><p>PNG, JPG, WebP, or GIF. Maximum 2 MB.</p>{profile.avatarObjectKey && <Form method="post"><input name="intent" type="hidden" value="remove-avatar" /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Remove photo</button></Form>}</div></div>
 			<Form className="profile-editor-form" encType="multipart/form-data" method="post"><input name="intent" type="hidden" value="update-profile" />
 				<label>Profile photo<input accept="image/png,image/jpeg,image/webp,image/gif" name="avatar" type="file" /></label><label>Name<input defaultValue={profile.name ?? ""} maxLength={120} name="name" required /></label><label>Role or title<input defaultValue={profile.profileTitle ?? ""} maxLength={160} name="profileTitle" placeholder="Organizer, policy lead, volunteer coordinator…" /></label><label>Pronouns<input defaultValue={profile.pronouns ?? ""} maxLength={80} name="pronouns" /></label><label>Location<input defaultValue={profile.location ?? ""} maxLength={160} name="location" /></label><label>Website<input defaultValue={profile.websiteUrl ?? ""} maxLength={500} name="websiteUrl" type="url" /></label><label>Directory visibility<select defaultValue={profile.profileVisibility} name="profileVisibility"><option value="members">Visible to members in my affiliations</option><option value="hidden">Hidden from the member directory</option></select></label><label className="wide-field">Bio<textarea defaultValue={profile.bio ?? ""} maxLength={2000} name="bio" rows={6} /></label>
 				<fieldset className="profile-affiliation-picker wide-field"><legend>Your direct affiliations</legend><p>Organization affiliations are inherited automatically. Choose any additional coalitions you participate in directly.</p><div>{loaderData.affiliations.map((affiliation) => <label key={affiliation.id}><input defaultChecked={loaderData.directAffiliationIds.includes(affiliation.id)} name="affiliationId" type="checkbox" value={affiliation.id} />{affiliation.name}</label>)}</div></fieldset>
-				<button className="button button--primary" disabled={submitting} type="submit">{submitting ? "Saving…" : "Save profile"}</button>
+				<button className="button button--primary" disabled={submitting} type="submit">{submitting ? "Saving…" : loaderData.onboarding ? "Save profile and continue" : "Save profile"}</button>
 			</Form>
 		</section>
-		<section className="panel profile-organization-panel">
+		{!loaderData.onboarding && <section className="panel profile-organization-panel">
 			<div className="panel-heading"><div><p className="eyebrow">Community roles</p><h2>Your organizations</h2></div><span>{profile.organizations.length}</span></div>
 			{profile.organizations.length === 0 ? <p className="muted-empty">You do not have an approved organization membership yet.</p> : <div className="member-organization-list">{profile.organizations.map((organization) => <Link key={organization.id} to={`/organizations/${organization.slug}`}><OrganizationIdentity logoObjectKey={organization.logoObjectKey} name={organization.name} /><div><strong>{organization.name}</strong><p>{organizationRoleLabels[organization.role]}</p></div><span className="status-pill status-pill--active">Approved</span></Link>)}</div>}
 			<div className="profile-claim-workflow">
@@ -158,6 +165,6 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
 				</Form>
 			</div>
 			{loaderData.organizationClaims.length > 0 && <div className="profile-claim-history"><h3>Claim history</h3>{loaderData.organizationClaims.map((claim) => <article key={claim.id}><div><strong>{claim.organizationName}</strong><p>{organizationRoleLabels[claim.requestedRole]} · submitted {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(claim.createdAt))}</p>{claim.reviewReason && <small>{claim.reviewReason}</small>}</div><span className={`status-pill status-pill--${claim.status}`}>{claim.status}</span>{claim.status === "pending" && <Form method="post"><input name="intent" type="hidden" value="cancel-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Cancel</button></Form>}</article>)}</div>}
-		</section>
+		</section>}
 	</div>;
 }

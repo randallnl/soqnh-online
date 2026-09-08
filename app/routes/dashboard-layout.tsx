@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Link, NavLink, Outlet, useLocation } from "react-router";
+import { Form, Link, NavLink, Outlet, redirect, useLocation } from "react-router";
 
 import type { Route } from "./+types/dashboard-layout";
 import { Icon, type IconName } from "~/components/icon";
@@ -7,6 +7,7 @@ import { IdentityAvatar } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { listManagedOrganizations } from "~/models/organizations.server";
 import { countUnreadNotifications } from "~/models/notifications.server";
+import { isOwnProfileComplete } from "~/models/profiles.server";
 
 type NavigationItem = {
 	label: string;
@@ -75,12 +76,21 @@ function NavigationGroup({
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const [managedOrganizations, unreadCount, identity] = await Promise.all([
+	const [identity, profileComplete] = await Promise.all([
+		context.cloudflare.env.DB.prepare("SELECT avatar_object_key AS avatarObjectKey FROM users WHERE id = ?1").bind(user.id).first<{ avatarObjectKey: string | null }>(),
+		isOwnProfileComplete(context.cloudflare.env, user),
+	]);
+	if (!profileComplete && new URL(request.url).pathname !== "/profile") {
+		throw redirect("/profile?onboarding=1");
+	}
+	if (!profileComplete) {
+		return { user: { ...user, avatarObjectKey: identity?.avatarObjectKey ?? null }, managedOrganizations: [], unreadCount: 0, profileComplete };
+	}
+	const [managedOrganizations, unreadCount] = await Promise.all([
 		listManagedOrganizations(context.cloudflare.env, user),
 		countUnreadNotifications(context.cloudflare.env, user),
-		context.cloudflare.env.DB.prepare("SELECT avatar_object_key AS avatarObjectKey FROM users WHERE id = ?1").bind(user.id).first<{ avatarObjectKey: string | null }>(),
 	]);
-	return { user: { ...user, avatarObjectKey: identity?.avatarObjectKey ?? null }, managedOrganizations, unreadCount };
+	return { user: { ...user, avatarObjectKey: identity?.avatarObjectKey ?? null }, managedOrganizations, unreadCount, profileComplete };
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
@@ -96,6 +106,15 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 		[...primaryNavigation, ...communityNavigation, ...managedNavigation, ...adminNavigation].find(
 			(item) => item.to === location.pathname,
 		)?.label ?? "Overview";
+	if (!loaderData.profileComplete) {
+		return <div className="onboarding-frame">
+			<header className="onboarding-header">
+				<span className="brand-lockup"><span className="brand-mark" aria-hidden="true"><span /><span /></span><span><strong>State of Queer</strong><small>New Hampshire</small></span></span>
+				<Form action="/logout" method="post"><button className="button button--secondary button--compact" type="submit">Sign out</button></Form>
+			</header>
+			<main className="onboarding-main" id="main-content"><Outlet /></main>
+		</div>;
+	}
 
 	return (
 		<div className="app-frame">

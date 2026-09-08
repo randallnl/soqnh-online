@@ -74,7 +74,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const cookie = await createUserSession(context.cloudflare.env, user);
-	throw redirect("/", { headers: { "Set-Cookie": cookie } });
+	throw redirect("/profile?onboarding=1", { headers: { "Set-Cookie": cookie } });
 }
 
 export default function InviteAccept({ loaderData }: Route.ComponentProps) {

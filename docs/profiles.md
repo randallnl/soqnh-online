@@ -2,6 +2,8 @@
 
 Member profiles combine user identity, organization memberships, affiliation access, and private R2-backed images. Organization membership claims are stored separately from approved memberships so self-service requests never grant access before moderation.
 
+New members who accept an invitation are taken directly to profile onboarding. Workspace routes remain gated until the member saves their name, optional identity details, visibility preference, and direct affiliations. Organization claims become available after onboarding is complete.
+
 ## Access model
 
 - Members can find active, directory-visible people who share at least one effective affiliation.
