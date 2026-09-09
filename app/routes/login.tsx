@@ -149,7 +149,7 @@ export default function Login() {
 					<div className="auth-quote">
 						<span className="auth-quote-icon"><Icon name="heart" size={24} /></span>
 						<p className="eyebrow">Stronger connections, shared power</p>
-						<h1>One place for New Hampshire’s queer community to organize.</h1>
+						<h1>One place for New Hampshire’s community to organize.</h1>
 						<p>
 							Coordinate across organizations, share important updates, and find the people already doing the work.
 						</p>
