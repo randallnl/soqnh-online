@@ -209,13 +209,13 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 								}}
 								type="checkbox"
 							/>
-							<span><strong>Opt in to State of Queer Digital</strong><small id="manage-directory-opt-in-description">By checking this box, you confirm that this organization may be added to a public directory after administrator review. Its organization profile information may be published; member and affiliation details remain private.</small></span>
+							<span><strong>Opt in to State of Queer Digital</strong><small id="manage-directory-opt-in-description">All signed-in members can already view this organization profile. By checking this box, you confirm that its profile information may also be added to a public directory after administrator review; member and affiliation details remain private.</small></span>
 						</label>
 						<p id="manage-directory-opt-in-status">{organization.directoryStatus === "pending" ? "Pending administrator review. Uncheck the box and save to cancel this request." : organization.directoryStatus === "published" ? "Approved and eligible to appear in the public directory. Uncheck the box and save to opt out." : organization.directoryStatus === "rejected" ? `Changes requested${organization.directoryReviewNote ? `: ${organization.directoryReviewNote}` : "."} Check the box and save to resubmit.` : "Not currently opted in. Check the box and save to request review."}</p>
 					</div>
 					<button className="button button--primary" disabled={submitting} type="submit">Save profile</button>
 				</Form>
-				<div className="managed-affiliation-note"><div><p className="eyebrow">Visibility network</p><h3>Affiliations</h3></div>{organization.affiliations.length === 0 ? <p>No affiliations are assigned. A site administrator must connect this organization before it becomes discoverable through the network.</p> : <div className="affiliation-chip-row">{organization.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}<small>Affiliations control access and can only be changed by a site administrator.</small></div>
+				<div className="managed-affiliation-note"><div><p className="eyebrow">Coalition spaces</p><h3>Affiliations</h3></div>{organization.affiliations.length === 0 ? <p>No affiliations are assigned. The organization profile is still visible to signed-in members.</p> : <div className="affiliation-chip-row">{organization.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}<small>Affiliations control coalition-scoped content and are only shown to people in those affiliations. They can only be changed by a site administrator.</small></div>
 			</section>
 
 			<section className="panel managed-members-panel">

@@ -90,15 +90,39 @@ export class OrganizationMutationError extends Error {
 
 type OrganizationRow = Omit<OrganizationRecord, "affiliations">;
 
-async function attachAffiliations(env: Env, organizations: OrganizationRow[]) {
+async function attachAffiliations(
+	env: Env,
+	organizations: OrganizationRow[],
+	viewer?: AuthenticatedUser,
+) {
 	if (organizations.length === 0) return [];
-	const result = await env.DB.prepare(
+	const statement = viewer ? env.DB.prepare(
+		`WITH viewer_affiliations AS (
+		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
+		   UNION
+		   SELECT oa.affiliation_id
+		   FROM organization_memberships AS membership
+		   JOIN organizations AS member_organization
+		     ON member_organization.id = membership.organization_id
+		    AND member_organization.status != 'archived'
+		   JOIN organization_affiliations AS oa
+		     ON oa.organization_id = membership.organization_id
+		   WHERE membership.user_id = ?1
+		 )
+		 SELECT oa.organization_id AS organizationId,
+		        a.id, a.name, a.slug
+		 FROM organization_affiliations AS oa
+		 JOIN affiliations AS a ON a.id = oa.affiliation_id
+		 JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = a.id
+		 ORDER BY a.name COLLATE NOCASE`,
+	).bind(viewer.id) : env.DB.prepare(
 		`SELECT oa.organization_id AS organizationId,
 		        a.id, a.name, a.slug
 		 FROM organization_affiliations AS oa
 		 JOIN affiliations AS a ON a.id = oa.affiliation_id
 		 ORDER BY a.name COLLATE NOCASE`,
-	).all<OrganizationAffiliation & { organizationId: string }>();
+	);
+	const result = await statement.all<OrganizationAffiliation & { organizationId: string }>();
 	return organizations.map((organization) => ({
 		...organization,
 		affiliations: result.results
@@ -183,61 +207,12 @@ export async function listVisibleOrganizations(
 	env: Env,
 	viewer: AuthenticatedUser,
 ) {
-	if (viewer.siteRole === "site_admin") return listOrganizations(env);
-	const result = await env.DB.prepare(
-		`WITH viewer_affiliations AS (
-		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
-		   UNION
-		   SELECT oa.affiliation_id
-		   FROM organization_memberships AS membership
-		   JOIN organizations AS member_organization
-		     ON member_organization.id = membership.organization_id
-		    AND member_organization.status != 'archived'
-		   JOIN organization_affiliations AS oa
-		     ON oa.organization_id = membership.organization_id
-		   WHERE membership.user_id = ?1
-		 )
-		 SELECT o.id, o.name, o.slug, o.summary, o.description, o.category,
-		        o.website_url AS websiteUrl,
-		        o.event_source_url AS eventSourceUrl,
-		        o.contact_email AS contactEmail,
-		        o.contact_phone AS contactPhone, o.town_city AS townCity, o.region,
-		        o.social_platform AS socialPlatform, o.social_handle AS socialHandle,
-		        o.listing_rationale AS listingRationale,
-		        o.leadership_identity AS leadershipIdentity,
-		        o.source_image_urls AS sourceImageUrls,
-		        o.operates_statewide AS operatesStatewide,
-		        o.logo_object_key AS logoObjectKey,
-		        o.status,
-		        o.directory_status AS directoryStatus,
-		        o.directory_requested_at AS directoryRequestedAt,
-		        o.directory_reviewed_at AS directoryReviewedAt,
-		        o.directory_review_note AS directoryReviewNote,
-		        o.directory_published_at AS directoryPublishedAt,
-		        o.created_at AS createdAt, o.updated_at AS updatedAt,
-		        (SELECT count(*) FROM organization_memberships WHERE organization_id = o.id) AS memberCount
-		 FROM organizations AS o
-		 WHERE o.status = 'active'
-		   AND (
-		     o.directory_status = 'published'
-		     OR
-		     EXISTS (
-		       SELECT 1 FROM organization_memberships
-		       WHERE organization_id = o.id AND user_id = ?1
-		     )
-		     OR EXISTS (
-		       SELECT 1
-		       FROM organization_affiliations AS organization_affiliation
-		       JOIN viewer_affiliations
-		         ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-		       WHERE organization_affiliation.organization_id = o.id
-		     )
-		   )
-		 ORDER BY o.name COLLATE NOCASE`,
-	)
-		.bind(viewer.id)
-		.all<OrganizationRow>();
-	return attachAffiliations(env, result.results);
+	const organizations = await listOrganizations(env);
+	return attachAffiliations(
+		env,
+		organizations.map(({ affiliations: _affiliations, ...organization }) => organization),
+		viewer,
+	);
 }
 
 export async function listManagedOrganizations(
@@ -302,40 +277,12 @@ export async function getOrganizationBySlug(
 		.bind(slug)
 		.first<OrganizationRow>();
 	if (!organization) return null;
-	if (viewer.siteRole !== "site_admin") {
+	if (viewer.siteRole !== "site_admin" && organization.status !== "active") {
 		const visible = await env.DB.prepare(
-			`WITH viewer_affiliations AS (
-			   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
-			   UNION
-			   SELECT oa.affiliation_id
-			   FROM organization_memberships AS membership
-			   JOIN organizations AS member_organization
-			     ON member_organization.id = membership.organization_id
-			    AND member_organization.status != 'archived'
-			   JOIN organization_affiliations AS oa ON oa.organization_id = membership.organization_id
-			   WHERE membership.user_id = ?1
-			 )
-			 SELECT 1
-			 FROM organizations AS o
-			 WHERE o.id = ?2
-			   AND o.status != 'archived'
-			   AND (
-			     o.directory_status = 'published'
-			     OR
-			     EXISTS (
-			       SELECT 1 FROM organization_memberships
-			       WHERE organization_id = o.id AND user_id = ?1
-			     )
-			     OR (
-			       o.status = 'active'
-			       AND EXISTS (
-			         SELECT 1
-			         FROM organization_affiliations AS organization_affiliation
-			         JOIN viewer_affiliations
-			           ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-			         WHERE organization_affiliation.organization_id = o.id
-			       )
-			     )
+			`SELECT 1 FROM organization_memberships
+			 WHERE organization_id = ?2 AND user_id = ?1
+			   AND EXISTS (
+			     SELECT 1 FROM organizations WHERE id = ?2 AND status != 'archived'
 			   )`,
 		)
 			.bind(viewer.id, organization.id)
@@ -361,7 +308,7 @@ export async function getOrganizationBySlug(
 		.bind(organization.id, viewer.siteRole === "site_admin" ? 1 : 0, viewer.id)
 		.all<VisibleOrganizationMember>();
 
-	const [organizationWithAffiliations] = await attachAffiliations(env, [organization]);
+	const [organizationWithAffiliations] = await attachAffiliations(env, [organization], viewer);
 	return { organization: organizationWithAffiliations, members: memberResult.results };
 }
 

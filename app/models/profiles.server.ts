@@ -181,15 +181,13 @@ export async function canReadIdentityObject(env: Env, viewer: AuthenticatedUser,
 	}
 	if (objectKey.startsWith("org-logos/")) {
 		return (await env.DB.prepare(
-			`WITH viewer_affiliations AS (
-			 SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
-			 UNION SELECT oa.affiliation_id FROM organization_memberships AS om
-			 JOIN organizations AS member_org ON member_org.id = om.organization_id AND member_org.status != 'archived'
-			 JOIN organization_affiliations AS oa ON oa.organization_id = om.organization_id WHERE om.user_id = ?1
-			)
-			 SELECT 1 FROM organizations AS o WHERE o.logo_object_key = ?2 AND o.status != 'archived'
-			 AND (?3 = 1 OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = o.id AND user_id = ?1)
-			 OR EXISTS (SELECT 1 FROM organization_affiliations AS oa JOIN viewer_affiliations AS va ON va.affiliation_id = oa.affiliation_id WHERE oa.organization_id = o.id)) LIMIT 1`,
+			`SELECT 1 FROM organizations AS o
+			 WHERE o.logo_object_key = ?2
+			   AND (o.status = 'active' OR ?3 = 1 OR EXISTS (
+			     SELECT 1 FROM organization_memberships
+			     WHERE organization_id = o.id AND user_id = ?1
+			   ))
+			 LIMIT 1`,
 		).bind(viewer.id, objectKey, viewer.siteRole === "site_admin" ? 1 : 0).first<number>("1")) !== null;
 	}
 	return false;

@@ -2730,6 +2730,7 @@ h3 {
 .scraper-source-name strong { font-size: 0.8rem; }
 .scraper-source-row .scraper-toggle { display: flex; flex-direction: row; align-items: center; gap: 7px; min-height: 40px; }
 .scraper-source-row .scraper-toggle input { width: 16px; height: 16px; }
+.scraper-source-actions { display: flex; gap: 8px; align-items: center; }
 
 .scraper-operations-grid {
 	display: grid;
@@ -2749,10 +2750,11 @@ h3 {
 .scraper-run-list article > div { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; }
 .scraper-run-list small { grid-column: 1 / -1; color: var(--ink-500); font-size: 0.75rem; }
 .scraper-run-list p { align-self: center; color: var(--ink-600); font-size: 0.75rem; line-height: 1.45; }
-.scraper-import-list article { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.scraper-import-list article { grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; }
 .scraper-import-list strong { display: block; overflow: hidden; font-size: 0.8rem; text-overflow: ellipsis; white-space: nowrap; }
 .scraper-import-list p { margin-top: 4px; color: var(--ink-500); font-size: 0.75rem; }
 .scraper-import-list time { color: var(--ink-500); font-size: 0.75rem; white-space: nowrap; }
+.scraper-import-list form { justify-self: end; }
 .scraper-empty { padding: 24px; border-top: 1px solid var(--ink-100); }
 .scraper-status--succeeded, .scraper-outcome--imported, .scraper-outcome--updated { color: var(--green-800); background: var(--green-50); }
 .scraper-status--running { color: #865d13; background: #fff4d8; }

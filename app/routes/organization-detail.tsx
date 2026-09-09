@@ -131,7 +131,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 								}}
 								type="checkbox"
 							/>
-							<span><strong>Opt in to State of Queer Digital</strong><small id="directory-opt-in-description">By checking this box, you confirm that this organization may be added to a public directory after administrator review. Its organization profile information may be published; member and affiliation details remain private.</small></span>
+							<span><strong>Opt in to State of Queer Digital</strong><small id="directory-opt-in-description">All signed-in members can already view this organization profile. By checking this box, you confirm that its profile information may also be added to a public directory after administrator review; member and affiliation details remain private.</small></span>
 						</label>
 						<p id="directory-opt-in-status">{organization.directoryStatus === "pending" ? "Pending administrator review. Uncheck the box to cancel this request." : organization.directoryStatus === "published" ? "Approved and eligible to appear in the public directory. Uncheck the box to opt out." : organization.directoryStatus === "rejected" ? `Changes requested${organization.directoryReviewNote ? `: ${organization.directoryReviewNote}` : "."}` : "Not currently opted in."}</p>
 						{actionData && <p className={`form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}

@@ -65,6 +65,7 @@ import {
 import { normalizeTags } from "../app/lib/content";
 import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
 import { eventReviewSchema } from "../app/lib/event-review";
+import { scraperParsers } from "../app/lib/scraper";
 import {
 	archivePost,
 	createPost,
@@ -109,7 +110,9 @@ import {
 	listAuditEvents,
 } from "../app/models/admin.server";
 import {
+	createManualScraperRun,
 	importScraperRecords,
+	getScraperOrganizationSource,
 	listScraperPartners,
 	updateOrganizationScraperSettings,
 } from "../app/models/scraper.server";
@@ -302,7 +305,7 @@ describe("directory filters", () => {
 		await env.DB.prepare("UPDATE organizations SET summary = 'Peer support and community care', category = 'Community services', region = 'Capital Area' WHERE id = 'org-one'").run();
 		await env.DB.prepare("UPDATE users SET profile_title = 'Community organizer', location = 'Concord' WHERE id = ?1").bind(activeUser.id).run();
 
-		const organizations = await listVisibleOrganizations(env, siteAdmin);
+		const organizations = await listVisibleOrganizations(env, activeUser);
 		expect(filterOrganizations(organizations, { query: "peer support", category: "Community services", region: "Capital Area", affiliationId: "aff-shared" }).map((organization) => organization.id)).toEqual(["org-one"]);
 		expect(filterOrganizations(organizations, { query: "missing", category: "", region: "", affiliationId: "" })).toEqual([]);
 
@@ -546,6 +549,11 @@ describe("partner event scraper imports", () => {
 		scraped_at: "2026-08-13T18:00:00Z",
 	};
 
+	it("offers every parser supported by the scraper Worker", () => {
+		expect(scraperParsers).toContain("embedded_calendar");
+		expect(scraperParsers).toContain("mobilize_events");
+	});
+
 	it("publishes only enabled active organizations to the scraper", async () => {
 		await seedSiteAdmin();
 		await seedOrganization();
@@ -559,9 +567,16 @@ describe("partner event scraper imports", () => {
 		await expect(listScraperPartners(env)).resolves.toEqual([
 			{ name: "Community Center", url: "https://example.org/events", parser: "generic_links" },
 		]);
+		await expect(getScraperOrganizationSource(env, "org-one")).resolves.toEqual({
+			id: "org-one",
+			name: "Community Center",
+			eventSourceUrl: "https://example.org/events",
+			eventParser: "generic_links",
+		});
 	});
 
 	it("imports new events into moderation and updates a pending repeat", async () => {
+		await seedSiteAdmin();
 		await seedOrganization();
 		const first = await importScraperRecords(env, [scrapedEvent], null);
 		expect(first).toMatchObject({ imported: 1, new: 1, updated: 0, skipped: 0 });
@@ -584,6 +599,26 @@ describe("partner event scraper imports", () => {
 		await expect(env.DB.prepare(
 			"SELECT body FROM posts WHERE author_user_id = 'system:event-scraper'",
 		).first<string>("body")).resolves.toBe("Updated details.");
+
+		const rerunId = await createManualScraperRun(env, siteAdmin);
+		const corrected = await importScraperRecords(env, [{
+			...scrapedEvent,
+			title: "Corrected Community Picnic",
+			start_date: "2026-09-13",
+			description: "Corrected parser output.",
+		}], rerunId);
+		expect(corrected).toMatchObject({ imported: 1, new: 0, updated: 1, skipped: 0 });
+		await expect(env.DB.prepare(
+			`SELECT p.title, p.body, e.starts_at AS startsAt
+			 FROM posts AS p JOIN events AS e ON e.post_id = p.id
+			 WHERE p.author_user_id = 'system:event-scraper'`,
+		).all()).resolves.toMatchObject({
+			results: [{
+				title: "Corrected Community Picnic",
+				body: "Corrected parser output.",
+				startsAt: "2026-09-13T13:30",
+			}],
+		});
 	});
 
 	it("does not overwrite an approved scraper event", async () => {
@@ -1142,7 +1177,7 @@ describe("member deletion", () => {
 });
 
 describe("affiliation visibility and administration", () => {
-	it("limits the directory to direct, inherited, or site-admin access", async () => {
+	it("shows all active organizations while limiting affiliation labels to affiliation members", async () => {
 		await seedSiteAdmin();
 		await seedUser();
 		await seedOrganization();
@@ -1157,12 +1192,17 @@ describe("affiliation visibility and administration", () => {
 			organizationId: "org-two",
 		});
 
-		await expect(listVisibleOrganizations(env, activeUser)).resolves.toEqual([]);
+		const memberDirectory = await listVisibleOrganizations(env, activeUser);
+		expect(memberDirectory.map((organization) => organization.id)).toEqual(["org-one", "org-two"]);
+		expect(memberDirectory.every((organization) => organization.affiliations.length === 0)).toBe(true);
+		expect((await getOrganizationBySlug(env, "community-center", activeUser))?.organization.affiliations).toEqual([]);
 		await addUserAffiliation(env, siteAdmin, {
 			affiliationId: "aff-shared",
 			userId: activeUser.id,
 		});
-		await expect(listVisibleOrganizations(env, activeUser)).resolves.toHaveLength(2);
+		expect((await listVisibleOrganizations(env, activeUser)).every((organization) =>
+			organization.affiliations.map((affiliation) => affiliation.id).includes("aff-shared")
+		)).toBe(true);
 
 		await removeUserAffiliation(env, siteAdmin, {
 			affiliationId: "aff-shared",
@@ -1175,7 +1215,12 @@ describe("affiliation visibility and administration", () => {
 		});
 		const inherited = await listVisibleOrganizations(env, activeUser);
 		expect(inherited.map((organization) => organization.id)).toEqual(["org-one", "org-two"]);
-		await expect(listVisibleOrganizations(env, siteAdmin)).resolves.toHaveLength(2);
+		expect(inherited.every((organization) => organization.affiliations.length === 1)).toBe(true);
+		const adminDirectory = await listVisibleOrganizations(env, siteAdmin);
+		expect(adminDirectory).toHaveLength(2);
+		expect(adminDirectory.every((organization) => organization.affiliations.length === 0)).toBe(true);
+		await env.DB.prepare("UPDATE organizations SET logo_object_key = 'org-logos/community.png' WHERE id = 'org-one'").run();
+		await expect(canReadIdentityObject(env, activeUser, "org-logos/community.png")).resolves.toBe(true);
 	});
 
 	it("does not reveal hidden organization members to ordinary viewers", async () => {
@@ -1754,7 +1799,7 @@ describe("event moderation", () => {
 });
 
 describe("dashboard data", () => {
-	it("scopes member and organization totals to the viewer's affiliation network", async () => {
+	it("scopes member totals while showing every active organization", async () => {
 		await seedSiteAdmin();
 		await seedUser();
 		await seedSecondMember();
@@ -1771,11 +1816,11 @@ describe("dashboard data", () => {
 
 		expect((await getDashboardData(env, activeUser)).counts).toMatchObject({
 			activeMembers: 2,
-			organizations: 1,
+			organizations: 2,
 		});
 		expect((await getDashboardData(env, thirdMember)).counts).toMatchObject({
 			activeMembers: 1,
-			organizations: 1,
+			organizations: 2,
 		});
 		expect((await getDashboardData(env, siteAdmin)).counts).toMatchObject({
 			activeMembers: 4,

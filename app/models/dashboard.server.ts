@@ -113,20 +113,7 @@ export async function getDashboardData(
 			      ))) AS activeMembers,
 			   (SELECT count(*)
 			    FROM organizations AS visible_organization
-			    WHERE visible_organization.status = 'active'
-			      AND (?2 = 1
-			        OR EXISTS (
-			          SELECT 1 FROM organization_memberships
-			          WHERE organization_id = visible_organization.id AND user_id = ?1
-			        )
-			        OR EXISTS (
-			          SELECT 1
-			          FROM organization_affiliations AS organization_affiliation
-			          JOIN viewer_affiliations
-			            ON viewer_affiliations.affiliation_id = organization_affiliation.affiliation_id
-			          WHERE organization_affiliation.organization_id = visible_organization.id
-			        )
-			      )) AS organizations,
+			    WHERE visible_organization.status = 'active') AS organizations,
 			   (SELECT count(*)
 			    FROM posts AS pending_post
 			    JOIN events AS pending_event ON pending_event.post_id = pending_post.id

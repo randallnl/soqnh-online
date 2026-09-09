@@ -12,6 +12,10 @@ import {
 	failManualScraperRun,
 	finishManualScraperRun,
 	getScraperAdministrationData,
+	getScraperOrganizationSource,
+	importScraperRecords,
+	scraperPayloadSchema,
+	scraperRecordSchema,
 	updateOrganizationScraperSettings,
 } from "~/models/scraper.server";
 
@@ -29,8 +33,17 @@ const settingsSchema = z.object({
 	eventScrapingEnabled: z.preprocess((value) => value === "on", z.boolean()),
 });
 
-async function readSmallResponse(response: Response) {
-	const limit = 65_536;
+const rerunSchema = z.object({
+	intent: z.literal("rerun-source"),
+	organizationId: z.string().trim().min(1).max(100),
+});
+
+const parsedSourceResponseSchema = z.object({
+	ok: z.literal(true),
+	import_payload: scraperPayloadSchema,
+});
+
+async function readBoundedResponse(response: Response, limit = 65_536) {
 	const contentLength = Number(response.headers.get("Content-Length") ?? "0");
 	if (contentLength > limit) throw new Error("Scraper response was unexpectedly large.");
 	if (!response.body) return "";
@@ -94,7 +107,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				signal: AbortSignal.timeout(120_000),
 				},
 			);
-			const text = await readSmallResponse(response);
+			const text = await readBoundedResponse(response);
 			if (!response.ok) throw new Error(`Scraper returned ${response.status}${text ? `: ${text.slice(0, 500)}` : ""}`);
 			const result = JSON.parse(text) as unknown;
 			if (!result || typeof result !== "object" || Array.isArray(result)) {
@@ -104,6 +117,68 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return { ok: true as const, message: "Scraper run completed. Review imported events below." };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "The scraper run failed.";
+			await failManualScraperRun(context.cloudflare.env, runId, message);
+			return { ok: false as const, error: message };
+		}
+	}
+	if (formData.get("intent") === "rerun-source") {
+		const parsed = rerunSchema.safeParse(Object.fromEntries(formData));
+		if (!parsed.success) {
+			return { ok: false as const, error: "Choose an organization source to re-scrape." };
+		}
+		const runId = await createManualScraperRun(context.cloudflare.env, admin);
+		try {
+			if (!context.cloudflare.env.SCRAPER_ADMIN_TOKEN) {
+				throw new Error("The SCRAPER_ADMIN_TOKEN production secret is not configured.");
+			}
+			const source = await getScraperOrganizationSource(
+				context.cloudflare.env,
+				parsed.data.organizationId,
+			);
+			const rerunUrl = new URL("/api/parse-url", context.cloudflare.env.SCRAPER_RUN_URL);
+			const response = await context.cloudflare.env.EVENT_SCRAPER.fetch(rerunUrl, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${context.cloudflare.env.SCRAPER_ADMIN_TOKEN}`,
+					Accept: "application/json",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					name: source.name,
+					url: source.eventSourceUrl,
+					parser: source.eventParser,
+					kind: "event",
+					include_details: true,
+				}),
+				signal: AbortSignal.timeout(120_000),
+			});
+			const text = await readBoundedResponse(response, 1_048_576);
+			if (!response.ok) {
+				throw new Error(`Scraper returned ${response.status}${text ? `: ${text.slice(0, 500)}` : ""}`);
+			}
+			const payload = parsedSourceResponseSchema.safeParse(JSON.parse(text));
+			if (!payload.success) throw new Error("Scraper returned an invalid source result.");
+			const today = new Date().toISOString().slice(0, 10);
+			const records = payload.data.import_payload.records.filter((record) => {
+				const candidate = scraperRecordSchema.safeParse(record);
+				return !candidate.success || ((candidate.data.kind || "event") === "event" && candidate.data.start_date >= today);
+			});
+			const result = await importScraperRecords(context.cloudflare.env, records, runId);
+			await finishManualScraperRun(context.cloudflare.env, runId, {
+				partners: 1,
+				scraped: payload.data.import_payload.records.length,
+				submitted: records.length,
+				imported: result.new,
+				updated: result.updated,
+				skipped: result.skipped,
+				failures: [],
+			});
+			return {
+				ok: true as const,
+				message: `${source.name} re-scraped: ${result.new} new, ${result.updated} corrected, ${result.skipped} skipped.`,
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "The organization source could not be re-scraped.";
 			await failManualScraperRun(context.cloudflare.env, runId, message);
 			return { ok: false as const, error: message };
 		}
@@ -157,13 +232,15 @@ export default function AdminScraper({ loaderData }: Route.ComponentProps) {
 				<div className="scraper-source-list">
 					{loaderData.organizations.map((organization) => (
 						<Form className="scraper-source-row" key={organization.id} method="post">
-							<input name="intent" type="hidden" value="save-settings" />
 							<input name="organizationId" type="hidden" value={organization.id} />
 							<div className="scraper-source-name"><strong>{organization.name}</strong><span className={`status-pill status-pill--${organization.status}`}>{organization.status}</span></div>
 							<label>Event source URL<input defaultValue={organization.eventSourceUrl ?? ""} name="eventSourceUrl" placeholder="https://example.org/events" type="url" /></label>
 							<label>Parser<select defaultValue={organization.eventParser ?? ""} name="eventParser"><option value="">Choose parser</option>{scraperParsers.map((parser) => <option key={parser} value={parser}>{parser.replaceAll("_", " ")}</option>)}</select></label>
 							<label className="scraper-toggle"><input defaultChecked={organization.eventScrapingEnabled === 1} name="eventScrapingEnabled" type="checkbox" />Enabled</label>
-							<button className="button button--secondary button--compact" disabled={submitting} type="submit">Save</button>
+							<div className="scraper-source-actions">
+								<button className="button button--secondary button--compact" disabled={submitting} name="intent" type="submit" value="save-settings">Save</button>
+								<button className="button button--ghost button--compact" disabled={submitting || !organization.eventSourceUrl || !organization.eventParser || organization.status !== "active"} name="intent" type="submit" value="rerun-source">Re-scrape</button>
+							</div>
 						</Form>
 					))}
 				</div>
@@ -180,7 +257,7 @@ export default function AdminScraper({ loaderData }: Route.ComponentProps) {
 				<section className="panel scraper-panel">
 					<div className="panel-heading"><div><p className="eyebrow">Review trail</p><h2>Recent import decisions</h2></div><Link to="/events/moderation">Moderation queue</Link></div>
 					{loaderData.imports.length === 0 ? <p className="muted-empty scraper-empty">No import decisions recorded yet.</p> : <div className="scraper-import-list">{loaderData.imports.map((item) => (
-						<article key={item.id}><span className={`status-pill scraper-outcome--${item.outcome}`}>{item.outcome}</span><div><strong>{item.postId ? <Link to={`/posts/${item.postId}`}>{item.title || "Untitled event"}</Link> : item.title || "Invalid record"}</strong><p>{item.organizationName || item.reason || "No organization match"}{item.startsAt ? ` · ${formatEventDateTime(item.startsAt)}` : ""}</p></div><time>{formatDateTime(item.createdAt)}</time></article>
+						<article key={item.id}><span className={`status-pill scraper-outcome--${item.outcome}`}>{item.outcome}</span><div><strong>{item.postId ? <Link to={`/posts/${item.postId}`}>{item.title || "Untitled event"}</Link> : item.title || "Invalid record"}</strong><p>{item.organizationName || item.reason || "No organization match"}{item.startsAt ? ` · ${formatEventDateTime(item.startsAt)}` : ""}</p></div><time>{formatDateTime(item.createdAt)}</time>{item.organizationId && <Form method="post"><input name="organizationId" type="hidden" value={item.organizationId} /><button className="button button--ghost button--compact" disabled={submitting} name="intent" type="submit" value="rerun-source">Re-scrape source</button></Form>}</article>
 					))}</div>}
 				</section>
 			</div>

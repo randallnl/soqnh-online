@@ -51,6 +51,7 @@ export type ScraperRunRecord = {
 
 export type ScraperImportRecord = {
 	id: string;
+	organizationId: string | null;
 	organizationName: string | null;
 	postId: string | null;
 	outcome: ImportOutcome;
@@ -59,6 +60,13 @@ export type ScraperImportRecord = {
 	sourceUrl: string | null;
 	reason: string | null;
 	createdAt: string;
+};
+
+export type ScraperOrganizationSource = {
+	id: string;
+	name: string;
+	eventSourceUrl: string;
+	eventParser: typeof scraperParsers[number];
 };
 
 function normalizeTime(value: string) {
@@ -125,6 +133,46 @@ async function recordImport(
 			new Date().toISOString(),
 		)
 		.run();
+}
+
+async function updateImportedEvent(
+	env: Env,
+	input: {
+		postId: string;
+		organizationId: string;
+		externalId: string;
+		record: ScraperRecord;
+		startsAt: string;
+		endsAt: string | null;
+		externalUrl: string | null;
+		sourceUrl: string | null;
+		imageUrl: string | null;
+	},
+) {
+	const now = new Date().toISOString();
+	await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE posts SET title = ?1, body = ?2, status = 'draft', updated_at = ?3,
+			 archived_at = NULL WHERE id = ?4`,
+		).bind(input.record.title, input.record.description, now, input.postId),
+		env.DB.prepare(
+			`UPDATE events SET starts_at = ?1, ends_at = ?2, location_name = ?3,
+			 registration_url = ?4, source_url = ?5, external_url = ?6,
+			 external_id = ?7, scraped_at = ?8, image_url = ?9,
+			 moderation_status = 'pending', reviewed_by_user_id = NULL,
+			 reviewed_at = NULL, rejection_reason = NULL WHERE post_id = ?10`,
+		).bind(
+			input.startsAt, input.endsAt, input.record.location || null,
+			input.externalUrl, input.sourceUrl, input.externalUrl, input.externalId,
+			input.record.scraped_at || now, input.imageUrl, input.postId,
+		),
+		env.DB.prepare("DELETE FROM post_affiliations WHERE post_id = ?1").bind(input.postId),
+		env.DB.prepare(
+			`INSERT INTO post_affiliations (post_id, affiliation_id, created_at)
+			 SELECT ?1, affiliation_id, ?2 FROM organization_affiliations
+			 WHERE organization_id = ?3`,
+		).bind(input.postId, now, input.organizationId),
+	]);
 }
 
 export async function listScraperPartners(env: Env) {
@@ -231,27 +279,10 @@ export async function importScraperRecords(
 		}
 
 		if (exact) {
-			const now = new Date().toISOString();
-			await env.DB.batch([
-				env.DB.prepare(
-					`UPDATE posts SET title = ?1, body = ?2, status = 'draft', updated_at = ?3,
-					 archived_at = NULL WHERE id = ?4`,
-				).bind(record.title, record.description, now, exact.postId),
-				env.DB.prepare(
-					`UPDATE events SET starts_at = ?1, ends_at = ?2, location_name = ?3,
-					 registration_url = ?4, source_url = ?5, external_url = ?6,
-					 scraped_at = ?7, image_url = ?8, moderation_status = 'pending',
-					 reviewed_by_user_id = NULL, reviewed_at = NULL, rejection_reason = NULL
-					 WHERE post_id = ?9`,
-				).bind(startsAt, endsAt, record.location || null, externalUrl, sourceUrl,
-					externalUrl, record.scraped_at || now, imageUrl, exact.postId),
-				env.DB.prepare("DELETE FROM post_affiliations WHERE post_id = ?1").bind(exact.postId),
-				env.DB.prepare(
-					`INSERT INTO post_affiliations (post_id, affiliation_id, created_at)
-					 SELECT ?1, affiliation_id, ?2 FROM organization_affiliations
-					 WHERE organization_id = ?3`,
-				).bind(exact.postId, now, organization.id),
-			]);
+			await updateImportedEvent(env, {
+				postId: exact.postId, organizationId: organization.id, externalId,
+				record, startsAt, endsAt, externalUrl, sourceUrl, imageUrl,
+			});
 			counts.updated += 1;
 			await recordImport(env, {
 				runId, organizationId: organization.id, postId: exact.postId,
@@ -262,18 +293,55 @@ export async function importScraperRecords(
 		}
 
 		const likelyDuplicate = await env.DB.prepare(
-			`SELECT p.id AS postId
+			`SELECT p.id AS postId, p.author_user_id AS authorUserId,
+			 e.moderation_status AS moderationStatus,
+			 CASE WHEN lower(trim(p.title)) = lower(trim(?2))
+			           AND substr(e.starts_at, 1, 10) = ?3 THEN 1 ELSE 0 END AS titleDateMatch,
+			 (SELECT count(*) FROM posts AS url_post
+			  JOIN events AS url_event ON url_event.post_id = url_post.id
+			  WHERE url_post.organization_id = ?1
+			    AND url_post.section = 'event'
+			    AND url_post.author_user_id = 'system:event-scraper'
+			    AND ?4 IS NOT NULL
+			    AND (url_event.external_url = ?4 OR url_event.registration_url = ?4)) AS urlMatchCount,
+			 EXISTS(
+			   SELECT 1 FROM scraper_imports AS current_import
+			   WHERE current_import.post_id = p.id AND current_import.run_id = ?5
+			 ) AS importedInCurrentRun
 			 FROM posts AS p JOIN events AS e ON e.post_id = p.id
 			 WHERE p.organization_id = ?1 AND p.section = 'event'
 			   AND (
 			     (lower(trim(p.title)) = lower(trim(?2)) AND substr(e.starts_at, 1, 10) = ?3)
-			     OR (?4 IS NOT NULL AND (e.external_url = ?4 OR e.source_url = ?4 OR e.registration_url = ?4))
+			     OR (?4 IS NOT NULL AND (e.external_url = ?4 OR e.registration_url = ?4))
 			   )
-			 LIMIT 1`,
+			 ORDER BY titleDateMatch DESC LIMIT 1`,
 		)
-			.bind(organization.id, record.title, record.start_date, externalUrl)
-			.first<{ postId: string }>();
+			.bind(organization.id, record.title, record.start_date, externalUrl, runId)
+			.first<{
+				postId: string;
+				authorUserId: string;
+				moderationStatus: string;
+				titleDateMatch: number;
+				urlMatchCount: number;
+				importedInCurrentRun: number;
+			}>();
 		if (likelyDuplicate) {
+			const canSafelyReplace = likelyDuplicate.titleDateMatch === 1 || (
+				runId !== null && likelyDuplicate.urlMatchCount === 1 && likelyDuplicate.importedInCurrentRun === 0
+			);
+			if (canSafelyReplace && likelyDuplicate.authorUserId === "system:event-scraper" && likelyDuplicate.moderationStatus !== "approved") {
+				await updateImportedEvent(env, {
+					postId: likelyDuplicate.postId, organizationId: organization.id, externalId,
+					record, startsAt, endsAt, externalUrl, sourceUrl, imageUrl,
+				});
+				counts.updated += 1;
+				await recordImport(env, {
+					runId, organizationId: organization.id, postId: likelyDuplicate.postId,
+					externalId, outcome: "updated", title: record.title, startsAt,
+					sourceUrl, reason: null, payload: record,
+				});
+				continue;
+			}
 			counts.duplicate += 1;
 			await recordImport(env, {
 				runId, organizationId: organization.id, postId: likelyDuplicate.postId,
@@ -387,7 +455,8 @@ export async function getScraperAdministrationData(env: Env) {
 			 ORDER BY r.started_at DESC LIMIT 25`,
 		).all<ScraperRunRecord>(),
 		env.DB.prepare(
-			`SELECT i.id, o.name AS organizationName, i.post_id AS postId, i.outcome,
+			`SELECT i.id, i.organization_id AS organizationId,
+			 o.name AS organizationName, i.post_id AS postId, i.outcome,
 			 i.title, i.starts_at AS startsAt, i.source_url AS sourceUrl,
 			 i.reason, i.created_at AS createdAt
 			 FROM scraper_imports AS i
@@ -404,6 +473,35 @@ export async function getScraperAdministrationData(env: Env) {
 		}>(),
 	]);
 	return { runs: runs.results, imports: imports.results, organizations: organizations.results };
+}
+
+export async function getScraperOrganizationSource(
+	env: Env,
+	organizationId: string,
+): Promise<ScraperOrganizationSource> {
+	const organization = await env.DB.prepare(
+		`SELECT id, name, status, event_source_url AS eventSourceUrl,
+		 event_parser AS eventParser FROM organizations WHERE id = ?1 LIMIT 1`,
+	)
+		.bind(organizationId)
+		.first<{
+			id: string;
+			name: string;
+			status: string;
+			eventSourceUrl: string | null;
+			eventParser: string | null;
+		}>();
+	if (!organization) throw new Error("Organization not found.");
+	if (organization.status !== "active") throw new Error("Only active organization sources can be re-scraped.");
+	if (!organization.eventSourceUrl) throw new Error("Save an event source URL before re-scraping.");
+	const parser = z.enum(scraperParsers).safeParse(organization.eventParser);
+	if (!parser.success) throw new Error("Save a supported event parser before re-scraping.");
+	return {
+		id: organization.id,
+		name: organization.name,
+		eventSourceUrl: organization.eventSourceUrl,
+		eventParser: parser.data,
+	};
 }
 
 export async function updateOrganizationScraperSettings(
