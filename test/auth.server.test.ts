@@ -38,6 +38,14 @@ import {
 	updateAffiliation,
 } from "../app/models/affiliations.server";
 import {
+	cancelAffiliationRequest,
+	listOwnAffiliationRequests,
+	listPendingAffiliationRequests,
+	listRequestableAffiliations,
+	reviewAffiliationRequest,
+	submitAffiliationRequest,
+} from "../app/models/affiliation-requests.server";
+import {
 	createOrganization,
 	deleteOrganization,
 	getOrganizationAdministrationData,
@@ -63,6 +71,8 @@ import {
 	submitOrganizationClaim,
 } from "../app/models/organization-claims.server";
 import { normalizeTags } from "../app/lib/content";
+import { uploadContentImage } from "../app/lib/media.server";
+import { getContentImagePostId } from "../app/models/attachments.server";
 import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
 import { eventReviewSchema } from "../app/lib/event-review";
 import { scraperParsers } from "../app/lib/scraper";
@@ -282,6 +292,7 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM auth_tokens"),
 		env.DB.prepare("DELETE FROM organization_affiliations"),
 		env.DB.prepare("DELETE FROM user_affiliations"),
+		env.DB.prepare("DELETE FROM affiliation_membership_requests"),
 		env.DB.prepare("DELETE FROM organization_membership_claims"),
 		env.DB.prepare("DELETE FROM organization_memberships"),
 		env.DB.prepare("DELETE FROM invitations"),
@@ -352,9 +363,11 @@ describe("member profiles", () => {
 		await expect(canReadIdentityObject(env, activeUser, "profile-photos/second.jpg")).resolves.toBe(false);
 	});
 
-	it("updates a member's own directory profile and direct affiliations", async () => {
+	it("updates a member's own directory profile without changing admin-assigned affiliations", async () => {
 		await seedUser();
+		await seedSiteAdmin();
 		await seedAffiliation();
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
 		await expect(isOwnProfileComplete(env, activeUser)).resolves.toBe(false);
 		await updateOwnProfile(env, activeUser, {
 			name: "Updated Member",
@@ -364,7 +377,6 @@ describe("member profiles", () => {
 			location: "Concord, NH",
 			websiteUrl: "https://example.org",
 			profileVisibility: "hidden",
-			affiliationIds: ["aff-shared"],
 			avatarObjectKey: "profile-photos/user-active.jpg",
 		});
 
@@ -376,6 +388,51 @@ describe("member profiles", () => {
 		});
 		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first<string>("affiliation_id")).resolves.toBe("aff-shared");
 		await expect(isOwnProfileComplete(env, activeUser)).resolves.toBe(true);
+	});
+});
+
+describe("affiliation membership requests", () => {
+	it("keeps affiliation access pending until a site administrator approves it", async () => {
+		await Promise.all([seedUser(), seedSecondMember(), seedSiteAdmin()]);
+		await seedAffiliation();
+		expect(await listRequestableAffiliations(env, activeUser)).toEqual([
+			expect.objectContaining({ id: "aff-shared", hasEffectiveAccess: false, hasPendingRequest: false }),
+		]);
+
+		const request = await submitAffiliationRequest(env, activeUser, "aff-shared");
+		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first()).resolves.toBeNull();
+		await expect(listOwnAffiliationRequests(env, activeUser)).resolves.toEqual([
+			expect.objectContaining({ id: request.id, affiliationName: "Shared Coalition", status: "pending" }),
+		]);
+		await expect(listPendingAffiliationRequests(env)).resolves.toEqual([
+			expect.objectContaining({ id: request.id, userEmail: activeUser.email }),
+		]);
+		await expect(submitAffiliationRequest(env, activeUser, "aff-shared")).rejects.toMatchObject({ reason: "already-pending" });
+		await expect(reviewAffiliationRequest(env, secondMember, { requestId: request.id, decision: "approve", reason: null })).rejects.toMatchObject({ reason: "forbidden" });
+
+		await reviewAffiliationRequest(env, siteAdmin, { requestId: request.id, decision: "approve", reason: null });
+		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first<string>("affiliation_id")).resolves.toBe("aff-shared");
+		await expect(listPendingAffiliationRequests(env)).resolves.toEqual([]);
+		expect(await listRequestableAffiliations(env, activeUser)).toEqual([
+			expect.objectContaining({ id: "aff-shared", hasDirectAccess: true, hasEffectiveAccess: true, hasPendingRequest: false }),
+		]);
+		await expect(submitAffiliationRequest(env, activeUser, "aff-shared")).rejects.toMatchObject({ reason: "already-member" });
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM notifications WHERE user_id = ?1 AND type = 'approval'").bind(activeUser.id).first<number>("count")).toBe(1);
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('affiliation.request_submitted', 'affiliation.request_approved')").first<number>("count")).toBe(2);
+	});
+
+	it("allows members to cancel and resubmit rejected affiliation requests", async () => {
+		await Promise.all([seedUser(), seedSiteAdmin()]);
+		await seedAffiliation();
+		const first = await submitAffiliationRequest(env, activeUser, "aff-shared");
+		await cancelAffiliationRequest(env, activeUser, first.id);
+		await expect(cancelAffiliationRequest(env, activeUser, first.id)).rejects.toMatchObject({ reason: "request-unavailable" });
+		const second = await submitAffiliationRequest(env, activeUser, "aff-shared");
+		await reviewAffiliationRequest(env, siteAdmin, { requestId: second.id, decision: "reject", reason: "Please confirm participation with the coalition lead." });
+		await expect(listOwnAffiliationRequests(env, activeUser)).resolves.toEqual(expect.arrayContaining([
+			expect.objectContaining({ id: second.id, status: "rejected", reviewReason: "Please confirm participation with the coalition lead." }),
+			expect.objectContaining({ id: first.id, status: "cancelled" }),
+		]));
 	});
 });
 
@@ -1464,6 +1521,52 @@ describe("State of Queer Digital participation", () => {
 });
 
 describe("content feeds and post permissions", () => {
+	it("stores and loads private images for projects, updates, and comments", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+		const projectImage = await uploadContentImage(env, new File([pngBytes], "project-poster.png", { type: "image/png" }), activeUser.id);
+		expect(projectImage).not.toBeNull();
+		const project = await createPost(env, activeUser, {
+			organizationId: null,
+			section: "project",
+			title: "Project with an image",
+			body: "A member-led project with a privately stored poster image.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			affiliationIds: [],
+			attachment: projectImage,
+		});
+		await expect(getPostById(env, activeUser, project.id)).resolves.toMatchObject({
+			imageAttachments: [expect.objectContaining({ filename: "project-poster.png", contentType: "image/png", byteSize: 8 })],
+		});
+		await expect(getContentImagePostId(env, projectImage!.objectKey)).resolves.toBe(project.id);
+		expect(await env.ASSETS.get(projectImage!.objectKey)).not.toBeNull();
+
+		const updateImage = await uploadContentImage(env, new File([pngBytes], "update.png", { type: "image/png" }), activeUser.id);
+		const update = await createPost(env, activeUser, {
+			organizationId: null,
+			section: "update",
+			title: "An update with an image",
+			body: "Sharing an image with the community.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			affiliationIds: [],
+			attachment: updateImage,
+		});
+		const commentImage = await uploadContentImage(env, new File([pngBytes], "comment.png", { type: "image/png" }), activeUser.id);
+		const comment = await createComment(env, activeUser, { postId: update.id, parentCommentId: null, body: "A comment with an image.", attachment: commentImage });
+		expect((await listPostComments(env, activeUser, update.id))[0]?.imageAttachments).toEqual([expect.objectContaining({ filename: "comment.png" })]);
+		expect((await listFeedCommentPreviews(env, [update.id]))[0]?.imageAttachments).toEqual([expect.objectContaining({ filename: "comment.png" })]);
+		await expect(getContentImagePostId(env, commentImage!.objectKey)).resolves.toBe(update.id);
+		await archiveComment(env, activeUser, { postId: update.id, commentId: comment.id });
+		await expect(getContentImagePostId(env, commentImage!.objectKey)).resolves.toBeNull();
+
+		await expect(uploadContentImage(env, new File(["not an image"], "spoofed.png", { type: "image/png" }), activeUser.id)).rejects.toMatchObject({ reason: "invalid" });
+	});
+
 	it("allows members without an organization or affiliation to post ecosystem-wide updates, projects, and events", async () => {
 		await seedSiteAdmin();
 		await seedUser();

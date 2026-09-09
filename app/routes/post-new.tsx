@@ -7,6 +7,8 @@ import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { communityUpdateTitle, contentSections, isContentSection, normalizeTags, postStatuses, postVisibilities, sectionDefinitions } from "~/lib/content";
 import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
+import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
+import type { ContentImageAttachment } from "~/lib/media";
 import { createPost, listAvailablePostAffiliations, listPostOrganizations, PostMutationError } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
@@ -56,6 +58,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
+	try {
+		requireUploadRequestSize(request);
+	} catch (error) {
+		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
+		throw error;
+	}
 	const formData = await request.formData();
 	const requestedAffiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
@@ -65,7 +73,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (result.data.section !== "updates" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 	const eventResult = result.data.section === "events" ? parseEventDetails(formData) : null;
 	if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
+	let uploadedImage: ContentImageAttachment | null = null;
+	let attachmentPersisted = false;
 	try {
+		if (result.data.section === "projects" || result.data.section === "updates") {
+			uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
+		}
 		const created = await createPost(context.cloudflare.env, user, {
 			...result.data,
 			title: result.data.section === "updates" ? communityUpdateTitle(result.data.body) : result.data.title,
@@ -73,11 +86,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 			tags: normalizeTags(result.data.tags),
 			affiliationIds,
 			event: eventResult?.data,
+			attachment: uploadedImage,
 		});
+		attachmentPersisted = true;
 		if (result.data.section === "updates") await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
 		throw redirect(`/posts/${created.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
+		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned post image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
+		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
 		if (error instanceof PostMutationError) return { ok: false as const, error: messageFor(error) };
 		console.error(JSON.stringify({ message: "post creation failed", actorUserId: user.id, error: error instanceof Error ? error.message : String(error) }));
 		return { ok: false as const, error: "The post could not be created." };

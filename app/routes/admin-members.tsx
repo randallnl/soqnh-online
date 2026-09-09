@@ -6,7 +6,7 @@ import type { Route } from "./+types/admin-members";
 import { Icon } from "~/components/icon";
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
-import { deleteIdentityImage } from "~/lib/media.server";
+import { deleteContentImage, deleteIdentityImage } from "~/lib/media.server";
 import {
 	changeMemberStatus,
 	deleteMember,
@@ -65,10 +65,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 	try {
 		if (result.data.intent === "delete-member") {
 			const deleted = await deleteMember(context.cloudflare.env, admin, result.data.targetUserId);
-			const objectKeys = [deleted.avatarObjectKey, ...deleted.attachmentObjectKeys].filter((key): key is string => Boolean(key));
-			if (objectKeys.length > 0) {
-				context.cloudflare.ctx.waitUntil(Promise.all(objectKeys.map((key) => deleteIdentityImage(context.cloudflare.env, key))).then(() => undefined));
-			}
+			const cleanup = [
+				...(deleted.avatarObjectKey ? [deleteIdentityImage(context.cloudflare.env, deleted.avatarObjectKey)] : []),
+				...deleted.attachmentObjectKeys.map((key) => deleteContentImage(context.cloudflare.env, key)),
+			];
+			if (cleanup.length > 0) context.cloudflare.ctx.waitUntil(Promise.all(cleanup).then(() => undefined));
 			return { ok: true as const, message: "Member and their associated account data were permanently deleted." };
 		}
 		const change = await changeMemberStatus(

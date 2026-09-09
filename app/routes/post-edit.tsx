@@ -7,6 +7,8 @@ import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { communityUpdateTitle, normalizeTags, postStatuses, postVisibilities, routeSectionForDatabase } from "~/lib/content";
 import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
+import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
+import type { ContentImageAttachment } from "~/lib/media";
 import { getPostById, listAvailablePostAffiliations, listPostOrganizations, PostMutationError, updatePost } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
@@ -46,11 +48,19 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
+	try {
+		requireUploadRequestSize(request);
+	} catch (error) {
+		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
+		throw error;
+	}
 	const formData = await request.formData();
 	const requestedAffiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = formSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the post details" };
+	let uploadedImage: ContentImageAttachment | null = null;
+	let attachmentPersisted = false;
 	try {
 		const existing = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!existing) throw new PostMutationError("not-found");
@@ -58,11 +68,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (existing.section !== "update" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 		const eventResult = existing.section === "event" ? parseEventDetails(formData) : null;
 		if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
-		await updatePost(context.cloudflare.env, user, { ...result.data, title: existing.section === "update" ? communityUpdateTitle(result.data.body) : result.data.title, tags: normalizeTags(result.data.tags), affiliationIds, event: eventResult?.data });
+		if (existing.section === "project" || existing.section === "update") uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
+		await updatePost(context.cloudflare.env, user, { ...result.data, title: existing.section === "update" ? communityUpdateTitle(result.data.body) : result.data.title, tags: normalizeTags(result.data.tags), affiliationIds, event: eventResult?.data, attachment: uploadedImage });
+		attachmentPersisted = true;
 		if (existing.section === "update") await syncPostMentions(context.cloudflare.env, user, result.data.postId, mentionUserIds, existing.status !== "published" && result.data.status === "published");
 		throw redirect(`/posts/${result.data.postId}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
+		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned post image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
+		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
 		if (error instanceof PostMutationError) {
 			const messages = { "not-found": "That post is no longer available.", "forbidden": "You cannot edit that post.", "organization-required": "Choose an organization for that visibility setting.", "organization-unavailable": "You cannot post for that organization.", "affiliation-required": "Choose at least one affiliation, or opt the posting organization in to State of Queer Digital for statewide sharing.", "affiliation-unavailable": "You can only tag affiliations you belong to.", "event-details-required": "Add the event date and time before submitting it." };
 			return { ok: false as const, error: messages[error.reason] };

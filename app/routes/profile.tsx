@@ -7,8 +7,10 @@ import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
 import { cancelOrganizationClaimSchema, organizationRoleLabels, submitOrganizationClaimSchema } from "~/lib/organization-claims";
+import { cancelAffiliationRequestSchema, submitAffiliationRequestSchema } from "~/lib/affiliation-requests";
 import { organizationRoles } from "~/lib/organizations";
 import { cancelOrganizationClaim, listClaimableOrganizations, listOwnOrganizationClaims, OrganizationClaimMutationError, submitOrganizationClaim } from "~/models/organization-claims.server";
+import { AffiliationRequestMutationError, cancelAffiliationRequest, listOwnAffiliationRequests, listRequestableAffiliations, submitAffiliationRequest } from "~/models/affiliation-requests.server";
 import { getOwnProfileEditorData, isOwnProfileComplete, updateOwnProfile } from "~/models/profiles.server";
 
 const optionalText = (maximum: number) => z.preprocess(
@@ -41,20 +43,22 @@ export function meta() {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const [data, claimableOrganizations, organizationClaims, profileComplete] = await Promise.all([
+	const [data, claimableOrganizations, organizationClaims, requestableAffiliations, affiliationRequests, profileComplete] = await Promise.all([
 		getOwnProfileEditorData(context.cloudflare.env, user),
 		listClaimableOrganizations(context.cloudflare.env, user),
 		listOwnOrganizationClaims(context.cloudflare.env, user),
+		listRequestableAffiliations(context.cloudflare.env, user),
+		listOwnAffiliationRequests(context.cloudflare.env, user),
 		isOwnProfileComplete(context.cloudflare.env, user),
 	]);
 	if (!data.profile) throw new Response("Profile not found", { status: 404 });
 	return {
 		user,
 		profile: data.profile,
-		affiliations: data.affiliations,
-		directAffiliationIds: data.directAffiliationIds,
 		claimableOrganizations,
 		organizationClaims,
+		requestableAffiliations,
+		affiliationRequests,
 		onboarding: !profileComplete,
 	};
 }
@@ -69,6 +73,19 @@ function claimErrorMessage(error: OrganizationClaimMutationError) {
 		forbidden: "You do not have permission to change that membership claim.",
 		"self-review": "You cannot review your own membership claim.",
 		"member-unavailable": "The member or organization is no longer active.",
+	}[error.reason];
+}
+
+function affiliationRequestErrorMessage(error: AffiliationRequestMutationError) {
+	return {
+		"affiliation-unavailable": "That affiliation is no longer available.",
+		"already-member": "You already have access to that affiliation.",
+		"already-pending": "You already have a pending request for that affiliation.",
+		"request-unavailable": "That affiliation request is no longer available.",
+		"already-reviewed": "That affiliation request has already been reviewed.",
+		forbidden: "You do not have permission to change that affiliation request.",
+		"self-review": "You cannot review your own affiliation request.",
+		"member-unavailable": "The member or affiliation is no longer active.",
 	}[error.reason];
 }
 
@@ -97,6 +114,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 			await cancelOrganizationClaim(context.cloudflare.env, user, parsed.data.claimId);
 			return { ok: true as const, message: "Organization claim cancelled." };
 		}
+		if (intent === "submit-affiliation-request") {
+			const parsed = submitAffiliationRequestSchema.safeParse(Object.fromEntries(formData));
+			if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Choose an affiliation." };
+			await submitAffiliationRequest(context.cloudflare.env, user, parsed.data.affiliationId);
+			return { ok: true as const, message: "Affiliation request submitted for administrator approval." };
+		}
+		if (intent === "cancel-affiliation-request") {
+			const parsed = cancelAffiliationRequestSchema.safeParse(Object.fromEntries(formData));
+			if (!parsed.success) return { ok: false as const, error: "That affiliation request is unavailable." };
+			await cancelAffiliationRequest(context.cloudflare.env, user, parsed.data.requestId);
+			return { ok: true as const, message: "Affiliation request cancelled." };
+		}
 		if (intent === "remove-avatar") {
 			await updateOwnProfile(context.cloudflare.env, user, {
 				name: editor.profile.name ?? "Member",
@@ -106,7 +135,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 				location: editor.profile.location,
 				websiteUrl: editor.profile.websiteUrl,
 				profileVisibility: editor.profile.profileVisibility,
-				affiliationIds: editor.directAffiliationIds,
 				avatarObjectKey: null,
 			});
 			context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, editor.profile.avatarObjectKey));
@@ -114,12 +142,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 		const parsed = profileSchema.safeParse(Object.fromEntries(formData));
 		if (!parsed.success) return { ok: false as const, error: parsed.error.issues[0]?.message ?? "Check your profile details." };
-		const selectedAffiliations = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 		const newAvatarKey = await uploadIdentityImage(context.cloudflare.env, formData.get("avatar"), "profile-photos", user.id);
 		try {
 			await updateOwnProfile(context.cloudflare.env, user, {
 				...parsed.data,
-				affiliationIds: selectedAffiliations,
 				avatarObjectKey: newAvatarKey ?? editor.profile.avatarObjectKey,
 			});
 		} catch (error) {
@@ -133,6 +159,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (error instanceof Response) throw error;
 		if (error instanceof ImageUploadError) return { ok: false as const, error: uploadMessage(error) };
 		if (error instanceof OrganizationClaimMutationError) return { ok: false as const, error: claimErrorMessage(error) };
+		if (error instanceof AffiliationRequestMutationError) return { ok: false as const, error: affiliationRequestErrorMessage(error) };
 		console.error(JSON.stringify({ message: "profile update failed", actorUserId: user.id, error: error instanceof Error ? error.message : String(error) }));
 		return { ok: false as const, error: "Your profile could not be saved." };
 	}
@@ -148,7 +175,6 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
 		<section className="panel profile-editor-panel"><div className="profile-photo-editor"><IdentityAvatar name={profile.name} objectKey={profile.avatarObjectKey} size="large" /><div><strong>Profile photo</strong><p>PNG, JPG, WebP, or GIF. Maximum 2 MB.</p>{profile.avatarObjectKey && <Form method="post"><input name="intent" type="hidden" value="remove-avatar" /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Remove photo</button></Form>}</div></div>
 			<Form className="profile-editor-form" encType="multipart/form-data" method="post"><input name="intent" type="hidden" value="update-profile" />
 				<label>Profile photo<input accept="image/png,image/jpeg,image/webp,image/gif" name="avatar" type="file" /></label><label>Name<input defaultValue={profile.name ?? ""} maxLength={120} name="name" required /></label><label>Role or title<input defaultValue={profile.profileTitle ?? ""} maxLength={160} name="profileTitle" placeholder="Organizer, policy lead, volunteer coordinator…" /></label><label>Pronouns<input defaultValue={profile.pronouns ?? ""} maxLength={80} name="pronouns" /></label><label>Location<input defaultValue={profile.location ?? ""} maxLength={160} name="location" /></label><label>Website<input defaultValue={profile.websiteUrl ?? ""} maxLength={500} name="websiteUrl" type="url" /></label><label>Directory visibility<select defaultValue={profile.profileVisibility} name="profileVisibility"><option value="members">Visible to all signed-in members</option><option value="hidden">Hidden from the member directory</option></select></label><label className="wide-field">Bio<textarea defaultValue={profile.bio ?? ""} maxLength={2000} name="bio" rows={6} /></label>
-				<fieldset className="profile-affiliation-picker wide-field"><legend>Your direct affiliations</legend><p>Organization affiliations are inherited automatically. Choose any additional coalitions you participate in directly.</p><div>{loaderData.affiliations.map((affiliation) => <label key={affiliation.id}><input defaultChecked={loaderData.directAffiliationIds.includes(affiliation.id)} name="affiliationId" type="checkbox" value={affiliation.id} />{affiliation.name}</label>)}</div></fieldset>
 				<button className="button button--primary" disabled={submitting} type="submit">{submitting ? "Saving…" : loaderData.onboarding ? "Save profile and continue" : "Save profile"}</button>
 			</Form>
 		</section>
@@ -165,6 +191,19 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
 				</Form>
 			</div>
 			{loaderData.organizationClaims.length > 0 && <div className="profile-claim-history"><h3>Claim history</h3>{loaderData.organizationClaims.map((claim) => <article key={claim.id}><div><strong>{claim.organizationName}</strong><p>{organizationRoleLabels[claim.requestedRole]} · submitted {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(claim.createdAt))}</p>{claim.reviewReason && <small>{claim.reviewReason}</small>}</div><span className={`status-pill status-pill--${claim.status}`}>{claim.status}</span>{claim.status === "pending" && <Form method="post"><input name="intent" type="hidden" value="cancel-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Cancel</button></Form>}</article>)}</div>}
+		</section>}
+		{!loaderData.onboarding && <section className="panel profile-organization-panel">
+			<div className="panel-heading"><div><p className="eyebrow">Coalition spaces</p><h2>Your affiliations</h2></div><span>{profile.affiliations.length}</span></div>
+			{profile.affiliations.length === 0 ? <p className="muted-empty">You do not have approved affiliation access yet.</p> : <div className="affiliation-chip-row">{profile.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}
+			<div className="profile-claim-workflow">
+				<div><p className="eyebrow">Request access</p><h3>Join an affiliation</h3><p>Affiliations provide access to coalition-specific posts, projects, and events. A site administrator must approve your request before access is added.</p></div>
+				<Form className="profile-claim-form profile-claim-form--single" method="post">
+					<input name="intent" type="hidden" value="submit-affiliation-request" />
+					<label>Affiliation<select name="affiliationId" required><option value="">Select an affiliation</option>{loaderData.requestableAffiliations.map((affiliation) => <option disabled={affiliation.hasEffectiveAccess || affiliation.hasPendingRequest} key={affiliation.id} value={affiliation.id}>{affiliation.name}{affiliation.hasDirectAccess ? " · approved" : affiliation.hasEffectiveAccess ? " · access through organization" : affiliation.hasPendingRequest ? " · pending" : ""}</option>)}</select></label>
+					<button className="button button--primary button--compact" disabled={submitting} type="submit">Request affiliation</button>
+				</Form>
+			</div>
+			{loaderData.affiliationRequests.length > 0 && <div className="profile-claim-history"><h3>Request history</h3>{loaderData.affiliationRequests.map((request) => <article key={request.id}><div><strong>{request.affiliationName}</strong><p>Submitted {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(new Date(request.createdAt))}</p>{request.reviewReason && <small>{request.reviewReason}</small>}</div><span className={`status-pill status-pill--${request.status}`}>{request.status}</span>{request.status === "pending" && <Form method="post"><input name="intent" type="hidden" value="cancel-affiliation-request" /><input name="requestId" type="hidden" value={request.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Cancel</button></Form>}</article>)}</div>}
 		</section>}
 	</div>;
 }

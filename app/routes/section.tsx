@@ -10,8 +10,10 @@ import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { communityUpdateTitle, isContentSection, isEventTiming, normalizeTags, sectionDefinitions, type EventTiming } from "~/lib/content";
 import { formatEventDateTime } from "~/lib/events";
 import { requireSameOrigin } from "~/lib/http.server";
+import { imageUploadAccept, mediaUrl, type ContentImageAttachment } from "~/lib/media";
+import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
 import { CommentMutationError, createComment, listFeedCommentPreviews } from "~/models/comments.server";
-import { InteractionMutationError, listMentionableMembers, syncPostMentions } from "~/models/interactions.server";
+import { InteractionMutationError, listMentionableMembers, syncPostMentions, togglePostSupport } from "~/models/interactions.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 import { createPost, deleteCommunityUpdate, getPostById, listAvailablePostAffiliations, listPostOrganizations, listSectionPosts, PostMutationError } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
@@ -20,6 +22,7 @@ const optionalOrganization = z.preprocess((value) => typeof value === "string" &
 const updateActionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("create-update"), body: z.string().trim().min(2, "Write a community update").max(12000), organizationId: optionalOrganization, tags: z.string().max(320) }),
 	z.object({ intent: z.literal("create-feed-comment"), postId: z.string().uuid(), body: z.string().trim().min(2, "Write a comment").max(4000) }),
+	z.object({ intent: z.literal("toggle-support"), postId: z.string().uuid() }),
 	z.object({ intent: z.literal("delete-update"), postId: z.string().uuid() }),
 ]);
 
@@ -90,6 +93,12 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 export async function action({ request, context, params }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
+	try {
+		requireUploadRequestSize(request);
+	} catch (error) {
+		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
+		throw error;
+	}
 	if (params.section !== "updates") throw new Response("Not found", { status: 404 });
 	const formData = await request.formData();
 	const requestedAffiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
@@ -97,12 +106,16 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = updateActionSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check your update" };
+	let uploadedImage: ContentImageAttachment | null = null;
+	let attachmentPersisted = false;
 	try {
 		if (result.data.intent === "delete-update") {
-			await deleteCommunityUpdate(context.cloudflare.env, user, result.data.postId);
+			const objectKeys = await deleteCommunityUpdate(context.cloudflare.env, user, result.data.postId);
+			if (objectKeys.length > 0) context.cloudflare.ctx.waitUntil(Promise.all(objectKeys.map((key) => deleteContentImage(context.cloudflare.env, key))).then(() => undefined));
 			throw redirect("/updates");
 		}
 		if (result.data.intent === "create-update") {
+			uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
 			const created = await createPost(context.cloudflare.env, user, {
 				organizationId: result.data.organizationId,
 				section: "update",
@@ -112,16 +125,28 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				status: "published",
 				tags: normalizeTags(result.data.tags),
 				affiliationIds,
+				attachment: uploadedImage,
 			});
+			attachmentPersisted = true;
 			await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
 			throw redirect(`/updates#post-${created.id}`);
 		}
+		if (result.data.intent === "toggle-support") {
+			const post = await getPostById(context.cloudflare.env, user, result.data.postId);
+			if (!post || post.section !== "update") throw new InteractionMutationError("post-unavailable");
+			await togglePostSupport(context.cloudflare.env, user, post.id);
+			throw redirect(`/updates#post-${post.id}`);
+		}
 		const post = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!post || post.section !== "update") throw new CommentMutationError("post-unavailable");
-		const created = await createComment(context.cloudflare.env, user, { postId: post.id, parentCommentId: null, body: result.data.body, mentionUserIds });
+		uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
+		const created = await createComment(context.cloudflare.env, user, { postId: post.id, parentCommentId: null, body: result.data.body, mentionUserIds, attachment: uploadedImage });
+		attachmentPersisted = true;
 		throw redirect(`/updates#comment-${created.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
+		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned feed image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
+		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
 		if (error instanceof PostMutationError) return {
 			ok: false as const,
 			error: result.data.intent === "delete-update" && error.reason === "forbidden"
@@ -129,7 +154,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				: updateErrorMessage(error),
 		};
 		if (error instanceof CommentMutationError) return { ok: false as const, error: error.reason === "post-unavailable" ? "That update is no longer available for comments." : "Your comment could not be posted." };
-		if (error instanceof InteractionMutationError) return { ok: false as const, error: error.reason === "member-unavailable" ? "One of the tagged members cannot be mentioned in this conversation." : "Your update could not be posted." };
+		if (error instanceof InteractionMutationError) return { ok: false as const, error: error.reason === "member-unavailable" ? "One of the tagged members cannot be mentioned in this conversation." : result.data.intent === "toggle-support" ? "That update is no longer available to support." : "Your update could not be posted." };
 		console.error(JSON.stringify({ message: "inline update action failed", actorUserId: user.id, error: error instanceof Error ? error.message : String(error) }));
 		return { ok: false as const, error: "Your update could not be posted. Please try again." };
 	}
@@ -167,7 +192,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 	const submittingIntent = navigation.formData?.get("intent");
 	return (
 		<div className="section-page content-section-page">
-			<section className="section-hero">
+			<section className={`section-hero${sectionKey === "updates" ? " section-hero--community" : ""}`}>
 				<div className="section-hero-copy">
 					<span className="section-hero-icon"><Icon name={section.icon} size={24} /></span>
 					<div><p className="eyebrow">{section.eyebrow}</p><h1>{section.title}</h1><p>{section.description}</p></div>
@@ -178,8 +203,8 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 			{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}
 
 			{sectionKey === "updates" && loaderData.canCreate && <details className="panel community-update-composer" id="community-update-composer">
-				<summary className="community-update-composer-summary"><span><Icon name="message" size={19} /><span><strong>Post a community update</strong><small>Share news, ask a question, or celebrate a win</small></span></span><Icon className="community-update-expand-icon" name="plus" size={18} /></summary>
-				<Form className="community-update-composer-form" method="post">
+				<summary className="community-update-composer-summary"><span><Icon name="message" size={19} /><span><strong>Post a community update</strong><span className="community-update-composer-preview">Share news, ask a question, or celebrate a win…</span></span></span><Icon className="community-update-expand-icon" name="plus" size={18} /></summary>
+				<Form className="community-update-composer-form" encType="multipart/form-data" method="post">
 					<input name="intent" type="hidden" value="create-update" />
 					<label className="sr-only" htmlFor="community-update-body">Community update</label>
 					<MentionTextarea id="community-update-body" maxLength={12000} minLength={2} placeholder="Share news, ask a question, celebrate a win, or let the community know what’s happening… Type @ to tag." required rows={4} targets={loaderData.mentionTargets} />
@@ -187,6 +212,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 						<label>Post as<select defaultValue={loaderData.authoringOrganizations[0]?.id ?? ""} name="organizationId"><option value="">Yourself · community-wide</option>{loaderData.authoringOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · State of Queer Digital" : ""}</option>)}</select></label>
 						<label>Topics <span>(optional)</span><input maxLength={320} name="tags" placeholder="mutual-aid, celebration, question" /></label>
 					</div>
+					<label className="community-image-upload">Image <span>(optional)</span><input accept={imageUploadAccept} name="image" type="file" /><small>PNG, JPG, WebP, or GIF. Maximum 2 MB.</small></label>
 					<details className="community-update-audience">
 						<summary>Choose audience</summary>
 						<p>Community updates default to Ecosystem-wide. Select affiliations to limit this update to those coalition spaces.</p>
@@ -225,14 +251,15 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 								{post.section !== "update" && <span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>}
 							</div>
 							<div className="content-card-link">{post.section !== "update" && <h2><Link to={`/posts/${post.id}`}>{post.title}</Link></h2>}<MentionText targets={loaderData.mentionTargets} text={post.body} /></div>
+							{post.imageAttachments.length > 0 && <div className="content-image-gallery">{post.imageAttachments.map((image) => <img alt={image.filename} key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div>}
 							{post.affiliations.length > 0 && <div className="content-affiliation-row" aria-label="Affiliations">{post.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}
 							{post.tags.length > 0 && <div className="content-tag-row">{post.tags.map((tag) => <Link key={tag} to={pageUrl(sectionKey, 1, tag, filters.organizationId, filters.affiliationIds, filters.eventTiming)}>#{tag}</Link>)}</div>}
 							{post.section === "update" && <section className="update-comment-preview" aria-label={`Conversation on update from ${post.authorName || "Member"}`}>
 								<div className="update-comment-preview-heading"><strong>Conversation</strong>{post.commentCount > 0 && <Link to={`/posts/${post.id}#conversation`}>View all {post.commentCount}</Link>}</div>
-								{commentPreviews.length > 0 && <div className="update-comment-preview-list">{commentPreviews.map((comment) => <article className="update-comment-preview-item" id={`comment-${comment.id}`} key={comment.id}><IdentityAvatar name={comment.authorName || "Member"} objectKey={comment.authorAvatarObjectKey} /><div><p><strong>{comment.authorName || "Member"}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt)}</time></p><MentionText targets={loaderData.mentionTargets} text={comment.body} /></div></article>)}</div>}
-								<Form className="update-feed-comment-form" method="post"><input name="intent" type="hidden" value="create-feed-comment" /><input name="postId" type="hidden" value={post.id} /><label className="sr-only" htmlFor={`feed-comment-${post.id}`}>Comment on this update</label><MentionTextarea id={`feed-comment-${post.id}`} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={commentMentionTargets} /><button className="button button--secondary button--compact" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Comment</button></Form>
+								{commentPreviews.length > 0 && <div className="update-comment-preview-list">{commentPreviews.map((comment) => <article className="update-comment-preview-item" id={`comment-${comment.id}`} key={comment.id}><IdentityAvatar name={comment.authorName || "Member"} objectKey={comment.authorAvatarObjectKey} /><div><p><strong>{comment.authorName || "Member"}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt)}</time></p><MentionText targets={loaderData.mentionTargets} text={comment.body} />{comment.imageAttachments.map((image) => <img alt={image.filename} className="comment-image" key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div></article>)}</div>}
+								<Form className="update-feed-comment-form" encType="multipart/form-data" method="post"><input name="intent" type="hidden" value="create-feed-comment" /><input name="postId" type="hidden" value={post.id} /><label className="sr-only" htmlFor={`feed-comment-${post.id}`}>Comment on this update</label><MentionTextarea id={`feed-comment-${post.id}`} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={commentMentionTargets} /><label className="comment-image-upload">Add image<input accept={imageUploadAccept} name="image" type="file" /></label><button className="button button--secondary button--compact" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Comment</button></Form>
 							</section>}
-							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span><span><Icon name="heart" size={15} /> {post.supportCount} supports</span>{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link>{post.section === "update" && loaderData.canDeleteUpdates && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="update-delete-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Delete</button></Form>}</footer>
+							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span>{post.section === "update" ? <Form method="post"><input name="intent" type="hidden" value="toggle-support" /><input name="postId" type="hidden" value={post.id} /><button aria-label={`${post.viewerSupported ? "Remove support from" : "Support"} this update`} aria-pressed={post.viewerSupported} className={`support-button${post.viewerSupported ? " support-button--active" : ""}`} disabled={navigation.state === "submitting" && submittingIntent === "toggle-support" && navigation.formData?.get("postId") === post.id} type="submit"><Icon name="heart" size={15} /> {post.viewerSupported ? "Supported" : "Support"} · {post.supportCount}</button></Form> : <span><Icon name="heart" size={15} /> {post.supportCount} supports</span>}{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link>{post.section === "update" && loaderData.canDeleteUpdates && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="update-delete-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Delete</button></Form>}</footer>
 						</article>;
 					})}
 				</section>

@@ -604,6 +604,38 @@ export const userAffiliations = sqliteTable(
 	],
 );
 
+export const affiliationMembershipRequests = sqliteTable(
+	"affiliation_membership_requests",
+	{
+		id: text("id").primaryKey(),
+		affiliationId: text("affiliation_id")
+			.notNull()
+			.references(() => affiliations.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		status: text("status", { enum: ["pending", "approved", "rejected", "cancelled"] })
+			.notNull()
+			.default("pending"),
+		reviewedByUserId: text("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+		reviewedAt: text("reviewed_at"),
+		reviewReason: text("review_reason"),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		check(
+			"affiliation_membership_requests_status_check",
+			sql`${table.status} in ('pending', 'approved', 'rejected', 'cancelled')`,
+		),
+		uniqueIndex("idx_affiliation_membership_requests_pending")
+			.on(table.affiliationId, table.userId)
+			.where(sql`${table.status} = 'pending'`),
+		index("idx_affiliation_membership_requests_user_created").on(table.userId, desc(table.createdAt)),
+		index("idx_affiliation_membership_requests_status_created").on(table.status, table.createdAt),
+	],
+);
+
 export const videoEmbeds = sqliteTable(
 	"video_embeds",
 	{

@@ -1103,6 +1103,11 @@ h3 {
 	margin-inline: auto;
 }
 
+.section-hero--community {
+	width: min(100%, 760px);
+	margin-inline: auto;
+}
+
 .content-filter-panel > p {
 	flex: 0 0 auto;
 	color: var(--ink-500);
@@ -1137,11 +1142,25 @@ h3 {
 .community-update-composer-summary::-webkit-details-marker { display: none; }
 .community-update-composer-summary > span { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .community-update-composer-summary > span > svg { flex: 0 0 auto; color: var(--plum-700); }
-.community-update-composer-summary > span > span { display: grid; gap: 2px; min-width: 0; }
+.community-update-composer-summary > span > span { display: grid; gap: 7px; min-width: 0; }
 .community-update-composer-summary strong { color: var(--ink-900); font-size: 0.82rem; }
-.community-update-composer-summary small { overflow: hidden; color: var(--ink-500); font-size: 0.75rem; font-weight: 520; text-overflow: ellipsis; white-space: nowrap; }
+.community-update-composer-preview {
+	display: block;
+	min-width: min(420px, 54vw);
+	padding: 10px 12px;
+	overflow: hidden;
+	border: 1px solid var(--ink-200);
+	border-radius: 9px;
+	color: var(--ink-500);
+	background: var(--paper);
+	font-size: 0.8rem;
+	font-weight: 520;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 .community-update-expand-icon { flex: 0 0 auto; color: var(--green-700); transition: transform 160ms ease; }
 .community-update-composer[open] .community-update-expand-icon { transform: rotate(45deg); }
+.community-update-composer[open] .community-update-composer-preview { display: none; }
 
 .community-update-composer-form {
 	display: grid;
@@ -1199,6 +1218,35 @@ h3 {
 	background: var(--surface);
 	font: inherit;
 	font-size: 0.8rem;
+}
+
+.community-image-upload,
+.comment-image-upload {
+	display: grid;
+	gap: 6px;
+	color: var(--ink-600);
+	font-size: 0.78rem;
+	font-weight: 720;
+}
+
+.community-image-upload > span,
+.comment-image-upload > span,
+.community-image-upload small,
+.comment-image-upload small {
+	color: var(--ink-500);
+	font-size: 0.75rem;
+	font-weight: 520;
+}
+
+.community-image-upload input,
+.comment-image-upload input {
+	min-height: 42px;
+	padding: 8px;
+	border: 1px solid var(--ink-200);
+	border-radius: 8px;
+	color: var(--ink-700);
+	background: var(--surface);
+	font: inherit;
 }
 
 .community-update-audience {
@@ -1409,6 +1457,25 @@ h3 {
 	-webkit-line-clamp: 3;
 }
 
+.content-image-gallery {
+	display: grid;
+	gap: 10px;
+	margin-top: 16px;
+}
+
+.content-image-gallery img {
+	display: block;
+	width: 100%;
+	max-height: 440px;
+	border-radius: 10px;
+	background: var(--paper);
+	object-fit: contain;
+}
+
+.content-image-gallery--detail {
+	margin: 20px 0 0;
+}
+
 .update-content-card .content-card-link > p {
 	color: var(--ink-700);
 	font-size: 0.84rem;
@@ -1454,10 +1521,11 @@ h3 {
 .update-comment-preview-item strong { font-size: 0.76rem; }
 .update-comment-preview-item time { flex: 0 0 auto; color: var(--ink-500); font-size: 0.7rem; }
 .update-comment-preview-item > div > p:not(:first-child) { color: var(--ink-700); font-size: 0.78rem; line-height: 1.55; }
+.update-comment-preview-item .comment-image { width: min(100%, 260px); max-height: 180px; margin-top: 8px; }
 
 .update-feed-comment-form {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) auto auto;
 	align-items: end;
 	gap: 9px;
 }
@@ -1931,6 +1999,19 @@ h3 {
 	color: var(--ink-700);
 	font-size: 0.8rem;
 	line-height: 1.65;
+}
+
+.comment-image {
+	display: block;
+	width: min(100%, 520px);
+	max-height: 440px;
+	border-radius: 10px;
+	background: var(--paper);
+	object-fit: contain;
+}
+
+.comment-card > .comment-image {
+	margin: 12px 0 0 42px;
 }
 
 .comment-tombstone {
@@ -4026,6 +4107,7 @@ h3 {
 	.directory-filter-actions .button { width: 100%; }
 	.community-update-composer-actions { align-items: stretch; flex-direction: column; }
 	.community-update-composer-actions .button { width: 100%; }
+	.community-update-composer-preview { min-width: 0; width: 100%; }
 
 	.topbar {
 		padding-inline: 14px;
@@ -4474,6 +4556,7 @@ h3 {
 .profile-claim-history h3 { margin: 4px 0 6px; }
 .profile-claim-workflow p { margin: 0; color: var(--ink-500); font-size: .84rem; line-height: 1.55; }
 .profile-claim-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, .55fr) auto; gap: 10px; align-items: end; }
+.profile-claim-form--single { grid-template-columns: minmax(0, 1fr) auto; }
 .profile-claim-form label { display: grid; gap: 7px; font-size: .78rem; font-weight: 700; }
 .profile-claim-history { margin-top: 24px; }
 .profile-claim-history article,

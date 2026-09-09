@@ -1,3 +1,5 @@
+import type { ContentImageAttachment } from "./media";
+
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const extensions = {
 	"image/png": "png",
@@ -47,7 +49,38 @@ export async function uploadIdentityImage(
 	return key;
 }
 
+export async function uploadContentImage(
+	env: Env,
+	file: FormDataEntryValue | null,
+	uploaderId: string,
+): Promise<ContentImageAttachment | null> {
+	if (!(file instanceof File) || file.size === 0) return null;
+	if (file.size > MAX_IMAGE_BYTES) throw new ImageUploadError("too-large");
+	if (!(file.type in extensions)) throw new ImageUploadError("unsupported");
+	const type = file.type as keyof typeof extensions;
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	if (!matchesSignature(bytes, type)) throw new ImageUploadError("invalid");
+	const id = crypto.randomUUID();
+	const objectKey = `content-images/${uploaderId}-${id}.${extensions[type]}`;
+	await env.ASSETS.put(objectKey, bytes, {
+		httpMetadata: { contentType: type, cacheControl: "private, max-age=3600" },
+		customMetadata: { uploaderId, kind: "content-image" },
+	});
+	return {
+		id,
+		objectKey,
+		filename: file.name.replace(/^.*[\\/]/, "").slice(0, 240) || `image.${extensions[type]}`,
+		contentType: type,
+		byteSize: file.size,
+	};
+}
+
 export async function deleteIdentityImage(env: Env, objectKey: string | null) {
 	if (!objectKey || (!objectKey.startsWith("profile-photos/") && !objectKey.startsWith("org-logos/"))) return;
+	await env.ASSETS.delete(objectKey);
+}
+
+export async function deleteContentImage(env: Env, objectKey: string | null) {
+	if (!objectKey?.startsWith("content-images/")) return;
 	await env.ASSETS.delete(objectKey);
 }

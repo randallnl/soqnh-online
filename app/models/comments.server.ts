@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from "../lib/auth.server";
+import type { ContentImageAttachment } from "../lib/media";
 import { getPostById } from "./posts.server";
 import { getMentionRecipient } from "./interactions.server";
 
@@ -15,6 +16,7 @@ export type CommentRecord = {
 	updatedAt: string;
 	mentionedUserId: string | null;
 	mentionedUserName: string | null;
+	imageAttachments: ContentImageAttachment[];
 	canEdit: boolean;
 	canDelete: boolean;
 	replies: CommentRecord[];
@@ -28,9 +30,11 @@ export type FeedCommentPreview = {
 	authorAvatarObjectKey: string | null;
 	body: string;
 	createdAt: string;
+	imageAttachments: ContentImageAttachment[];
 };
 
-type CommentRow = Omit<CommentRecord, "canEdit" | "canDelete" | "replies"> & {
+type CommentRow = Omit<CommentRecord, "imageAttachments" | "canEdit" | "canDelete" | "replies"> & {
+	attachmentJson: string;
 	canEdit: number;
 	canDelete: number;
 };
@@ -59,6 +63,11 @@ export async function listPostComments(env: Env, viewer: AuthenticatedUser, post
 		        c.created_at AS createdAt, c.updated_at AS updatedAt,
 		        CASE WHEN c.status = 'published' THEN (SELECT mentioned.id FROM post_mentions JOIN users AS mentioned ON mentioned.id = post_mentions.mentioned_user_id WHERE post_mentions.comment_id = c.id AND (?3 = 1 OR mentioned.id = ?1 OR mentioned.profile_visibility != 'hidden') LIMIT 1) END AS mentionedUserId,
 		        CASE WHEN c.status = 'published' THEN (SELECT coalesce(mentioned.name, 'Member') FROM post_mentions JOIN users AS mentioned ON mentioned.id = post_mentions.mentioned_user_id WHERE post_mentions.comment_id = c.id AND (?3 = 1 OR mentioned.id = ?1 OR mentioned.profile_visibility != 'hidden') LIMIT 1) END AS mentionedUserName,
+		        coalesce((SELECT json_group_array(json_object(
+		          'id', attachment.id, 'objectKey', attachment.object_key,
+		          'filename', attachment.filename, 'contentType', attachment.content_type,
+		          'byteSize', attachment.byte_size
+		        )) FROM attachments AS attachment WHERE attachment.comment_id = c.id), '[]') AS attachmentJson,
 		        CASE WHEN c.status = 'published' AND c.author_user_id = ?1 THEN 1 ELSE 0 END AS canEdit,
 		        CASE WHEN c.status = 'published' AND (
 		          c.author_user_id = ?1 OR ?3 = 1 OR EXISTS (
@@ -82,6 +91,7 @@ export async function listPostComments(env: Env, viewer: AuthenticatedUser, post
 	));
 	const comments = visibleRows.map<CommentRecord>((row) => ({
 		...row,
+		imageAttachments: row.status === "published" ? JSON.parse(row.attachmentJson) as ContentImageAttachment[] : [],
 		canEdit: row.canEdit === 1,
 		canDelete: row.canDelete === 1,
 		replies: [],
@@ -105,6 +115,11 @@ export async function listFeedCommentPreviews(env: Env, postIds: string[], limit
 		   SELECT c.id, c.post_id AS postId, c.author_user_id AS authorUserId,
 		          u.name AS authorName, u.avatar_object_key AS authorAvatarObjectKey,
 		          c.body, c.created_at AS createdAt,
+		          coalesce((SELECT json_group_array(json_object(
+		            'id', attachment.id, 'objectKey', attachment.object_key,
+		            'filename', attachment.filename, 'contentType', attachment.content_type,
+		            'byteSize', attachment.byte_size
+		          )) FROM attachments AS attachment WHERE attachment.comment_id = c.id), '[]') AS attachmentJson,
 		          row_number() OVER (
 		            PARTITION BY c.post_id ORDER BY c.created_at DESC, c.id DESC
 		          ) AS commentRank
@@ -112,18 +127,18 @@ export async function listFeedCommentPreviews(env: Env, postIds: string[], limit
 		   JOIN users AS u ON u.id = c.author_user_id
 		   WHERE c.status = 'published' AND c.post_id IN (${placeholders})
 		 )
-		 SELECT id, postId, authorUserId, authorName, authorAvatarObjectKey, body, createdAt
+		 SELECT id, postId, authorUserId, authorName, authorAvatarObjectKey, body, createdAt, attachmentJson
 		 FROM ranked_comments
 		 WHERE commentRank <= ?1
 		 ORDER BY postId, createdAt, id`,
-	).bind(Math.max(1, Math.min(limitPerPost, 5)), ...uniquePostIds).all<FeedCommentPreview>();
-	return result.results;
+	).bind(Math.max(1, Math.min(limitPerPost, 5)), ...uniquePostIds).all<Omit<FeedCommentPreview, "imageAttachments"> & { attachmentJson: string }>();
+	return result.results.map((row) => ({ ...row, imageAttachments: JSON.parse(row.attachmentJson) as ContentImageAttachment[] }));
 }
 
 export async function createComment(
 	env: Env,
 	actor: AuthenticatedUser,
-	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null; mentionUserIds?: string[] },
+	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null; mentionUserIds?: string[]; attachment?: ContentImageAttachment | null },
 ) {
 	const post = await requirePublishedPost(env, actor, input.postId);
 	let parentAuthorUserId: string | null = null;
@@ -151,6 +166,11 @@ export async function createComment(
 			 (id, post_id, parent_comment_id, author_user_id, body, status, created_at, updated_at)
 			 VALUES (?1, ?2, ?3, ?4, ?5, 'published', ?6, ?6)`,
 		).bind(id, input.postId, input.parentCommentId, actor.id, input.body, now),
+		...(input.attachment ? [env.DB.prepare(
+			`INSERT INTO attachments
+			 (id, post_id, comment_id, uploaded_by_user_id, object_key, filename, content_type, byte_size, created_at)
+			 VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+		).bind(input.attachment.id, id, actor.id, input.attachment.objectKey, input.attachment.filename, input.attachment.contentType, input.attachment.byteSize, now)] : []),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
@@ -222,6 +242,9 @@ export async function archiveComment(
 	if (removable.authorUserId !== actor.id && actor.siteRole !== "site_admin" && canModerateOrganization === null) {
 		throw new CommentMutationError("forbidden");
 	}
+	const attachmentResult = await env.DB.prepare(
+		"SELECT object_key AS objectKey FROM attachments WHERE comment_id = ?1",
+	).bind(input.commentId).all<{ objectKey: string }>();
 	const now = new Date().toISOString();
 	await env.DB.batch([
 		env.DB.prepare(
@@ -234,4 +257,5 @@ export async function archiveComment(
 			 VALUES (?1, ?2, 'comment.archived', 'comment', ?3, ?4, ?5)`,
 		).bind(crypto.randomUUID(), actor.id, input.commentId, JSON.stringify({ postId: input.postId }), now),
 	]);
+	return attachmentResult.results.map((attachment) => attachment.objectKey);
 }

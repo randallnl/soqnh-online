@@ -108,12 +108,7 @@ export async function getVisibleMemberProfile(env: Env, viewer: AuthenticatedUse
 }
 
 export async function getOwnProfileEditorData(env: Env, actor: AuthenticatedUser) {
-	const [profile, affiliations, direct] = await Promise.all([
-		getVisibleMemberProfile(env, actor, actor.id),
-		env.DB.prepare("SELECT id, name, slug FROM affiliations ORDER BY name COLLATE NOCASE").all<{ id: string; name: string; slug: string }>(),
-		env.DB.prepare("SELECT affiliation_id AS affiliationId FROM user_affiliations WHERE user_id = ?1").bind(actor.id).all<{ affiliationId: string }>(),
-	]);
-	return { profile, affiliations: affiliations.results, directAffiliationIds: direct.results.map((row) => row.affiliationId) };
+	return { profile: await getVisibleMemberProfile(env, actor, actor.id) };
 }
 
 export async function isOwnProfileComplete(env: Env, actor: AuthenticatedUser) {
@@ -134,14 +129,9 @@ export async function updateOwnProfile(
 		location: string | null;
 		websiteUrl: string | null;
 		profileVisibility: "members" | "hidden";
-		affiliationIds: string[];
 		avatarObjectKey: string | null;
 	},
 ) {
-	const validAffiliations = input.affiliationIds.length === 0 ? [] : (await env.DB.prepare(
-		`SELECT id FROM affiliations WHERE id IN (${input.affiliationIds.map(() => "?").join(",")})`,
-	).bind(...input.affiliationIds).all<{ id: string }>()).results.map((row) => row.id);
-	if (validAffiliations.length !== new Set(input.affiliationIds).size) throw new Error("One or more affiliations are unavailable.");
 	const now = new Date().toISOString();
 	await env.DB.batch([
 		env.DB.prepare(
@@ -151,10 +141,6 @@ export async function updateOwnProfile(
 			 updated_at = ?9 WHERE id = ?10 AND status = 'active'`,
 		).bind(input.name, input.profileTitle, input.pronouns, input.bio, input.location,
 			input.websiteUrl, input.profileVisibility, input.avatarObjectKey, now, actor.id),
-		env.DB.prepare("DELETE FROM user_affiliations WHERE user_id = ?1").bind(actor.id),
-		...validAffiliations.map((affiliationId) => env.DB.prepare(
-			"INSERT INTO user_affiliations (user_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)",
-		).bind(actor.id, affiliationId, now)),
 		env.DB.prepare(
 			`INSERT INTO audit_log (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'member.profile_self_updated', 'user', ?2, ?3, ?4)`,

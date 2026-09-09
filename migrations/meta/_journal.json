@@ -64,6 +64,13 @@
       "when": 1788968454000,
       "tag": "0008_scraped_events_ecosystem_wide",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788972000000,
+      "tag": "0009_affiliation_membership_requests",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Route } from "./+types/admin-affiliations";
 import { Icon } from "~/components/icon";
 import { slugifyAffiliationName } from "~/lib/affiliations";
+import { reviewAffiliationRequestSchema } from "~/lib/affiliation-requests";
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import {
@@ -16,6 +17,7 @@ import {
 	removeUserAffiliation,
 	updateAffiliation,
 } from "~/models/affiliations.server";
+import { AffiliationRequestMutationError, listPendingAffiliationRequests, reviewAffiliationRequest } from "~/models/affiliation-requests.server";
 
 const identifier = z.string().trim().min(1).max(100);
 const affiliationFields = z.object({
@@ -37,7 +39,11 @@ export function meta(_args: Route.MetaArgs) {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	await requireSiteAdmin(request, context.cloudflare.env);
-	return getAffiliationAdministrationData(context.cloudflare.env);
+	const [administration, pendingRequests] = await Promise.all([
+		getAffiliationAdministrationData(context.cloudflare.env),
+		listPendingAffiliationRequests(context.cloudflare.env),
+	]);
+	return { ...administration, pendingRequests };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -46,6 +52,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const raw = Object.fromEntries(await request.formData());
 	if ((raw.intent === "create" || raw.intent === "update") && !raw.slug && typeof raw.name === "string") {
 		raw.slug = slugifyAffiliationName(raw.name);
+	}
+	if (raw.intent === "review-affiliation-request") {
+		const review = reviewAffiliationRequestSchema.safeParse(raw);
+		if (!review.success) return { ok: false as const, error: review.error.issues[0]?.message ?? "Check the affiliation request decision." };
+		try {
+			await reviewAffiliationRequest(context.cloudflare.env, admin, { requestId: review.data.requestId, decision: review.data.decision, reason: review.data.reason });
+			return { ok: true as const, message: review.data.decision === "approve" ? "Affiliation request approved." : "Affiliation request rejected." };
+		} catch (error) {
+			if (error instanceof AffiliationRequestMutationError) {
+				const messages = { "affiliation-unavailable": "That affiliation is no longer available.", "already-member": "That member already has affiliation access.", "already-pending": "That request is already pending.", "request-unavailable": "That affiliation request is no longer available.", "already-reviewed": "Another administrator already reviewed that request.", forbidden: "Only site administrators can review affiliation requests.", "self-review": "You cannot approve your own affiliation request.", "member-unavailable": "The member or affiliation is no longer active." };
+				return { ok: false as const, error: messages[error.reason] };
+			}
+			console.error(JSON.stringify({ message: "affiliation request review failed", actorUserId: admin.id, error: error instanceof Error ? error.message : String(error) }));
+			return { ok: false as const, error: "The affiliation request could not be reviewed." };
+		}
 	}
 	const result = actionSchema.safeParse(raw);
 	if (!result.success) {
@@ -103,6 +124,11 @@ export default function AdminAffiliations({ loaderData }: Route.ComponentProps) 
 				<Link className="button button--secondary heading-action" to="/admin/organizations"><Icon name="building" size={17} /> Organizations</Link>
 			</section>
 			{actionData && <p className={`admin-notice form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}
+
+			<section className="panel organization-claim-review-panel" id="affiliation-requests">
+				<div className="panel-heading"><div><p className="eyebrow">Access moderation</p><h2>Affiliation requests</h2></div><span>{loaderData.pendingRequests.length}</span></div>
+				{loaderData.pendingRequests.length === 0 ? <p className="muted-empty">No affiliation requests are awaiting review.</p> : <div className="organization-claim-review-list">{loaderData.pendingRequests.map((request) => <article key={request.id}><div><strong>{request.userName || request.userEmail}</strong><p>{request.userName ? `${request.userEmail} · ` : ""}Requests access to {request.affiliationName}</p></div><div className="organization-claim-actions"><Form method="post"><input name="intent" type="hidden" value="review-affiliation-request" /><input name="requestId" type="hidden" value={request.id} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary button--compact" disabled={submitting} type="submit">Approve</button></Form><Form className="organization-claim-reject-form" method="post"><input name="intent" type="hidden" value="review-affiliation-request" /><input name="requestId" type="hidden" value={request.id} /><input name="decision" type="hidden" value="reject" /><input aria-label={`Reason for rejecting ${request.userName || request.userEmail}`} maxLength={500} name="reason" placeholder="Reason for rejection" required /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Reject</button></Form></div></article>)}</div>}
+			</section>
 
 			<section className="panel organization-create-panel">
 				<div className="panel-heading"><div><p className="eyebrow">New network</p><h2>Add an affiliation</h2></div></div>

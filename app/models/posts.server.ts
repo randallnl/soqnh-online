@@ -5,6 +5,7 @@ import type {
 	EventTiming,
 	PostVisibility,
 } from "../lib/content";
+import type { ContentImageAttachment } from "../lib/media";
 
 const PAGE_SIZE = 10;
 
@@ -54,6 +55,7 @@ export type PostRecord = {
 	viewerSupported: boolean;
 	tags: string[];
 	affiliations: PostAffiliationOption[];
+	imageAttachments: ContentImageAttachment[];
 	canEdit: boolean;
 	canModerateEvent: boolean;
 	eventStartsAt: string | null;
@@ -77,9 +79,10 @@ export type EventDetailsInput = {
 	imageUrl: string | null;
 };
 
-type PostRow = Omit<PostRecord, "tags" | "affiliations" | "canEdit" | "canModerateEvent" | "viewerSupported"> & {
+type PostRow = Omit<PostRecord, "tags" | "affiliations" | "imageAttachments" | "canEdit" | "canModerateEvent" | "viewerSupported"> & {
 	tagList: string | null;
 	affiliationJson: string;
+	attachmentJson: string;
 	canEdit: number;
 	canModerateEvent: number;
 	viewerSupported: number;
@@ -107,6 +110,7 @@ function mapPost(row: PostRow): PostRecord {
 		...row,
 		tags: row.tagList ? row.tagList.split(",") : [],
 		affiliations,
+		imageAttachments: JSON.parse(row.attachmentJson) as ContentImageAttachment[],
 		canEdit: row.canEdit === 1,
 		canModerateEvent: row.canModerateEvent === 1,
 		viewerSupported: row.viewerSupported === 1,
@@ -327,6 +331,11 @@ export async function listSectionPosts(
 			            SELECT 1 FROM viewer_affiliations
 			            WHERE viewer_affiliations.affiliation_id = pa.affiliation_id
 			          ))), '[]') AS affiliationJson,
+			        coalesce((SELECT json_group_array(json_object(
+			          'id', attachment.id, 'objectKey', attachment.object_key,
+			          'filename', attachment.filename, 'contentType', attachment.content_type,
+			          'byteSize', attachment.byte_size
+			        )) FROM attachments AS attachment WHERE attachment.post_id = p.id), '[]') AS attachmentJson,
 			        CASE WHEN ?5 = 1 OR EXISTS (
 			          SELECT 1 FROM organization_memberships
 			          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
@@ -416,13 +425,18 @@ export async function getPostById(env: Env, viewer: AuthenticatedUser, postId: s
 		        (SELECT count(*) FROM post_reactions WHERE post_id = p.id AND reaction = 'support') AS supportCount,
 			        EXISTS (SELECT 1 FROM post_reactions WHERE post_id = p.id AND user_id = ?1 AND reaction = 'support') AS viewerSupported,
 			        (SELECT group_concat(tag, ',') FROM (SELECT tag FROM post_tags WHERE post_id = p.id ORDER BY tag)) AS tagList,
-			        coalesce((SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'slug', a.slug))
+		        coalesce((SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'slug', a.slug))
 			          FROM post_affiliations AS pa
 			          JOIN affiliations AS a ON a.id = pa.affiliation_id
 			          WHERE pa.post_id = p.id AND (?3 = 1 OR EXISTS (
 			            SELECT 1 FROM viewer_affiliations
 			            WHERE viewer_affiliations.affiliation_id = pa.affiliation_id
-			          ))), '[]') AS affiliationJson,
+		          ))), '[]') AS affiliationJson,
+		        coalesce((SELECT json_group_array(json_object(
+		          'id', attachment.id, 'objectKey', attachment.object_key,
+		          'filename', attachment.filename, 'contentType', attachment.content_type,
+		          'byteSize', attachment.byte_size
+		        )) FROM attachments AS attachment WHERE attachment.post_id = p.id), '[]') AS attachmentJson,
 		        CASE WHEN ?3 = 1 OR EXISTS (
 		          SELECT 1 FROM organization_memberships
 		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
@@ -478,6 +492,7 @@ export async function createPost(
 		tags: string[];
 		affiliationIds?: string[];
 		event?: EventDetailsInput;
+		attachment?: ContentImageAttachment | null;
 	},
 ) {
 	await requirePostOrganization(env, actor, input.organizationId);
@@ -507,6 +522,11 @@ export async function createPost(
 		...affiliationIds.map((affiliationId) => env.DB.prepare(
 			"INSERT INTO post_affiliations (post_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)",
 		).bind(id, affiliationId, now)),
+		...(input.attachment ? [env.DB.prepare(
+			`INSERT INTO attachments
+			 (id, post_id, comment_id, uploaded_by_user_id, object_key, filename, content_type, byte_size, created_at)
+			 VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8)`,
+		).bind(input.attachment.id, id, actor.id, input.attachment.objectKey, input.attachment.filename, input.attachment.contentType, input.attachment.byteSize, now)] : []),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
@@ -534,6 +554,7 @@ export async function updatePost(
 		tags: string[];
 		affiliationIds?: string[];
 		event?: EventDetailsInput;
+		attachment?: ContentImageAttachment | null;
 	},
 ) {
 	const existing = await getPostById(env, actor, input.postId);
@@ -567,6 +588,11 @@ export async function updatePost(
 		...affiliationIds.map((affiliationId) => env.DB.prepare(
 			"INSERT INTO post_affiliations (post_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)",
 		).bind(input.postId, affiliationId, now)),
+		...(input.attachment ? [env.DB.prepare(
+			`INSERT INTO attachments
+			 (id, post_id, comment_id, uploaded_by_user_id, object_key, filename, content_type, byte_size, created_at)
+			 VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8)`,
+		).bind(input.attachment.id, input.postId, actor.id, input.attachment.objectKey, input.attachment.filename, input.attachment.contentType, input.attachment.byteSize, now)] : []),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
@@ -604,6 +630,12 @@ export async function deleteCommunityUpdate(env: Env, actor: AuthenticatedUser, 
 	const existing = await getPostById(env, actor, postId);
 	if (!existing) throw new PostMutationError("not-found");
 	if (existing.section !== "update") throw new PostMutationError("forbidden");
+	const attachmentResult = await env.DB.prepare(
+		`SELECT attachment.object_key AS objectKey
+		 FROM attachments AS attachment
+		 LEFT JOIN comments AS comment ON comment.id = attachment.comment_id
+		 WHERE attachment.post_id = ?1 OR comment.post_id = ?1`,
+	).bind(postId).all<{ objectKey: string }>();
 	const now = new Date().toISOString();
 	const results = await env.DB.batch([
 		env.DB.prepare(
@@ -619,4 +651,5 @@ export async function deleteCommunityUpdate(env: Env, actor: AuthenticatedUser, 
 		env.DB.prepare("DELETE FROM posts WHERE id = ?1 AND section = 'update'").bind(postId),
 	]);
 	if (!results[1]?.meta.changes) throw new PostMutationError("not-found");
+	return attachmentResult.results.map((attachment) => attachment.objectKey);
 }
