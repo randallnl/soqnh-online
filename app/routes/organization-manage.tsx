@@ -8,6 +8,7 @@ import { OrganizationProfileFields } from "~/components/organization-profile-fie
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
+import { serializeOrganizationCategories } from "~/lib/organization-categories";
 import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import { organizationRoles } from "~/lib/organizations";
 import { listReviewableOrganizationClaims, OrganizationClaimMutationError, reviewOrganizationClaim } from "~/models/organization-claims.server";
@@ -65,7 +66,7 @@ const actionSchema = z.discriminatedUnion("intent", [
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
 
 export function meta({ data }: Route.MetaArgs) {
-	return [{ title: `Manage ${data?.organization.name ?? "organization"} · State of Queer NH` }];
+	return [{ title: `Manage ${data?.organization.name ?? "organization"} · NH Connect` }];
 }
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
@@ -110,6 +111,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			return { ok: false as const, error: "The membership claim could not be reviewed." };
 		}
 	}
+	if (raw.intent === "update-profile") {
+		raw.category = serializeOrganizationCategories(formData.getAll("category"));
+	}
 	const result = actionSchema.safeParse(raw);
 	if (!result.success) {
 		return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the organization details" };
@@ -134,11 +138,11 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			}
 			if (directoryOptIn && !wasParticipating) {
 				await requestDirectoryParticipation(context.cloudflare.env, user, result.data.organizationId);
-				return { ok: true as const, message: "Organization profile updated and the State of Queer Digital opt-in request was submitted for review." };
+				return { ok: true as const, message: "Organization profile updated and the NH Connect public directory opt-in request was submitted for review." };
 			}
 			if (!directoryOptIn && wasParticipating) {
 				await withdrawDirectoryParticipation(context.cloudflare.env, user, result.data.organizationId);
-				return { ok: true as const, message: managed.organization.directoryStatus === "pending" ? "Organization profile updated and the opt-in request was canceled." : "Organization profile updated and removed from State of Queer Digital." };
+				return { ok: true as const, message: managed.organization.directoryStatus === "pending" ? "Organization profile updated and the opt-in request was canceled." : "Organization profile updated and removed from the NH Connect public directory." };
 			}
 			return { ok: true as const, message: "Organization profile updated." };
 		}
@@ -166,7 +170,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				"membership-not-found": "That membership has already been removed.",
 				"forbidden": "You no longer have permission to manage this organization.",
 				"self-management": "Organization administrators cannot remove or demote their own access. Ask another administrator for help.",
-				"directory-transition": "The State of Queer Digital participation status changed before this request could be completed. Refresh and try again.",
+				"directory-transition": "The NH Connect public directory status changed before this request could be completed. Refresh and try again.",
 			};
 			return { ok: false as const, error: messages[error.reason] };
 		}
@@ -205,11 +209,11 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 								disabled={submitting}
 								name="directoryOptIn"
 								onChange={(event) => {
-									if (!event.currentTarget.checked && directoryParticipating && !window.confirm("Opt this organization out of State of Queer Digital and remove it from the public directory?")) event.currentTarget.checked = true;
+									if (!event.currentTarget.checked && directoryParticipating && !window.confirm("Remove this organization from the NH Connect public directory?")) event.currentTarget.checked = true;
 								}}
 								type="checkbox"
 							/>
-							<span><strong>Opt in to State of Queer Digital</strong><small id="manage-directory-opt-in-description">All signed-in members can already view this organization profile. By checking this box, you confirm that its profile information may also be added to a public directory after administrator review; member and affiliation details remain private.</small></span>
+							<span><strong>Opt in to the NH Connect public directory</strong><small id="manage-directory-opt-in-description">All signed-in members can already view this organization profile. By checking this box, you confirm that its profile information may also be made public after administrator review; member and affiliation details remain private.</small></span>
 						</label>
 						<p id="manage-directory-opt-in-status">{organization.directoryStatus === "pending" ? "Pending administrator review. Uncheck the box and save to cancel this request." : organization.directoryStatus === "published" ? "Approved and eligible to appear in the public directory. Uncheck the box and save to opt out." : organization.directoryStatus === "rejected" ? `Changes requested${organization.directoryReviewNote ? `: ${organization.directoryReviewNote}` : "."} Check the box and save to resubmit.` : "Not currently opted in. Check the box and save to request review."}</p>
 					</div>

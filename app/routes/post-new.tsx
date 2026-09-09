@@ -32,7 +32,7 @@ function messageFor(error: PostMutationError) {
 		"forbidden": "You do not have permission to create this post.",
 		"organization-required": "Choose an organization for this post and visibility setting.",
 		"organization-unavailable": "You need a contributor or organization-admin role to post for that organization.",
-		"affiliation-required": "Choose at least one affiliation, or opt the posting organization in to State of Queer Digital for statewide sharing.",
+		"affiliation-required": "Choose at least one affiliation, or opt the posting organization in to the NH Connect public directory for statewide sharing.",
 		"affiliation-unavailable": "You can only tag affiliations you belong to.",
 		"event-details-required": "Add the event date and time before submitting it.",
 	}[error.reason];
@@ -102,7 +102,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export function meta({ data }: Route.MetaArgs) {
-	return [{ title: `New ${data?.definition.title ?? "post"} · State of Queer NH` }];
+	return [{ title: `New ${data?.definition.title ?? "post"} · NH Connect` }];
 }
 
 export default function PostNew({ loaderData }: Route.ComponentProps) {

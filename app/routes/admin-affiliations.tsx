@@ -34,7 +34,7 @@ const actionSchema = z.discriminatedUnion("intent", [
 ]);
 
 export function meta(_args: Route.MetaArgs) {
-	return [{ title: "Affiliation administration · State of Queer NH" }];
+	return [{ title: "Affiliation administration · NH Connect" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

@@ -32,7 +32,7 @@ function updateErrorMessage(error: PostMutationError) {
 		forbidden: "You do not have permission to post this update.",
 		"organization-required": "Choose an organization for this update.",
 		"organization-unavailable": "You need a contributor or organization-admin role to post for that organization.",
-		"affiliation-required": "Choose at least one affiliation, or post for an organization participating in State of Queer Digital.",
+		"affiliation-required": "Choose at least one affiliation, or post for an organization participating in the NH Connect public directory.",
 		"affiliation-unavailable": "You can only tag affiliations you belong to.",
 		"event-details-required": "Event details are required.",
 	}[error.reason];
@@ -159,7 +159,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 }
 
 export function meta({ data }: Route.MetaArgs) {
-	return [{ title: `${data?.section.title ?? "Workspace"} · State of Queer NH` }];
+	return [{ title: `${data?.section.title ?? "Workspace"} · NH Connect` }];
 }
 
 function formatDate(value: string) {
@@ -207,7 +207,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 					<label className="sr-only" htmlFor="community-update-body">Community update</label>
 					<MentionTextarea id="community-update-body" maxLength={12000} minLength={2} placeholder="Share news, ask a question, celebrate a win, or let the community know what’s happening… Type @ to tag." required rows={4} targets={loaderData.mentionTargets} />
 					<div className="community-update-options">
-						<label>Post as<select defaultValue={loaderData.authoringOrganizations[0]?.id ?? ""} name="organizationId"><option value="">Yourself · community-wide</option>{loaderData.authoringOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · State of Queer Digital" : ""}</option>)}</select></label>
+						<label>Post as<select defaultValue={loaderData.authoringOrganizations[0]?.id ?? ""} name="organizationId"><option value="">Yourself · community-wide</option>{loaderData.authoringOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · Public directory" : ""}</option>)}</select></label>
 						<label>Topics <span>(optional)</span><input maxLength={320} name="tags" placeholder="mutual-aid, celebration, question" /></label>
 					</div>
 					<label className="community-image-upload">Image <span>(optional)</span><input accept={imageUploadAccept} name="image" type="file" /><small>PNG, JPG, WebP, or GIF. Maximum 10 MB.</small></label>

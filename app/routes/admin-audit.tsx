@@ -7,7 +7,7 @@ import { requireSiteAdmin } from "~/lib/auth.server";
 import { listAuditEvents } from "~/models/admin.server";
 
 export function meta() {
-	return [{ title: "Audit log · State of Queer NH" }];
+	return [{ title: "Audit log · NH Connect" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

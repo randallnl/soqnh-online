@@ -109,7 +109,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	if (!loaderData.profileComplete) {
 		return <div className="onboarding-frame">
 			<header className="onboarding-header">
-				<span className="brand-lockup brand-lockup--dark"><img alt="" className="brand-logo" src="/brand/queerlective-round.png" /><span><strong>State of Queer</strong><small>New Hampshire</small></span></span>
+				<span className="brand-lockup brand-lockup--dark"><img alt="" className="brand-logo" src="/brand/queerlective-round.png" /><span><strong>NH Connect</strong><small>Community Network</small></span></span>
 				<Form action="/logout" method="post"><button className="button button--secondary button--compact" type="submit">Sign out</button></Form>
 			</header>
 			<main className="onboarding-main" id="main-content"><Outlet /></main>
@@ -134,8 +134,8 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 					<Link className="brand-lockup" to="/" onClick={() => setMenuOpen(false)}>
 						<img alt="" className="brand-logo" src="/brand/queerlective-round.png" />
 						<span>
-							<strong>State of Queer</strong>
-							<small>New Hampshire</small>
+							<strong>NH Connect</strong>
+							<small>Community Network</small>
 						</span>
 					</Link>
 					<button

@@ -6,7 +6,7 @@ import { requireSiteAdmin } from "~/lib/auth.server";
 import { getAdminOperationsData } from "~/models/admin.server";
 
 export function meta() {
-	return [{ title: "Administration · State of Queer NH" }];
+	return [{ title: "Administration · NH Connect" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

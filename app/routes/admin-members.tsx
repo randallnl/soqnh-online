@@ -31,10 +31,10 @@ const statusLabels = {
 
 export function meta(_args: Route.MetaArgs) {
 	return [
-		{ title: "Member access · State of Queer NH" },
+		{ title: "Member access · NH Connect" },
 		{
 			name: "description",
-			content: "Manage member access to the private State of Queer NH workspace.",
+			content: "Manage member access to the private NH Connect workspace.",
 		},
 	];
 }

@@ -3419,6 +3419,65 @@ h3 {
 	line-height: 1.2;
 }
 
+.organization-category-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+
+.organization-card .organization-category-row {
+	margin-top: 14px;
+}
+
+.organization-category-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 10px;
+	border: 1px solid var(--category-border);
+	border-radius: 999px;
+	color: var(--category-color);
+	background: var(--category-background);
+	font-size: 0.75rem;
+	font-weight: 720;
+	line-height: 1.2;
+}
+
+.organization-category-tone--plum {
+	--category-color: var(--plum-700);
+	--category-border: var(--plum-200);
+	--category-background: var(--plum-50);
+}
+
+.organization-category-tone--rose {
+	--category-color: #8e3f5d;
+	--category-border: var(--rose-100);
+	--category-background: #fff0f6;
+}
+
+.organization-category-tone--blue {
+	--category-color: var(--blue-700);
+	--category-border: var(--blue-100);
+	--category-background: var(--blue-50);
+}
+
+.organization-category-tone--coral {
+	--category-color: var(--coral-700);
+	--category-border: var(--coral-100);
+	--category-background: var(--danger-bg);
+}
+
+.organization-category-tone--gold {
+	--category-color: #8a470e;
+	--category-border: var(--gold-100);
+	--category-background: var(--gold-50);
+}
+
+.organization-category-tone--green {
+	--category-color: var(--green-700);
+	--category-border: var(--green-100);
+	--category-background: var(--green-50);
+}
+
 .organization-card footer {
 	display: flex;
 	align-items: center;
@@ -3656,6 +3715,81 @@ h3 {
 
 .wide-field {
 	grid-column: 1 / -1;
+}
+
+.organization-category-picker {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.organization-category-picker legend {
+	padding: 0;
+	color: var(--ink-700);
+	font-size: 0.75rem;
+	font-weight: 720;
+}
+
+.organization-category-picker > p {
+	margin: 5px 0 10px;
+	color: var(--ink-500);
+	font-size: 0.75rem;
+}
+
+.organization-category-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.organization-create-form .organization-category-option,
+.organization-edit-form .organization-category-option {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0;
+	cursor: pointer;
+}
+
+.organization-create-form .organization-category-option input,
+.organization-edit-form .organization-category-option input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	min-height: 0;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.organization-category-option span {
+	display: inline-flex;
+	align-items: center;
+	min-height: 34px;
+	padding: 6px 11px;
+	border: 1px solid var(--ink-200);
+	border-radius: 999px;
+	color: var(--ink-600);
+	background: var(--surface);
+	font-size: 0.75rem;
+	font-weight: 720;
+	line-height: 1.2;
+	transition: border-color 140ms ease, background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.organization-category-option input:checked + span {
+	border-color: var(--category-border);
+	color: var(--category-color);
+	background: var(--category-background);
+	box-shadow: inset 0 0 0 1px var(--category-border);
+}
+
+.organization-category-option input:focus-visible + span {
+	outline: 3px solid color-mix(in srgb, var(--category-color) 24%, transparent);
+	outline-offset: 2px;
 }
 
 .organization-create-form .button,

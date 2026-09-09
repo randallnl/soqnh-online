@@ -6,8 +6,8 @@ import { requireAuthenticatedUser } from "~/lib/auth.server";
 
 export function meta() {
 	return [
-		{ title: "How to use this site · State of Queer NH" },
-		{ name: "description", content: "A practical guide to participating in the State of Queer NH member network." },
+		{ title: "How to use this site · NH Connect" },
+		{ name: "description", content: "A practical guide to participating in the NH Connect member network." },
 	];
 }
 
@@ -26,7 +26,7 @@ const quickStart = [
 export default function HowToUse({ loaderData }: Route.ComponentProps) {
 	return <div className="guide-page">
 		<section className="page-heading guide-heading">
-			<div><p className="eyebrow">Member guide</p><h1>How to use this site</h1><p>State of Queer NH is a private, invitation-only workspace for sharing community updates, coordinating projects, finding organizations and people, and keeping events visible across the state.</p></div>
+			<div><p className="eyebrow">Member guide</p><h1>How to use this site</h1><p>NH Connect is a private, invitation-only workspace for sharing community updates, coordinating projects, finding organizations and people, and keeping events visible across the state.</p></div>
 		</section>
 
 		<div className="guide-layout">
@@ -74,7 +74,7 @@ export default function HowToUse({ loaderData }: Route.ComponentProps) {
 					<div className="guide-section-heading"><span>04</span><div><p className="eyebrow">Organizations</p><h2>Find groups and represent your work</h2></div></div>
 					<p>Every signed-in member can browse the organization directory. From your profile, you can claim an organization and request the role that matches your participation. Contributors can publish on an organization’s behalf; organization administrators can also manage its profile and member access.</p>
 					<div className="guide-action-row"><Link className="button button--secondary" to="/organizations"><Icon name="building" size={17} /> Browse organizations</Link><Link className="button button--secondary" to="/profile"><Icon name="user" size={17} /> Request an organization role</Link></div>
-					<p className="guide-note"><Icon name="sparkles" size={18} /><span>An organization administrator can opt into <strong>State of Queer Digital</strong>, making the organization eligible for the public-facing directory. The organization profile explains this before opt-in.</span></p>
+					<p className="guide-note"><Icon name="sparkles" size={18} /><span>An organization administrator can opt into the <strong>NH Connect public directory</strong>. The organization profile explains what information becomes public before opt-in.</span></p>
 				</section>
 
 				<section className="guide-section" id="affiliations">
@@ -95,7 +95,7 @@ export default function HowToUse({ loaderData }: Route.ComponentProps) {
 
 				<section className="guide-section" id="approvals">
 					<div className="guide-section-heading"><span>07</span><div><p className="eyebrow">Moderation</p><h2>What needs approval</h2></div></div>
-					<div className="guide-approval-grid"><article><strong>Organization roles</strong><p>Reviewed by a site administrator or an administrator for that organization.</p></article><article><strong>Affiliation access</strong><p>Reviewed by a site administrator.</p></article><article><strong>Events</strong><p>Reviewed by an eligible moderator before members can see them. Editing an approved event sends it back for review.</p></article><article><strong>Public directory opt-in</strong><p>Reviewed before an organization is marked ready for State of Queer Digital.</p></article></div>
+					<div className="guide-approval-grid"><article><strong>Organization roles</strong><p>Reviewed by a site administrator or an administrator for that organization.</p></article><article><strong>Affiliation access</strong><p>Reviewed by a site administrator.</p></article><article><strong>Events</strong><p>Reviewed by an eligible moderator before members can see them. Editing an approved event sends it back for review.</p></article><article><strong>Public directory opt-in</strong><p>Reviewed before an organization is added to the NH Connect public directory.</p></article></div>
 				</section>
 
 				{loaderData.isSiteAdmin && <section className="guide-section guide-admin-section" id="administration">

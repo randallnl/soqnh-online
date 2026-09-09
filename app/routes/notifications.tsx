@@ -36,7 +36,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export function meta() {
-	return [{ title: "Notifications · State of Queer NH" }];
+	return [{ title: "Notifications · NH Connect" }];
 }
 
 function formatDate(value: string) {

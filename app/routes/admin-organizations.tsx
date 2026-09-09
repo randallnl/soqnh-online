@@ -7,6 +7,7 @@ import { OrganizationProfileFields } from "~/components/organization-profile-fie
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { deleteIdentityImage } from "~/lib/media.server";
+import { serializeOrganizationCategories } from "~/lib/organization-categories";
 import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import {
 	organizationRoles,
@@ -90,7 +91,7 @@ const directoryReviewSchema = z.object({
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
 
 export function meta(_args: Route.MetaArgs) {
-	return [{ title: "Organization administration · State of Queer NH" }];
+	return [{ title: "Organization administration · NH Connect" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -114,7 +115,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (review.data.decision === "reject" && !review.data.note) return { ok: false as const, error: "Add the changes needed before returning this request." };
 		try {
 			await reviewDirectoryParticipation(context.cloudflare.env, admin, review.data);
-			return { ok: true as const, message: review.data.decision === "approve" ? "Organization approved for State of Queer Digital." : "Opt-in request returned for changes." };
+			return { ok: true as const, message: review.data.decision === "approve" ? "Organization approved for the NH Connect public directory." : "Opt-in request returned for changes." };
 		} catch (error) {
 			if (error instanceof OrganizationMutationError) return { ok: false as const, error: error.reason === "directory-transition" ? "That request has already been reviewed." : "The opt-in request could not be reviewed." };
 			throw error;
@@ -136,6 +137,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 	if (raw.intent === "create" && !raw.slug && typeof raw.name === "string") {
 		raw.slug = slugifyOrganizationName(raw.name);
+	}
+	if (raw.intent === "create" || raw.intent === "update") {
+		raw.category = serializeOrganizationCategories(formData.getAll("category"));
 	}
 	const result = actionSchema.safeParse(raw);
 	if (!result.success) {
@@ -171,7 +175,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				"membership-not-found": "That membership has already been removed.",
 				"forbidden": "You no longer have permission to manage that organization.",
 				"self-management": "Organization administrators cannot remove or demote their own access.",
-				"directory-transition": "The State of Queer Digital participation status changed. Refresh and try again.",
+				"directory-transition": "The NH Connect public directory status changed. Refresh and try again.",
 			};
 			return { ok: false as const, error: messages[error.reason] };
 		}
@@ -190,7 +194,7 @@ export default function AdminOrganizations({ loaderData }: Route.ComponentProps)
 			{actionData && <p className={`admin-notice form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}
 
 			<section className="panel directory-review-panel" id="directory-opt-in-requests">
-				<div className="panel-heading"><div><p className="eyebrow">State of Queer Digital</p><h2>Opt-in requests</h2></div><span>{loaderData.directoryQueue.length}</span></div>
+				<div className="panel-heading"><div><p className="eyebrow">NH Connect public directory</p><h2>Opt-in requests</h2></div><span>{loaderData.directoryQueue.length}</span></div>
 				{loaderData.directoryQueue.length === 0 ? <p className="muted-empty">No organizations are awaiting opt-in review.</p> : <div className="directory-review-list">{loaderData.directoryQueue.map((organization) => <article key={organization.id}><div className="directory-review-summary"><span className="organization-monogram">{organization.name.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}</span><div><strong>{organization.name}</strong><p>Requested by {organization.requesterName || organization.requesterEmail || "an organization administrator"}</p><small>{organization.summary || "No organization summary supplied."}</small></div></div><div className="directory-review-actions"><Form method="post"><input name="intent" type="hidden" value="review-directory" /><input name="organizationId" type="hidden" value={organization.id} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary button--compact" disabled={submitting} type="submit">Approve</button></Form><Form className="directory-review-reject" method="post"><input name="intent" type="hidden" value="review-directory" /><input name="organizationId" type="hidden" value={organization.id} /><input name="decision" type="hidden" value="reject" /><input aria-label={`Changes needed for ${organization.name}`} maxLength={500} name="note" placeholder="Changes needed" required /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Return</button></Form></div></article>)}</div>}
 			</section>
 

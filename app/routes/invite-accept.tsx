@@ -27,10 +27,10 @@ const roleLabels = {
 
 export function meta(_args: Route.MetaArgs) {
 	return [
-		{ title: "Accept invitation · State of Queer NH" },
+		{ title: "Accept invitation · NH Connect" },
 		{
 			name: "description",
-			content: "Accept an invitation to the private State of Queer NH workspace.",
+			content: "Accept an invitation to the private NH Connect workspace.",
 		},
 	];
 }
@@ -89,7 +89,7 @@ export default function InviteAccept({ loaderData }: Route.ComponentProps) {
 				<div className="auth-story-inner">
 					<Link className="brand-lockup" to="/">
 						<img alt="" className="brand-logo" src="/brand/queerlective-round.png" />
-						<span><strong>State of Queer</strong><small>New Hampshire</small></span>
+						<span><strong>NH Connect</strong><small>Community Network</small></span>
 					</Link>
 					<div className="auth-quote">
 						<span className="auth-quote-icon"><Icon name="people" size={24} /></span>

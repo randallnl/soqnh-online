@@ -1,5 +1,6 @@
 import type { OrganizationRecord } from "~/models/organizations.server";
 import type { MemberDirectoryRecord } from "~/models/profiles.server";
+import { parseOrganizationCategories } from "./organization-categories";
 
 export type OrganizationDirectoryFilters = {
 	query: string;
@@ -25,7 +26,7 @@ export function uniqueDirectoryOptions(values: Array<string | null | undefined>)
 export function filterOrganizations(organizations: OrganizationRecord[], filters: OrganizationDirectoryFilters) {
 	const query = filters.query.toLocaleLowerCase();
 	return organizations.filter((organization) => {
-		if (filters.category && organization.category !== filters.category) return false;
+		if (filters.category && !parseOrganizationCategories(organization.category).includes(filters.category)) return false;
 		if (filters.region && organization.region !== filters.region) return false;
 		if (filters.affiliationId && !organization.affiliations.some((affiliation) => affiliation.id === filters.affiliationId)) return false;
 		if (!query) return true;
@@ -33,7 +34,7 @@ export function filterOrganizations(organizations: OrganizationRecord[], filters
 			organization.name,
 			organization.summary,
 			organization.description,
-			organization.category,
+			...parseOrganizationCategories(organization.category),
 			organization.townCity,
 			organization.region,
 			...organization.affiliations.map((affiliation) => affiliation.name),

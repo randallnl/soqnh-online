@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Support NH Connect · Queerlective</title>
+	<style>
+		:root {
+			--ink: #211333;
+			--muted: #62566d;
+			--paper: #fffbea;
+			--surface: #fffef8;
+			--purple: #5b3178;
+			--plum: #9f2d69;
+			--pink: #f4cadd;
+			--coral: #d93428;
+			--gold: #f9dfad;
+			--blue: #cfe4f2;
+		}
+
+		* { box-sizing: border-box; }
+
+		html { background: #d9d3c8; }
+
+		body {
+			margin: 0;
+			color: var(--ink);
+			background: #d9d3c8;
+			font-family: Arial, Helvetica, sans-serif;
+			-webkit-font-smoothing: antialiased;
+		}
+
+		.flyer {
+			position: relative;
+			width: min(100%, 8.5in);
+			min-height: 11in;
+			margin: 24px auto;
+			overflow: hidden;
+			background: var(--paper);
+			box-shadow: 0 20px 60px rgba(33, 19, 51, 0.2);
+		}
+
+		.top-rule {
+			height: 12px;
+			background: linear-gradient(90deg, var(--purple) 0 32%, var(--plum) 32% 60%, var(--coral) 60% 78%, #e9a73a 78%);
+		}
+
+		.content { padding: 0.34in 0.55in 0.32in; }
+
+		header {
+			display: grid;
+			grid-template-columns: 100px 1fr;
+			align-items: center;
+			gap: 24px;
+		}
+
+		.logo {
+			display: block;
+			width: 100px;
+			height: 100px;
+			border-radius: 50%;
+			box-shadow: 0 8px 20px rgba(91, 49, 120, 0.18);
+		}
+
+		.kicker {
+			margin: 0 0 7px;
+			color: var(--plum);
+			font-size: 11px;
+			font-weight: 800;
+			letter-spacing: 0.16em;
+			text-transform: uppercase;
+		}
+
+		h1 {
+			margin: 0;
+			font-family: Georgia, "Times New Roman", serif;
+			font-size: 50px;
+			font-weight: 700;
+			letter-spacing: -0.045em;
+			line-height: 0.94;
+		}
+
+		.tagline {
+			margin: 11px 0 0;
+			color: var(--purple);
+			font-size: 16px;
+			font-weight: 700;
+		}
+
+		.intro {
+			display: grid;
+			grid-template-columns: 1.45fr 0.8fr;
+			gap: 25px;
+			margin-top: 24px;
+			padding: 24px 26px;
+			border: 1px solid #e8a9c7;
+			border-radius: 18px;
+			background: rgba(255, 254, 248, 0.88);
+		}
+
+		.intro h2,
+		.section-title {
+			margin: 0;
+			font-family: Georgia, "Times New Roman", serif;
+			font-size: 24px;
+			line-height: 1.08;
+		}
+
+		.intro p {
+			margin: 10px 0 0;
+			color: var(--muted);
+			font-size: 13px;
+			line-height: 1.55;
+		}
+
+		.ask {
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			padding-left: 24px;
+			border-left: 1px solid #e8a9c7;
+		}
+
+		.ask small {
+			color: var(--plum);
+			font-size: 10px;
+			font-weight: 800;
+			letter-spacing: 0.12em;
+			text-transform: uppercase;
+		}
+
+		.ask strong {
+			margin-top: 3px;
+			font-family: Georgia, "Times New Roman", serif;
+			font-size: 37px;
+			line-height: 1;
+		}
+
+		.ask span {
+			margin-top: 7px;
+			color: var(--muted);
+			font-size: 11px;
+			line-height: 1.35;
+		}
+
+		.impact {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 10px;
+			margin-top: 18px;
+		}
+
+		.impact article {
+			min-height: 106px;
+			padding: 14px;
+			border-radius: 14px;
+		}
+
+		.impact article:nth-child(1) { background: #eadcf1; }
+		.impact article:nth-child(2) { background: var(--pink); }
+		.impact article:nth-child(3) { background: var(--blue); }
+		.impact article:nth-child(4) { background: var(--gold); }
+
+		.impact strong {
+			display: block;
+			font-family: Georgia, "Times New Roman", serif;
+			font-size: 16px;
+			line-height: 1.12;
+		}
+
+		.impact span {
+			display: block;
+			margin-top: 7px;
+			font-size: 10.5px;
+			line-height: 1.35;
+		}
+
+		.sponsorship { margin-top: 20px; }
+
+		.sponsorship-heading {
+			display: flex;
+			align-items: end;
+			justify-content: space-between;
+			gap: 20px;
+			margin-bottom: 12px;
+		}
+
+		.sponsorship-heading p {
+			max-width: 320px;
+			margin: 0;
+			color: var(--muted);
+			font-size: 10.5px;
+			line-height: 1.4;
+			text-align: right;
+		}
+
+		.tiers {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+			gap: 10px;
+		}
+
+		.tier {
+			position: relative;
+			min-height: 88px;
+			padding: 15px 17px 14px;
+			border: 1px solid #dfd7c9;
+			border-radius: 13px;
+			background: rgba(255, 254, 248, 0.88);
+		}
+
+		.tier.featured {
+			border: 2px solid var(--purple);
+			background: #f7effa;
+		}
+
+		.tier-label {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 12px;
+		}
+
+		.tier-label strong { font-size: 14px; }
+		.tier-label b { color: var(--plum); font-family: Georgia, "Times New Roman", serif; font-size: 19px; }
+
+		.tier p {
+			margin: 7px 0 0;
+			color: var(--muted);
+			font-size: 10.5px;
+			line-height: 1.35;
+		}
+
+		.funding {
+			display: grid;
+			grid-template-columns: 0.78fr 1.22fr;
+			gap: 22px;
+			margin-top: 19px;
+			padding-top: 20px;
+			border-top: 2px solid var(--ink);
+		}
+
+		.funding p {
+			margin: 8px 0 0;
+			color: var(--muted);
+			font-size: 11px;
+			line-height: 1.45;
+		}
+
+		.funding ul {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 8px 18px;
+			margin: 0;
+			padding: 0;
+			list-style: none;
+		}
+
+		.funding li {
+			position: relative;
+			padding-left: 15px;
+			font-size: 10.5px;
+			font-weight: 700;
+			line-height: 1.35;
+		}
+
+		.funding li::before {
+			position: absolute;
+			top: 4px;
+			left: 0;
+			width: 7px;
+			height: 7px;
+			border-radius: 50%;
+			background: var(--coral);
+			content: "";
+		}
+
+		footer {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 20px;
+			margin-top: 18px;
+			padding: 15px 18px;
+			border-radius: 13px;
+			color: #fff;
+			background: var(--ink);
+		}
+
+		footer strong {
+			display: block;
+			font-family: Georgia, "Times New Roman", serif;
+			font-size: 17px;
+		}
+
+		footer span,
+		footer a {
+			color: #fff;
+			font-size: 11px;
+			line-height: 1.4;
+		}
+
+		footer a { font-weight: 700; text-underline-offset: 3px; }
+
+		@media (max-width: 700px) {
+			.flyer { min-height: 0; margin: 0; }
+			.content { padding: 28px 22px; }
+			header { grid-template-columns: 76px 1fr; gap: 16px; }
+			.logo { width: 76px; height: 76px; }
+			h1 { font-size: 39px; }
+			.intro, .funding { grid-template-columns: 1fr; }
+			.ask { padding: 18px 0 0; border-top: 1px solid #e8a9c7; border-left: 0; }
+			.impact { grid-template-columns: 1fr 1fr; }
+			.tiers { grid-template-columns: 1fr; }
+			.sponsorship-heading { align-items: start; flex-direction: column; }
+			.sponsorship-heading p { text-align: left; }
+			footer { align-items: start; flex-direction: column; }
+		}
+
+		@media print {
+			@page { size: letter; margin: 0; }
+			html, body { background: #fff; }
+			.flyer { width: 8.5in; height: 11in; min-height: 11in; margin: 0; box-shadow: none; }
+			.content { padding: 0.34in 0.55in 0.28in; }
+			* { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+		}
+	</style>
+</head>
+<body>
+	<main class="flyer">
+		<div class="top-rule"></div>
+		<div class="content">
+			<header>
+				<img class="logo" src="../public/brand/queerlective-round.png" alt="Queerlective" />
+				<div>
+					<p class="kicker">A Queerlective initiative</p>
+					<h1>NH Connect</h1>
+					<p class="tagline">Connection is community infrastructure.</p>
+				</div>
+			</header>
+
+			<section class="intro">
+				<div>
+					<h2>Help build a more connected queer New Hampshire.</h2>
+					<p>NH Connect is an invitation-only digital directory and collaboration network for New Hampshire’s LGBTQIA+ and BIPOC-affirming organizations, businesses, advocates, and community leaders. It brings updates, events, resources, projects, and coalition work into one accessible, privacy-conscious platform.</p>
+				</div>
+				<div class="ask">
+					<small>Founding sponsorship</small>
+					<strong>$15,000</strong>
+					<span>Support first-year development, distribution, and community adoption.</span>
+				</div>
+			</section>
+
+			<section class="impact" aria-label="Sponsor benefits">
+				<article><strong>Founding recognition</strong><span>Be recognized as an early partner helping bring NH Connect to communities statewide.</span></article>
+				<article><strong>Brand visibility</strong><span>Receive recognition on the platform, sponsor materials, and launch communications.</span></article>
+				<article><strong>Community connection</strong><span>Build relationships with organizations serving LGBTQIA+ and BIPOC communities.</span></article>
+				<article><strong>Impact reporting</strong><span>Receive updates showing how support strengthens participation and collaboration.</span></article>
+			</section>
+
+			<section class="sponsorship">
+				<div class="sponsorship-heading">
+					<h2 class="section-title">Sponsorship levels &amp; benefits</h2>
+					<p>Benefits can be customized, with all recognition designed to respect member privacy and community trust.</p>
+				</div>
+				<div class="tiers">
+					<article class="tier featured">
+						<div class="tier-label"><strong>Founding Partner</strong><b>$15,000</b></div>
+						<p>Prominent recognition on the website and launch materials, plus a first-year impact briefing.</p>
+					</article>
+					<article class="tier">
+						<div class="tier-label"><strong>Network Builder</strong><b>$5,000</b></div>
+						<p>Logo recognition on the sponsor page and outreach materials, plus impact updates.</p>
+					</article>
+					<article class="tier">
+						<div class="tier-label"><strong>Community Sponsor</strong><b>$2,500</b></div>
+						<p>Name or logo recognition on the sponsor page and in launch communications.</p>
+					</article>
+					<article class="tier">
+						<div class="tier-label"><strong>Supporting Friend</strong><b>$1,000</b></div>
+						<p>Name recognition on the sponsor page and in the first-year thank-you report.</p>
+					</article>
+				</div>
+			</section>
+
+			<section class="funding">
+				<div>
+					<h2 class="section-title">Your support makes connection possible.</h2>
+					<p>Contributions fund the people, tools, and stewardship needed to keep NH Connect useful, secure, and available to participating organizations at no cost.</p>
+				</div>
+				<ul>
+					<li>Software development and maintenance</li>
+					<li>Partner outreach and onboarding</li>
+					<li>Accessibility and security improvements</li>
+					<li>Directory and content stewardship</li>
+					<li>Training and communication materials</li>
+					<li>Hosting and technical infrastructure</li>
+				</ul>
+			</section>
+
+			<footer>
+				<div><strong>Let’s build NH Connect together.</strong><span>For sponsorship and partnership opportunities, connect with Queerlective.</span></div>
+				<a href="https://queerlective.com">queerlective.com</a>
+			</footer>
+		</div>
+	</main>
+</body>
+</html>

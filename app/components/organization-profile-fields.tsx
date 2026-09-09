@@ -1,17 +1,5 @@
 import type { OrganizationRecord } from "~/models/organizations.server";
-
-const categoryOptions = [
-	"Arts & Culture",
-	"Community & Advocacy",
-	"Education & Learning",
-	"Events & Nightlife",
-	"Food & Drink",
-	"Health & Wellness",
-	"Shops & Services",
-	"Artist or Creative",
-	"Resource Listing",
-	"Other",
-] as const;
+import { organizationCategoryOptions, organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 
 const regionOptions = [
 	"Great North Woods",
@@ -59,9 +47,22 @@ function ProfileSelect({
 }
 
 export function OrganizationProfileFields({ organization }: { organization?: Partial<OrganizationRecord> }) {
+	const selectedCategories = parseOrganizationCategories(organization?.category);
+	const categoryOptions = [...new Set([...organizationCategoryOptions, ...selectedCategories])];
 	return <>
 		<label>Name<input defaultValue={organization?.name ?? ""} maxLength={120} name="name" placeholder="Organization name" required /></label>
-		<ProfileSelect label="Category" name="category" options={categoryOptions} value={organization?.category} />
+		<fieldset className="organization-category-picker wide-field">
+			<legend>Categories</legend>
+			<p>Select all that apply.</p>
+			<div className="organization-category-options">
+				{categoryOptions.map((category) => (
+					<label className={`organization-category-option organization-category-tone--${organizationCategoryTone(category)}`} key={category}>
+						<input defaultChecked={selectedCategories.includes(category)} name="category" type="checkbox" value={category} />
+						<span>{category}</span>
+					</label>
+				))}
+			</div>
+		</fieldset>
 		<label>Website<input defaultValue={organization?.websiteUrl ?? ""} maxLength={500} name="websiteUrl" placeholder="https://example.org" type="url" /></label>
 		<label>Event source URL<input defaultValue={organization?.eventSourceUrl ?? ""} maxLength={500} name="eventSourceUrl" placeholder="https://example.org/events" type="url" /></label>
 		<label>Contact email<input defaultValue={organization?.contactEmail ?? ""} maxLength={320} name="contactEmail" placeholder="hello@example.org" type="email" /></label>

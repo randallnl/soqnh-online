@@ -11,7 +11,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 
 export const meta: Route.MetaFunction = () => [
-	{ title: "State of Queer NH" },
+	{ title: "NH Connect" },
 	{
 		name: "description",
 		content:
@@ -73,7 +73,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 			<div className="error-card">
 				<a className="brand-lockup brand-lockup--dark" href="/">
 					<img alt="" className="brand-logo" src="/brand/queerlective-round.png" />
-					<span>State of Queer NH</span>
+					<span>NH Connect</span>
 				</a>
 				<p className="eyebrow">{isRouteErrorResponse(error) ? error.status : "Error"}</p>
 				<h1>{message}</h1>

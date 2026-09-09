@@ -79,10 +79,10 @@ async function deliverInvitation(
 
 export function meta(_args: Route.MetaArgs) {
 	return [
-		{ title: "Invitations · State of Queer NH" },
+		{ title: "Invitations · NH Connect" },
 		{
 			name: "description",
-			content: "Invite members to the private State of Queer NH workspace.",
+			content: "Invite members to the private NH Connect workspace.",
 		},
 	];
 }

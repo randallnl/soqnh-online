@@ -5,6 +5,7 @@ import { Icon } from "~/components/icon";
 import { IdentityAvatar, OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
+import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 import {
 	getOrganizationBySlug,
 	OrganizationMutationError,
@@ -24,7 +25,7 @@ function socialUrl(platform: string | null, handle: string) {
 }
 
 export function meta({ data }: Route.MetaArgs) {
-	return [{ title: `${data?.organization.name ?? "Organization"} · State of Queer NH` }];
+	return [{ title: `${data?.organization.name ?? "Organization"} · NH Connect` }];
 }
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
@@ -51,10 +52,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	try {
 		if (optedIn) {
 			await requestDirectoryParticipation(context.cloudflare.env, user, result.organization.id);
-			return { ok: true as const, message: "Your State of Queer Digital opt-in request was submitted for review." };
+			return { ok: true as const, message: "Your NH Connect public directory opt-in request was submitted for review." };
 		}
 		await withdrawDirectoryParticipation(context.cloudflare.env, user, result.organization.id);
-		return { ok: true as const, message: result.organization.directoryStatus === "pending" ? "The opt-in request was canceled." : "The organization opted out of State of Queer Digital." };
+		return { ok: true as const, message: result.organization.directoryStatus === "pending" ? "The opt-in request was canceled." : "The organization was removed from the NH Connect public directory." };
 	} catch (error) {
 		if (error instanceof OrganizationMutationError) {
 			return {
@@ -80,7 +81,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 		<div className="organization-detail-page">
 			<div className="organization-detail-actions">
 				<Link className="back-link" to="/organizations">← All organizations</Link>
-				{loaderData.canManage && <Link className="button button--secondary button--compact" to={`/organizations/${organization.slug}/manage`}><Icon name="settings" size={16} /> Manage organization</Link>}
+				{loaderData.canManage && <Link className="button button--secondary button--compact" to={`/organizations/${organization.slug}/manage`}><Icon name="settings" size={16} /> Edit organization</Link>}
 			</div>
 			<section className="organization-profile panel">
 				<div className="organization-profile-header">
@@ -88,12 +89,12 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 					<div>
 						<p className="eyebrow">Ecosystem organization</p>
 						<h1>{organization.name}</h1>
-						<p>{organization.summary || "A member organization in the State of Queer NH ecosystem."}</p>
+						<p>{organization.summary || "A member organization in the NH Connect community network."}</p>
 					</div>
 				</div>
 				{organization.description && <p className="organization-description">{organization.description}</p>}
 				{(organization.category || organization.townCity || organization.region || organization.operatesStatewide !== null || organization.leadershipIdentity) && <dl className="organization-profile-facts">
-					{organization.category && <div><dt>Category</dt><dd>{organization.category}</dd></div>}
+					{organization.category && <div><dt>Categories</dt><dd className="organization-category-row">{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</dd></div>}
 					{organization.townCity && <div><dt>Town or city</dt><dd>{organization.townCity}</dd></div>}
 					{organization.region && <div><dt>Region</dt><dd>{organization.region}</dd></div>}
 					{organization.operatesStatewide !== null && <div><dt>Statewide services</dt><dd>{organization.operatesStatewide === 1 ? "Yes" : "No"}</dd></div>}
@@ -123,7 +124,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 								disabled={navigation.state === "submitting"}
 								name="directoryOptIn"
 								onChange={(event) => {
-									if (!event.currentTarget.checked && !window.confirm("Opt this organization out of State of Queer Digital and remove it from the public directory?")) {
+									if (!event.currentTarget.checked && !window.confirm("Remove this organization from the NH Connect public directory?")) {
 										event.currentTarget.checked = true;
 										return;
 									}
@@ -131,7 +132,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 								}}
 								type="checkbox"
 							/>
-							<span><strong>Opt in to State of Queer Digital</strong><small id="directory-opt-in-description">All signed-in members can already view this organization profile. By checking this box, you confirm that its profile information may also be added to a public directory after administrator review; member and affiliation details remain private.</small></span>
+							<span><strong>Opt in to the NH Connect public directory</strong><small id="directory-opt-in-description">All signed-in members can already view this organization profile. By checking this box, you confirm that its profile information may also be made public after administrator review; member and affiliation details remain private.</small></span>
 						</label>
 						<p id="directory-opt-in-status">{organization.directoryStatus === "pending" ? "Pending administrator review. Uncheck the box to cancel this request." : organization.directoryStatus === "published" ? "Approved and eligible to appear in the public directory. Uncheck the box to opt out." : organization.directoryStatus === "rejected" ? `Changes requested${organization.directoryReviewNote ? `: ${organization.directoryReviewNote}` : "."}` : "Not currently opted in."}</p>
 						{actionData && <p className={`form-message form-message--${actionData.ok ? "success" : "error"}`}>{actionData.ok ? actionData.message : actionData.error}</p>}

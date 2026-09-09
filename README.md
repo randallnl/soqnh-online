@@ -1,4 +1,4 @@
-# State of Queer NH
+# NH Connect
 
 A private collaboration hub for New Hampshire's queer community ecosystem. This is the clean-slate React Router 7 rebuild for Cloudflare Workers.
 

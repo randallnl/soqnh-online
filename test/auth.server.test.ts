@@ -74,6 +74,7 @@ import { normalizeTags } from "../app/lib/content";
 import { uploadContentImage } from "../app/lib/media.server";
 import { getContentImagePostId } from "../app/models/attachments.server";
 import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
+import { parseOrganizationCategories, serializeOrganizationCategories } from "../app/lib/organization-categories";
 import { eventReviewSchema } from "../app/lib/event-review";
 import { scraperParsers } from "../app/lib/scraper";
 import {
@@ -313,11 +314,12 @@ describe("directory filters", () => {
 		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
 		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
 		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-two", userId: secondMember.id, role: "viewer" });
-		await env.DB.prepare("UPDATE organizations SET summary = 'Peer support and community care', category = 'Community services', region = 'Capital Area' WHERE id = 'org-one'").run();
+		await env.DB.prepare("UPDATE organizations SET summary = 'Peer support and community care', category = 'Community services\nHealth & Wellness', region = 'Capital Area' WHERE id = 'org-one'").run();
 		await env.DB.prepare("UPDATE users SET profile_title = 'Community organizer', location = 'Concord' WHERE id = ?1").bind(activeUser.id).run();
 
 		const organizations = await listVisibleOrganizations(env, activeUser);
 		expect(filterOrganizations(organizations, { query: "peer support", category: "Community services", region: "Capital Area", affiliationId: "aff-shared" }).map((organization) => organization.id)).toEqual(["org-one"]);
+		expect(filterOrganizations(organizations, { query: "", category: "Health & Wellness", region: "", affiliationId: "" }).map((organization) => organization.id)).toEqual(["org-one"]);
 		expect(filterOrganizations(organizations, { query: "missing", category: "", region: "", affiliationId: "" })).toEqual([]);
 
 		const members = await listVisibleMembers(env, siteAdmin);
@@ -718,7 +720,7 @@ describe("invitation email content", () => {
 			invitedByName: "Site Administrator",
 		});
 
-		expect(content.subject).toBe("You’re invited to State of Queer NH");
+		expect(content.subject).toBe("You’re invited to NH Connect");
 		for (const body of [content.text, content.html]) {
 			expect(body).toContain("Site Administrator");
 			expect(body).toContain("Contributor");
@@ -1062,6 +1064,11 @@ describe("member access management", () => {
 });
 
 describe("organization administration", () => {
+	it("normalizes multiple organization categories while preserving legacy values", () => {
+		expect(serializeOrganizationCategories(["Arts & Culture", "Health & Wellness", "Arts & Culture"])).toBe("Arts & Culture\nHealth & Wellness");
+		expect(parseOrganizationCategories("Community services\nHealth & Wellness")).toEqual(["Community services", "Health & Wellness"]);
+	});
+
 	it("lets a site administrator permanently delete an organization", async () => {
 		await seedSiteAdmin();
 		await seedUser();
@@ -1105,7 +1112,7 @@ describe("organization administration", () => {
 			slug: "seacoast-pride-nh",
 			summary: "Updated summary",
 			description: "A longer organization profile.",
-			category: "Community & Advocacy",
+			category: "Community & Advocacy\nHealth & Wellness",
 			websiteUrl: "https://example.org",
 			eventSourceUrl: "https://example.org/events",
 			contactEmail: "hello@example.org",
@@ -1125,7 +1132,7 @@ describe("organization administration", () => {
 		expect(profile?.organization).toMatchObject({
 			name: "Seacoast Pride NH",
 			description: "A longer organization profile.",
-			category: "Community & Advocacy",
+			category: "Community & Advocacy\nHealth & Wellness",
 			eventSourceUrl: "https://example.org/events",
 			contactPhone: "(603) 555-0142",
 			region: "Seacoast",
@@ -1458,7 +1465,7 @@ describe("organization-admin self-service", () => {
 	});
 });
 
-describe("State of Queer Digital participation", () => {
+describe("NH Connect public directory participation", () => {
 	it("supports request, review, notification, audit, and withdrawal", async () => {
 		await seedSiteAdmin();
 		await seedUser();

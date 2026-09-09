@@ -33,7 +33,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export function meta() {
-	return [{ title: "Event moderation · State of Queer NH" }];
+	return [{ title: "Event moderation · NH Connect" }];
 }
 
 export default function EventModeration({ loaderData }: Route.ComponentProps) {

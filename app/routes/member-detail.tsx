@@ -7,7 +7,7 @@ import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { getVisibleMemberProfile } from "~/models/profiles.server";
 
 export function meta({ data }: Route.MetaArgs) {
-	return [{ title: `${data?.member.name || "Member"} · State of Queer NH` }];
+	return [{ title: `${data?.member.name || "Member"} · NH Connect` }];
 }
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {

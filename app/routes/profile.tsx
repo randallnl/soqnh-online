@@ -38,7 +38,7 @@ function uploadMessage(error: ImageUploadError) {
 }
 
 export function meta() {
-	return [{ title: "Edit profile · State of Queer NH" }];
+	return [{ title: "Edit profile · NH Connect" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

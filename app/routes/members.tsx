@@ -9,7 +9,7 @@ import { listVisibleOrganizations } from "~/models/organizations.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 
 export function meta() {
-	return [{ title: "Members · State of Queer NH" }];
+	return [{ title: "Members · NH Connect" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

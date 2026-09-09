@@ -113,7 +113,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 }
 
 export function meta({ data }: Route.MetaArgs) {
-	return [{ title: `${data?.post.title ?? "Post"} · State of Queer NH` }];
+	return [{ title: `${data?.post.title ?? "Post"} · NH Connect` }];
 }
 
 function formatDate(value: string) {

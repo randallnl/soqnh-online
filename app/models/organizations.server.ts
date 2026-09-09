@@ -461,8 +461,8 @@ export async function reviewDirectoryParticipation(
 			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
 			 SELECT ?1, ?2, ?3, NULL, NULL, 'approval',
 			        CASE WHEN ?4 = 'published'
-			          THEN 'Your organization is now approved for State of Queer Digital.'
-			          ELSE 'Your State of Queer Digital request needs changes.' END,
+			          THEN 'Your organization is now approved for the NH Connect public directory.'
+			          ELSE 'Your NH Connect public directory request needs changes.' END,
 			        NULL, ?5
 			 WHERE EXISTS (SELECT 1 FROM users WHERE id = ?2 AND status = 'active')`,
 		).bind(crypto.randomUUID(), existing.requesterUserId, actor.id, status, now));

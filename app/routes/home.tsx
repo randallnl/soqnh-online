@@ -12,7 +12,7 @@ import { canModerateEvents } from "~/models/events.server";
 
 export function meta(_args: Route.MetaArgs) {
 	return [
-		{ title: "Overview · State of Queer NH" },
+		{ title: "Overview · NH Connect" },
 		{
 			name: "description",
 			content: "Community activity, events, projects, and ecosystem health.",

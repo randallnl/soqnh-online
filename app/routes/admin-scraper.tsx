@@ -77,7 +77,7 @@ function formatDateTime(value: string) {
 }
 
 export function meta() {
-	return [{ title: "Event scraper · State of Queer NH" }];
+	return [{ title: "Event scraper · NH Connect" }];
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
