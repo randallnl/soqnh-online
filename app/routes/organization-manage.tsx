@@ -90,7 +90,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	try {
 		requireUploadRequestSize(request);
 	} catch (error) {
-		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
+		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 10 MB." };
 		throw error;
 	}
 	const formData = await request.formData();
@@ -155,7 +155,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		return { ok: true as const, message: "Member removed from the organization." };
 	} catch (error) {
 		if (error instanceof ImageUploadError) {
-			const message = error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image.";
+			const message = error.reason === "too-large" ? "Upload an image smaller than 10 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image.";
 			return { ok: false as const, error: message };
 		}
 		if (error instanceof OrganizationMutationError) {
@@ -192,7 +192,7 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 
 			<section className="panel managed-profile-panel">
 				<div className="panel-heading"><div><p className="eyebrow">Organization information</p><h2>Organization profile</h2></div><span className={`status-pill status-pill--${organization.status}`}>{organization.status}</span></div>
-				<div className="organization-logo-editor"><OrganizationIdentity large logoObjectKey={organization.logoObjectKey} name={organization.name} /><div><strong>Organization logo</strong><p>PNG, JPG, WebP, or GIF. Maximum 2 MB.</p>{organization.logoObjectKey && <Form method="post"><input name="intent" type="hidden" value="remove-logo" /><input name="organizationId" type="hidden" value={organization.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Remove logo</button></Form>}</div></div>
+				<div className="organization-logo-editor"><OrganizationIdentity large logoObjectKey={organization.logoObjectKey} name={organization.name} /><div><strong>Organization logo</strong><p>PNG, JPG, WebP, or GIF. Maximum 10 MB.</p>{organization.logoObjectKey && <Form method="post"><input name="intent" type="hidden" value="remove-logo" /><input name="organizationId" type="hidden" value={organization.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Remove logo</button></Form>}</div></div>
 				<Form className="organization-edit-form" encType="multipart/form-data" method="post">
 					<input name="intent" type="hidden" value="update-profile" /><input name="organizationId" type="hidden" value={organization.id} />
 					<label>Organization logo<input accept="image/png,image/jpeg,image/webp,image/gif" name="logo" type="file" /></label>

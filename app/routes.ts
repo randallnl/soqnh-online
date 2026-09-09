@@ -19,6 +19,7 @@ export default [
 		route("members", "routes/members.tsx"),
 		route("members/:memberId", "routes/member-detail.tsx"),
 		route("profile", "routes/profile.tsx"),
+		route("how-to-use", "routes/how-to-use.tsx"),
 		route("notifications", "routes/notifications.tsx"),
 		route("events/moderation", "routes/event-moderation.tsx"),
 		route("posts/new", "routes/post-new.tsx"),

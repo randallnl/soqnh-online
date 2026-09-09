@@ -1521,10 +1521,15 @@ describe("State of Queer Digital participation", () => {
 });
 
 describe("content feeds and post permissions", () => {
-	it("stores and loads private images for projects, updates, and comments", async () => {
+	it("stores and loads private images for projects and community updates", async () => {
 		await seedSiteAdmin();
 		await seedUser();
 		const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+		const largerPngBytes = new Uint8Array(3 * 1024 * 1024);
+		largerPngBytes.set(pngBytes);
+		const largerImage = await uploadContentImage(env, new File([largerPngBytes], "phone-photo.png", { type: "image/png" }), activeUser.id);
+		expect(largerImage).toMatchObject({ filename: "phone-photo.png", byteSize: 3 * 1024 * 1024 });
+		await env.ASSETS.delete(largerImage!.objectKey);
 		const projectImage = await uploadContentImage(env, new File([pngBytes], "project-poster.png", { type: "image/png" }), activeUser.id);
 		expect(projectImage).not.toBeNull();
 		const project = await createPost(env, activeUser, {
@@ -1556,14 +1561,6 @@ describe("content feeds and post permissions", () => {
 			affiliationIds: [],
 			attachment: updateImage,
 		});
-		const commentImage = await uploadContentImage(env, new File([pngBytes], "comment.png", { type: "image/png" }), activeUser.id);
-		const comment = await createComment(env, activeUser, { postId: update.id, parentCommentId: null, body: "A comment with an image.", attachment: commentImage });
-		expect((await listPostComments(env, activeUser, update.id))[0]?.imageAttachments).toEqual([expect.objectContaining({ filename: "comment.png" })]);
-		expect((await listFeedCommentPreviews(env, [update.id]))[0]?.imageAttachments).toEqual([expect.objectContaining({ filename: "comment.png" })]);
-		await expect(getContentImagePostId(env, commentImage!.objectKey)).resolves.toBe(update.id);
-		await archiveComment(env, activeUser, { postId: update.id, commentId: comment.id });
-		await expect(getContentImagePostId(env, commentImage!.objectKey)).resolves.toBeNull();
-
 		await expect(uploadContentImage(env, new File(["not an image"], "spoofed.png", { type: "image/png" }), activeUser.id)).rejects.toMatchObject({ reason: "invalid" });
 	});
 

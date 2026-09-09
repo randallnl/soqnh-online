@@ -1,6 +1,6 @@
 import type { ContentImageAttachment } from "./media";
 
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const extensions = {
 	"image/png": "png",
 	"image/jpeg": "jpg",

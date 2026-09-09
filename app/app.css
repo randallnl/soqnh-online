@@ -1220,8 +1220,7 @@ h3 {
 	font-size: 0.8rem;
 }
 
-.community-image-upload,
-.comment-image-upload {
+.community-image-upload {
 	display: grid;
 	gap: 6px;
 	color: var(--ink-600);
@@ -1230,16 +1229,13 @@ h3 {
 }
 
 .community-image-upload > span,
-.comment-image-upload > span,
-.community-image-upload small,
-.comment-image-upload small {
+.community-image-upload small {
 	color: var(--ink-500);
 	font-size: 0.75rem;
 	font-weight: 520;
 }
 
-.community-image-upload input,
-.comment-image-upload input {
+.community-image-upload input {
 	min-height: 42px;
 	padding: 8px;
 	border: 1px solid var(--ink-200);
@@ -1525,7 +1521,7 @@ h3 {
 
 .update-feed-comment-form {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: end;
 	gap: 9px;
 }
@@ -4582,6 +4578,62 @@ h3 {
 .status-pill--rejected { color: #963d35; background: #fff0ee; }
 .status-pill--cancelled { color: var(--ink-600); background: var(--ink-100); }
 
+/* Member guide */
+.guide-page { max-width: 1180px; margin: 0 auto; }
+.guide-heading { max-width: 850px; }
+.guide-heading > div > p:last-child { font-size: .96rem; line-height: 1.65; }
+.guide-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 34px; align-items: start; }
+.guide-index { position: sticky; top: 96px; padding: 20px; }
+.guide-index > strong { display: block; margin-bottom: 13px; font-size: .86rem; }
+.guide-index nav { display: grid; }
+.guide-index a { padding: 8px 0; border-bottom: 1px solid var(--ink-100); color: var(--ink-600); font-size: .8rem; font-weight: 650; }
+.guide-index a:hover { color: var(--plum-700); }
+.guide-content { min-width: 0; }
+.guide-section { scroll-margin-top: 92px; padding: 8px 0 44px; }
+.guide-section + .guide-section { padding-top: 38px; border-top: 1px solid var(--ink-100); }
+.guide-section > p { max-width: 800px; color: var(--ink-600); font-size: .9rem; line-height: 1.7; }
+.guide-section-heading { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+.guide-section-heading > span { display: grid; flex: 0 0 auto; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--plum-700); background: var(--plum-100); font-size: .72rem; font-weight: 850; }
+.guide-section-heading .eyebrow { margin: 0 0 3px; }
+.guide-section-heading h2 { font-family: Nunito, ui-rounded, sans-serif; font-size: clamp(1.3rem, 2vw, 1.7rem); font-weight: 900; letter-spacing: -.025em; }
+.guide-quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.guide-quick-card { position: relative; padding: 20px; }
+.guide-quick-card > span { position: absolute; top: 16px; right: 17px; color: var(--plum-700); font-size: 1.5rem; font-weight: 900; opacity: .7; }
+.guide-quick-card h3 { padding-right: 34px; font-size: .92rem; }
+.guide-quick-card p { min-height: 60px; margin: 7px 0 14px; color: var(--ink-600); font-size: .8rem; line-height: 1.55; }
+.guide-quick-card a,
+.guide-feature-card a { display: inline-flex; align-items: center; gap: 4px; color: var(--plum-700); font-size: .78rem; font-weight: 780; }
+.guide-audience-grid,
+.guide-approval-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.guide-audience-grid article,
+.guide-approval-grid article { padding: 17px; border: 1px solid var(--ink-100); border-radius: 10px; background: var(--surface); }
+.guide-audience-grid strong,
+.guide-approval-grid strong { font-size: .84rem; }
+.guide-audience-grid p,
+.guide-approval-grid p { margin-top: 6px; color: var(--ink-600); font-size: .78rem; line-height: 1.55; }
+.guide-note { display: flex; align-items: flex-start; gap: 10px; max-width: none !important; padding: 14px 16px; margin-top: 14px; border-radius: 9px; color: var(--ink-700) !important; background: var(--green-50); font-size: .8rem !important; line-height: 1.55 !important; }
+.guide-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--green-700); }
+.guide-card-grid { display: grid; gap: 13px; }
+.guide-feature-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; padding: 21px; }
+.guide-feature-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 10px; color: var(--plum-700); background: var(--plum-100); }
+.guide-feature-card h3 { margin-bottom: 5px; font-size: .95rem; }
+.guide-feature-card p,
+.guide-feature-card li { color: var(--ink-600); font-size: .8rem; line-height: 1.55; }
+.guide-feature-card ul { display: grid; gap: 3px; padding-left: 18px; margin: 9px 0 12px; }
+.guide-tags-note { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 13px; }
+.guide-tags-note > div { padding: 16px; border-radius: 9px; background: var(--paper); }
+.guide-tags-note strong { color: var(--plum-700); font-size: .83rem; }
+.guide-tags-note p { margin-top: 4px; color: var(--ink-600); font-size: .78rem; line-height: 1.5; }
+.guide-action-row { display: flex; flex-wrap: wrap; gap: 9px; margin: 18px 0; }
+.guide-section > .button { margin-top: 18px; }
+.guide-privacy-list { display: grid; gap: 8px; }
+.guide-privacy-list article { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 15px 0; border-bottom: 1px solid var(--ink-100); }
+.guide-privacy-list svg { color: var(--plum-700); }
+.guide-privacy-list strong { font-size: .84rem; }
+.guide-privacy-list p { margin-top: 4px; color: var(--ink-600); font-size: .8rem; line-height: 1.55; }
+.guide-approval-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.guide-admin-section { padding: 28px !important; border: 1px solid rgba(117, 69, 149, .18) !important; border-radius: var(--radius-md); background: var(--plum-50); }
+
 @media (max-width: 820px) {
 	.member-card-grid,
 	.profile-editor-form,
@@ -4590,6 +4642,10 @@ h3 {
 	.profile-affiliation-picker > div { grid-template-columns: 1fr; }
 	.member-profile-card { grid-template-columns: auto minmax(0, 1fr); }
 	.member-card-arrow { display: none; }
+	.guide-layout { grid-template-columns: 1fr; }
+	.guide-index { position: static; }
+	.guide-index nav { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+	.guide-audience-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 520px) {
@@ -4602,6 +4658,11 @@ h3 {
 	.organization-claim-actions,
 	.organization-claim-reject-form { align-items: stretch; flex-direction: column; }
 	.organization-claim-reject-form input { width: 100%; }
+	.guide-quick-grid,
+	.guide-tags-note,
+	.guide-approval-grid,
+	.guide-index nav { grid-template-columns: 1fr; }
+	.guide-feature-card { grid-template-columns: 1fr; }
 }
 
 /* Phase 8: administration operations */

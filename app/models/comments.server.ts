@@ -138,7 +138,7 @@ export async function listFeedCommentPreviews(env: Env, postIds: string[], limit
 export async function createComment(
 	env: Env,
 	actor: AuthenticatedUser,
-	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null; mentionUserIds?: string[]; attachment?: ContentImageAttachment | null },
+	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null; mentionUserIds?: string[] },
 ) {
 	const post = await requirePublishedPost(env, actor, input.postId);
 	let parentAuthorUserId: string | null = null;
@@ -166,11 +166,6 @@ export async function createComment(
 			 (id, post_id, parent_comment_id, author_user_id, body, status, created_at, updated_at)
 			 VALUES (?1, ?2, ?3, ?4, ?5, 'published', ?6, ?6)`,
 		).bind(id, input.postId, input.parentCommentId, actor.id, input.body, now),
-		...(input.attachment ? [env.DB.prepare(
-			`INSERT INTO attachments
-			 (id, post_id, comment_id, uploaded_by_user_id, object_key, filename, content_type, byte_size, created_at)
-			 VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-		).bind(input.attachment.id, id, actor.id, input.attachment.objectKey, input.attachment.filename, input.attachment.contentType, input.attachment.byteSize, now)] : []),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)

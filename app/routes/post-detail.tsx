@@ -11,8 +11,8 @@ import { requireSameOrigin } from "~/lib/http.server";
 import { routeSectionForDatabase, sectionDefinitions } from "~/lib/content";
 import { eventPostIdSchema } from "~/lib/event-review";
 import { formatEventDateTime } from "~/lib/events";
-import { imageUploadAccept, mediaUrl, type ContentImageAttachment } from "~/lib/media";
-import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
+import { mediaUrl } from "~/lib/media";
+import { deleteContentImage } from "~/lib/media.server";
 import { archivePost, deleteCommunityUpdate, getPostById, PostMutationError } from "~/models/posts.server";
 import { EventMutationError, removeEvent } from "~/models/events.server";
 import { archiveComment, CommentMutationError, createComment, listPostComments, updateComment } from "~/models/comments.server";
@@ -64,19 +64,11 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 export async function action({ request, context, params }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	try {
-		requireUploadRequestSize(request);
-	} catch (error) {
-		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
-		throw error;
-	}
 	const formData = await request.formData();
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = actionSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: "That request is invalid." };
 	if (result.data.postId !== params.postId) return { ok: false as const, error: "That request is invalid." };
-	let uploadedImage: ContentImageAttachment | null = null;
-	let attachmentPersisted = false;
 	try {
 		if (result.data.intent === "delete-update") {
 			const objectKeys = await deleteCommunityUpdate(context.cloudflare.env, user, result.data.postId);
@@ -97,9 +89,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			throw redirect(`/posts/${result.data.postId}`);
 		}
 		if (result.data.intent === "create-comment") {
-			uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
-			const created = await createComment(context.cloudflare.env, user, { ...result.data, mentionUserIds, attachment: uploadedImage });
-			attachmentPersisted = true;
+			const created = await createComment(context.cloudflare.env, user, { ...result.data, mentionUserIds });
 			throw redirect(`/posts/${result.data.postId}#comment-${created.id}`);
 		}
 		if (result.data.intent === "update-comment") {
@@ -111,8 +101,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		throw redirect(`/posts/${result.data.postId}#conversation`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
-		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned comment image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
-		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
 		if (error instanceof EventMutationError) return { ok: false as const, error: error.reason === "forbidden" ? "You cannot remove this event." : "That event is no longer available." };
 		if (error instanceof PostMutationError) return { ok: false as const, error: error.reason === "forbidden" ? result.data.intent === "delete-update" ? "Only site administrators can delete community updates." : "You cannot archive this post." : "That post is no longer available." };
 		if (error instanceof CommentMutationError) {
@@ -153,7 +141,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 			</article>
 			<section className="panel conversation-panel" id="conversation">
 				<div className="conversation-heading"><div><p className="eyebrow">Conversation</p><h2>{post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</h2></div><Icon name="message" size={22} /></div>
-				{post.status === "published" && <Form className="comment-compose-form" encType="multipart/form-data" method="post"><input name="intent" type="hidden" value="create-comment" /><input name="postId" type="hidden" value={post.id} /><label htmlFor="new-comment">Add to the conversation</label><MentionTextarea id="new-comment" maxLength={4000} minLength={2} placeholder="Share context, a question, or a next step… Type @ to tag." required rows={4} targets={composerMentionTargets} /><label className="comment-image-upload">Add image <span>(optional)</span><input accept={imageUploadAccept} name="image" type="file" /><small>PNG, JPG, WebP, or GIF. Maximum 2 MB.</small></label><div><span>Type @ to tag a person or organization. Tagged people are notified.</span><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Post comment</button></div></Form>}
+				{post.status === "published" && <Form className="comment-compose-form" method="post"><input name="intent" type="hidden" value="create-comment" /><input name="postId" type="hidden" value={post.id} /><label htmlFor="new-comment">Add to the conversation</label><MentionTextarea id="new-comment" maxLength={4000} minLength={2} placeholder="Share context, a question, or a next step… Type @ to tag." required rows={4} targets={composerMentionTargets} /><div><span>Type @ to tag a person or organization. Tagged people are notified.</span><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Post comment</button></div></Form>}
 				{comments.length > 0 ? <CommentThread comments={comments} composerMentionTargets={composerMentionTargets} interactive={post.status === "published"} mentionTargets={mentionTargets} postId={post.id} submitting={navigation.state === "submitting"} visibleMemberIds={loaderData.visibleMemberIds} /> : <div className="conversation-empty"><strong>No comments yet</strong><p>Start the conversation with a question, resource, or next step.</p></div>}
 			</section>
 			{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}

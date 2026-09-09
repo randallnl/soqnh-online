@@ -96,7 +96,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	try {
 		requireUploadRequestSize(request);
 	} catch (error) {
-		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
+		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 10 MB." };
 		throw error;
 	}
 	if (params.section !== "updates") throw new Response("Not found", { status: 404 });
@@ -139,14 +139,12 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		}
 		const post = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!post || post.section !== "update") throw new CommentMutationError("post-unavailable");
-		uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
-		const created = await createComment(context.cloudflare.env, user, { postId: post.id, parentCommentId: null, body: result.data.body, mentionUserIds, attachment: uploadedImage });
-		attachmentPersisted = true;
+		const created = await createComment(context.cloudflare.env, user, { postId: post.id, parentCommentId: null, body: result.data.body, mentionUserIds });
 		throw redirect(`/updates#comment-${created.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned feed image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
-		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
+		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 10 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
 		if (error instanceof PostMutationError) return {
 			ok: false as const,
 			error: result.data.intent === "delete-update" && error.reason === "forbidden"
@@ -212,7 +210,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 						<label>Post as<select defaultValue={loaderData.authoringOrganizations[0]?.id ?? ""} name="organizationId"><option value="">Yourself · community-wide</option>{loaderData.authoringOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · State of Queer Digital" : ""}</option>)}</select></label>
 						<label>Topics <span>(optional)</span><input maxLength={320} name="tags" placeholder="mutual-aid, celebration, question" /></label>
 					</div>
-					<label className="community-image-upload">Image <span>(optional)</span><input accept={imageUploadAccept} name="image" type="file" /><small>PNG, JPG, WebP, or GIF. Maximum 2 MB.</small></label>
+					<label className="community-image-upload">Image <span>(optional)</span><input accept={imageUploadAccept} name="image" type="file" /><small>PNG, JPG, WebP, or GIF. Maximum 10 MB.</small></label>
 					<details className="community-update-audience">
 						<summary>Choose audience</summary>
 						<p>Community updates default to Ecosystem-wide. Select affiliations to limit this update to those coalition spaces.</p>
@@ -257,7 +255,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 							{post.section === "update" && <section className="update-comment-preview" aria-label={`Conversation on update from ${post.authorName || "Member"}`}>
 								<div className="update-comment-preview-heading"><strong>Conversation</strong>{post.commentCount > 0 && <Link to={`/posts/${post.id}#conversation`}>View all {post.commentCount}</Link>}</div>
 								{commentPreviews.length > 0 && <div className="update-comment-preview-list">{commentPreviews.map((comment) => <article className="update-comment-preview-item" id={`comment-${comment.id}`} key={comment.id}><IdentityAvatar name={comment.authorName || "Member"} objectKey={comment.authorAvatarObjectKey} /><div><p><strong>{comment.authorName || "Member"}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt)}</time></p><MentionText targets={loaderData.mentionTargets} text={comment.body} />{comment.imageAttachments.map((image) => <img alt={image.filename} className="comment-image" key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div></article>)}</div>}
-								<Form className="update-feed-comment-form" encType="multipart/form-data" method="post"><input name="intent" type="hidden" value="create-feed-comment" /><input name="postId" type="hidden" value={post.id} /><label className="sr-only" htmlFor={`feed-comment-${post.id}`}>Comment on this update</label><MentionTextarea id={`feed-comment-${post.id}`} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={commentMentionTargets} /><label className="comment-image-upload">Add image<input accept={imageUploadAccept} name="image" type="file" /></label><button className="button button--secondary button--compact" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Comment</button></Form>
+				<Form className="update-feed-comment-form" method="post"><input name="intent" type="hidden" value="create-feed-comment" /><input name="postId" type="hidden" value={post.id} /><label className="sr-only" htmlFor={`feed-comment-${post.id}`}>Comment on this update</label><MentionTextarea id={`feed-comment-${post.id}`} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={commentMentionTargets} /><button className="button button--secondary button--compact" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Comment</button></Form>
 							</section>}
 							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span>{post.section === "update" ? <Form method="post"><input name="intent" type="hidden" value="toggle-support" /><input name="postId" type="hidden" value={post.id} /><button aria-label={`${post.viewerSupported ? "Remove support from" : "Support"} this update`} aria-pressed={post.viewerSupported} className={`support-button${post.viewerSupported ? " support-button--active" : ""}`} disabled={navigation.state === "submitting" && submittingIntent === "toggle-support" && navigation.formData?.get("postId") === post.id} type="submit"><Icon name="heart" size={15} /> {post.viewerSupported ? "Supported" : "Support"} · {post.supportCount}</button></Form> : <span><Icon name="heart" size={15} /> {post.supportCount} supports</span>}{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link>{post.section === "update" && loaderData.canDeleteUpdates && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="update-delete-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Delete</button></Form>}</footer>
 						</article>;

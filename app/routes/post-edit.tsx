@@ -51,7 +51,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	try {
 		requireUploadRequestSize(request);
 	} catch (error) {
-		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 2 MB." };
+		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 10 MB." };
 		throw error;
 	}
 	const formData = await request.formData();
@@ -76,7 +76,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned post image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
-		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 2 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
+		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 10 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
 		if (error instanceof PostMutationError) {
 			const messages = { "not-found": "That post is no longer available.", "forbidden": "You cannot edit that post.", "organization-required": "Choose an organization for that visibility setting.", "organization-unavailable": "You cannot post for that organization.", "affiliation-required": "Choose at least one affiliation, or opt the posting organization in to State of Queer Digital for statewide sharing.", "affiliation-unavailable": "You can only tag affiliations you belong to.", "event-details-required": "Add the event date and time before submitting it." };
 			return { ok: false as const, error: messages[error.reason] };
