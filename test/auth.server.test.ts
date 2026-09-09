@@ -316,7 +316,7 @@ describe("directory filters", () => {
 });
 
 describe("member profiles", () => {
-	it("limits the directory and profile assets to shared affiliations", async () => {
+	it("shows opted-in member profiles across affiliations while keeping affiliation details private", async () => {
 		await Promise.all([seedUser(), seedSecondMember(), seedThirdMember()]);
 		await seedSiteAdmin();
 		await seedAffiliation();
@@ -331,7 +331,7 @@ describe("member profiles", () => {
 
 		const memberDirectory = await listVisibleMembers(env, activeUser);
 		expect(memberDirectory).toSatisfy((members: Awaited<ReturnType<typeof listVisibleMembers>>) =>
-			members.map((member) => member.id).sort().join(",") === "user-active,user-second",
+			members.map((member) => member.id).sort().join(",") === "user-active,user-admin,user-second,user-third",
 		);
 		expect(memberDirectory.find((member) => member.id === activeUser.id)?.affiliationNames).toBe("Shared Coalition");
 		expect(memberDirectory.find((member) => member.id === secondMember.id)?.affiliationNames).toBeNull();
@@ -342,9 +342,14 @@ describe("member profiles", () => {
 		expect(ownProfile?.affiliations.map((affiliation) => affiliation.id)).toEqual(["aff-shared"]);
 		const adminProfile = await getVisibleMemberProfile(env, siteAdmin, secondMember.id);
 		expect(adminProfile?.affiliations.map((affiliation) => affiliation.id)).toEqual(["aff-shared"]);
-		await expect(getVisibleMemberProfile(env, activeUser, thirdMember.id)).resolves.toBeNull();
+		await expect(getVisibleMemberProfile(env, activeUser, thirdMember.id)).resolves.toMatchObject({ id: thirdMember.id, affiliationNames: null, affiliations: [] });
 		await expect(canReadIdentityObject(env, activeUser, "profile-photos/second.jpg")).resolves.toBe(true);
-		await expect(canReadIdentityObject(env, thirdMember, "profile-photos/second.jpg")).resolves.toBe(false);
+		await expect(canReadIdentityObject(env, thirdMember, "profile-photos/second.jpg")).resolves.toBe(true);
+
+		await env.DB.prepare("UPDATE users SET profile_visibility = 'hidden' WHERE id = ?1").bind(secondMember.id).run();
+		expect((await listVisibleMembers(env, activeUser)).map((member) => member.id)).not.toContain(secondMember.id);
+		await expect(getVisibleMemberProfile(env, activeUser, secondMember.id)).resolves.toBeNull();
+		await expect(canReadIdentityObject(env, activeUser, "profile-photos/second.jpg")).resolves.toBe(false);
 	});
 
 	it("updates a member's own directory profile and direct affiliations", async () => {
@@ -578,6 +583,8 @@ describe("partner event scraper imports", () => {
 	it("imports new events into moderation and updates a pending repeat", async () => {
 		await seedSiteAdmin();
 		await seedOrganization();
+		await seedAffiliation();
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
 		const first = await importScraperRecords(env, [scrapedEvent], null);
 		expect(first).toMatchObject({ imported: 1, new: 1, updated: 0, skipped: 0 });
 
@@ -593,12 +600,18 @@ describe("partner event scraper imports", () => {
 			startsAt: "2026-09-12T13:30",
 			moderationStatus: "pending",
 		});
+		await expect(env.DB.prepare(
+			"SELECT count(*) AS count FROM post_affiliations WHERE post_id IN (SELECT id FROM posts WHERE author_user_id = 'system:event-scraper')",
+		).first<number>("count")).resolves.toBe(0);
 
 		const repeat = await importScraperRecords(env, [{ ...scrapedEvent, description: "Updated details." }], null);
 		expect(repeat).toMatchObject({ imported: 1, new: 0, updated: 1, skipped: 0 });
 		await expect(env.DB.prepare(
 			"SELECT body FROM posts WHERE author_user_id = 'system:event-scraper'",
 		).first<string>("body")).resolves.toBe("Updated details.");
+		await expect(env.DB.prepare(
+			"SELECT count(*) AS count FROM post_affiliations WHERE post_id IN (SELECT id FROM posts WHERE author_user_id = 'system:event-scraper')",
+		).first<number>("count")).resolves.toBe(0);
 
 		const rerunId = await createManualScraperRun(env, siteAdmin);
 		const corrected = await importScraperRecords(env, [{
@@ -1700,6 +1713,42 @@ describe("event moderation", () => {
 		expect((await listSectionPosts(env, siteAdmin, { ...baseInput, eventTiming: "all" })).posts.map((post) => post.id)).toEqual([pastId, upcomingId]);
 	});
 
+	it("shows approved untagged events to every member and scopes tagged events by affiliation", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedAffiliation();
+		await seedAffiliation("aff-other", "Other Coalition", "other-coalition");
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+		const createApprovedEvent = async (title: string, affiliationIds: string[]) => {
+			const event = await createPost(env, siteAdmin, {
+				organizationId: null,
+				section: "event",
+				title,
+				body: `${title} details for the statewide calendar.`,
+				visibility: "members",
+				status: "published",
+				tags: [],
+				affiliationIds,
+				event: { ...eventDetails, startsAt: "2099-09-12T18:00" },
+			});
+			await reviewEvent(env, siteAdmin, { postId: event.id, decision: "approve", reason: null });
+			return event.id;
+		};
+		const statewideEventId = await createApprovedEvent("Statewide gathering", []);
+		const affiliationEventId = await createApprovedEvent("Coalition gathering", ["aff-shared", "aff-other"]);
+
+		const affiliatedFeed = await listSectionPosts(env, activeUser, { section: "event", tag: null, organizationId: null, page: 1 });
+		const statewideFeed = await listSectionPosts(env, secondMember, { section: "event", tag: null, organizationId: null, page: 1 });
+		expect(affiliatedFeed.posts.map((post) => post.id).sort()).toEqual([affiliationEventId, statewideEventId].sort());
+		expect(affiliatedFeed.posts.find((post) => post.id === affiliationEventId)?.affiliations).toEqual([
+			{ id: "aff-shared", name: "Shared Coalition", slug: "shared-coalition" },
+		]);
+		expect(statewideFeed.posts.map((post) => post.id)).toEqual([statewideEventId]);
+		await expect(getPostById(env, secondMember, statewideEventId)).resolves.toMatchObject({ id: statewideEventId });
+		await expect(getPostById(env, secondMember, affiliationEventId)).resolves.toBeNull();
+	});
+
 	it("keeps submitted events private until an organization admin approves them", async () => {
 		await seedSiteAdmin();
 		await seedUser();
@@ -1712,7 +1761,7 @@ describe("event moderation", () => {
 		const event = await createPost(env, activeUser, {
 			organizationId: "org-one", section: "event", title: "Queer community gathering",
 			body: "An evening gathering for community connection and shared learning.",
-			visibility: "members", status: "published", tags: ["community"], event: eventDetails,
+			visibility: "members", status: "published", tags: ["community"], affiliationIds: [], event: eventDetails,
 		});
 		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({
 			status: "draft", eventModerationStatus: "pending", eventStartsAt: eventDetails.startsAt,
@@ -1799,7 +1848,7 @@ describe("event moderation", () => {
 });
 
 describe("dashboard data", () => {
-	it("scopes member totals while showing every active organization", async () => {
+	it("shows statewide member and organization totals", async () => {
 		await seedSiteAdmin();
 		await seedUser();
 		await seedSecondMember();
@@ -1815,11 +1864,11 @@ describe("dashboard data", () => {
 		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-other", organizationId: "org-two" });
 
 		expect((await getDashboardData(env, activeUser)).counts).toMatchObject({
-			activeMembers: 2,
+			activeMembers: 4,
 			organizations: 2,
 		});
 		expect((await getDashboardData(env, thirdMember)).counts).toMatchObject({
-			activeMembers: 1,
+			activeMembers: 4,
 			organizations: 2,
 		});
 		expect((await getDashboardData(env, siteAdmin)).counts).toMatchObject({

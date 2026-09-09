@@ -76,6 +76,9 @@ export async function listMentionableMembers(env: Env, actor: AuthenticatedUser,
 		           WHERE membership.user_id = u.id
 		         )
 		     ))
+		     OR (?3 = 'members' AND ?6 = 'event' AND NOT EXISTS (
+		       SELECT 1 FROM post_affiliations WHERE post_id = ?5
+		     ))
 		     OR (?3 = 'members' AND NOT EXISTS (
 		       SELECT 1 FROM post_affiliations WHERE post_id = ?5
 		     ) AND (
@@ -96,7 +99,7 @@ export async function listMentionableMembers(env: Env, actor: AuthenticatedUser,
 		   )
 		 ORDER BY coalesce(u.name, 'Member') COLLATE NOCASE, u.id
 		 LIMIT 100`,
-	).bind(actor.id, post.organizationId, post.visibility, actor.siteRole === "site_admin" ? 1 : 0, post.id).all<MentionableMember>();
+	).bind(actor.id, post.organizationId, post.visibility, actor.siteRole === "site_admin" ? 1 : 0, post.id, post.section).all<MentionableMember>();
 	return result.results;
 }
 

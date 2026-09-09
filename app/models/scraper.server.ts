@@ -139,7 +139,6 @@ async function updateImportedEvent(
 	env: Env,
 	input: {
 		postId: string;
-		organizationId: string;
 		externalId: string;
 		record: ScraperRecord;
 		startsAt: string;
@@ -167,11 +166,6 @@ async function updateImportedEvent(
 			input.record.scraped_at || now, input.imageUrl, input.postId,
 		),
 		env.DB.prepare("DELETE FROM post_affiliations WHERE post_id = ?1").bind(input.postId),
-		env.DB.prepare(
-			`INSERT INTO post_affiliations (post_id, affiliation_id, created_at)
-			 SELECT ?1, affiliation_id, ?2 FROM organization_affiliations
-			 WHERE organization_id = ?3`,
-		).bind(input.postId, now, input.organizationId),
 	]);
 }
 
@@ -331,7 +325,7 @@ export async function importScraperRecords(
 			);
 			if (canSafelyReplace && likelyDuplicate.authorUserId === "system:event-scraper" && likelyDuplicate.moderationStatus !== "approved") {
 				await updateImportedEvent(env, {
-					postId: likelyDuplicate.postId, organizationId: organization.id, externalId,
+					postId: likelyDuplicate.postId, externalId,
 					record, startsAt, endsAt, externalUrl, sourceUrl, imageUrl,
 				});
 				counts.updated += 1;
@@ -371,11 +365,6 @@ export async function importScraperRecords(
 				         'pending', NULL, NULL, NULL)`,
 			).bind(postId, startsAt, endsAt, record.location || null, externalUrl,
 				sourceUrl, externalUrl, externalId, record.scraped_at || now, imageUrl),
-			env.DB.prepare(
-				`INSERT INTO post_affiliations (post_id, affiliation_id, created_at)
-				 SELECT ?1, affiliation_id, ?2 FROM organization_affiliations
-				 WHERE organization_id = ?3`,
-			).bind(postId, now, organization.id),
 		]);
 		counts.imported += 1;
 		await recordImport(env, {

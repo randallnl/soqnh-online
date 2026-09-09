@@ -37,7 +37,11 @@ const visibleNotificationWhere = `n.user_id = ?1
       JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
       WHERE post_affiliation.post_id = p.id
     ) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
-      p.organization_id IS NULL
+      (p.section = 'event' AND EXISTS (
+        SELECT 1 FROM events AS visible_event
+        WHERE visible_event.post_id = p.id AND visible_event.moderation_status = 'approved'
+      ))
+      OR p.organization_id IS NULL
       OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
       OR EXISTS (
         SELECT 1 FROM organization_affiliations AS legacy_affiliation

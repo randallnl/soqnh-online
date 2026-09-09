@@ -57,6 +57,13 @@
       "when": 1788896768650,
       "tag": "0007_striped_jean_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788968454000,
+      "tag": "0008_scraped_events_ecosystem_wide",
+      "breakpoints": true
     }
   ]
 }

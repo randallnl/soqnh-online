@@ -31,16 +31,7 @@ const effectiveAffiliations = `effective_affiliations AS (
 	JOIN organization_affiliations AS oa ON oa.organization_id = om.organization_id
 )`;
 
-const visiblePerson = `(
-	?2 = 1 OR u.id = ?1 OR (
-		u.profile_visibility = 'members' AND EXISTS (
-			SELECT 1 FROM effective_affiliations AS viewer_affiliation
-			JOIN effective_affiliations AS target_affiliation
-			  ON target_affiliation.affiliation_id = viewer_affiliation.affiliation_id
-			WHERE viewer_affiliation.user_id = ?1 AND target_affiliation.user_id = u.id
-		)
-	)
-)`;
+const visiblePerson = `(?2 = 1 OR u.id = ?1 OR u.profile_visibility = 'members')`;
 
 export async function listVisibleMembers(env: Env, viewer: AuthenticatedUser) {
 	const result = await env.DB.prepare(

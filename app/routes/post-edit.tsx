@@ -47,13 +47,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	const formData = await request.formData();
-	const affiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
+	const requestedAffiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = formSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the post details" };
 	try {
 		const existing = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!existing) throw new PostMutationError("not-found");
+		const affiliationIds = existing.section === "event" && formData.get("ecosystemWide") === "true" ? [] : requestedAffiliationIds;
 		if (existing.section !== "update" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 		const eventResult = existing.section === "event" ? parseEventDetails(formData) : null;
 		if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };

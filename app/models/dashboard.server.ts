@@ -67,6 +67,12 @@ const visiblePostPredicate = `(
 		WHERE organization_id = p.organization_id AND user_id = ?1
 	))
 	OR (
+		p.section = 'event'
+		AND p.visibility = 'members'
+		AND (p.organization_id IS NULL OR o.status = 'active')
+		AND NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id)
+	)
+	OR (
 		p.visibility = 'members'
 		AND (p.organization_id IS NULL OR o.status = 'active')
 		AND (EXISTS (
@@ -75,7 +81,7 @@ const visiblePostPredicate = `(
 			JOIN viewer_affiliations
 			  ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
 			WHERE post_affiliation.post_id = p.id
-		) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND (
+		) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND p.section != 'event' AND (
 			p.organization_id IS NULL
 			OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
 			OR EXISTS (
@@ -101,16 +107,7 @@ export async function getDashboardData(
 			    FROM users AS visible_member
 			    WHERE visible_member.status = 'active'
 			      AND visible_member.id != 'system:event-scraper'
-			      AND (?2 = 1 OR visible_member.id = ?1 OR (
-			        visible_member.profile_visibility = 'members'
-			        AND EXISTS (
-			          SELECT 1
-			          FROM effective_affiliations AS member_affiliation
-			          JOIN viewer_affiliations
-			            ON viewer_affiliations.affiliation_id = member_affiliation.affiliation_id
-			          WHERE member_affiliation.user_id = visible_member.id
-			        )
-			      ))) AS activeMembers,
+			      AND (?2 = 1 OR visible_member.id = ?1 OR visible_member.profile_visibility = 'members')) AS activeMembers,
 			   (SELECT count(*)
 			    FROM organizations AS visible_organization
 			    WHERE visible_organization.status = 'active') AS organizations,
