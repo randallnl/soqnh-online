@@ -1439,19 +1439,13 @@ describe("State of Queer Digital participation", () => {
 		]);
 	});
 
-	it("shares untagged posts statewide only among participating organizations", async () => {
+	it("shares untagged organization posts ecosystem-wide without affiliations or directory participation", async () => {
 		await seedSiteAdmin();
 		await seedUser();
 		await seedSecondMember();
 		await seedThirdMember();
 		await seedOrganization();
-		await seedSecondOrganization();
 		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: activeUser.id, role: "contributor" });
-		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-two", userId: secondMember.id, role: "viewer" });
-		await requestDirectoryParticipation(env, siteAdmin, "org-one");
-		await reviewDirectoryParticipation(env, siteAdmin, { organizationId: "org-one", decision: "approve", note: null });
-		await requestDirectoryParticipation(env, siteAdmin, "org-two");
-		await reviewDirectoryParticipation(env, siteAdmin, { organizationId: "org-two", decision: "approve", note: null });
 
 		const created = await createPost(env, activeUser, {
 			organizationId: "org-one",
@@ -1465,12 +1459,12 @@ describe("State of Queer Digital participation", () => {
 		});
 
 		expect((await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(created.id);
-		expect((await listSectionPosts(env, thirdMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts).toEqual([]);
+		expect((await listSectionPosts(env, thirdMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(created.id);
 	});
 });
 
 describe("content feeds and post permissions", () => {
-	it("allows members without an organization to post and manage personal community updates", async () => {
+	it("allows members without an organization or affiliation to post ecosystem-wide updates, projects, and events", async () => {
 		await seedSiteAdmin();
 		await seedUser();
 		await seedSecondMember();
@@ -1491,6 +1485,43 @@ describe("content feeds and post permissions", () => {
 		expect((await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(created.id);
 		await archivePost(env, activeUser, created.id);
 		await expect(getPostById(env, activeUser, created.id)).resolves.toMatchObject({ id: created.id, status: "archived" });
+
+		const project = await createPost(env, activeUser, {
+			organizationId: null,
+			section: "project",
+			title: "Personal ecosystem project",
+			body: "A member-led project shared with the full ecosystem.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			affiliationIds: [],
+		});
+		await expect(getPostById(env, activeUser, project.id)).resolves.toMatchObject({ id: project.id, organizationId: null, canEdit: true });
+		expect((await listSectionPosts(env, secondMember, { section: "project", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(project.id);
+		await archivePost(env, activeUser, project.id);
+
+		const event = await createPost(env, activeUser, {
+			organizationId: null,
+			section: "event",
+			title: "Personal ecosystem event",
+			body: "A member-hosted gathering shared with the full ecosystem.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			affiliationIds: [],
+			event: {
+				startsAt: "2099-10-15T18:00",
+				endsAt: null,
+				locationName: "Concord",
+				locationUrl: null,
+				registrationUrl: null,
+				sourceUrl: null,
+				imageUrl: null,
+			},
+		});
+		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({ id: event.id, organizationId: null, canEdit: true, eventModerationStatus: "pending" });
+		await reviewEvent(env, siteAdmin, { postId: event.id, decision: "approve", reason: null });
+		expect((await listSectionPosts(env, secondMember, { section: "event", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(event.id);
 	});
 
 	it("shows shared-network posts through direct or inherited affiliations", async () => {
@@ -1525,9 +1556,10 @@ describe("content feeds and post permissions", () => {
 		expect((await listSectionPosts(env, secondMember, { section: "update", tag: null, organizationId: null, affiliationIds: [], page: 1 })).posts).toEqual([]);
 	});
 
-	it("requires shared content to use affiliations available to the author", async () => {
+	it("defaults shared content to ecosystem-wide while rejecting unavailable affiliation tags", async () => {
 		await seedSiteAdmin();
 		await seedUser();
+		await seedThirdMember();
 		await seedOrganization();
 		await seedAffiliation();
 		await seedAffiliation("aff-other", "Other Coalition", "other-coalition");
@@ -1543,7 +1575,8 @@ describe("content feeds and post permissions", () => {
 			tags: [],
 		};
 
-		await expect(createPost(env, activeUser, { ...input, affiliationIds: [] })).rejects.toMatchObject({ reason: "affiliation-required" });
+		const ecosystemPost = await createPost(env, activeUser, { ...input, affiliationIds: [] });
+		expect((await listSectionPosts(env, thirdMember, { section: "update", tag: null, organizationId: null, page: 1 })).posts.map((post) => post.id)).toContain(ecosystemPost.id);
 		await expect(createPost(env, activeUser, { ...input, affiliationIds: ["aff-other"] })).rejects.toMatchObject({ reason: "affiliation-unavailable" });
 		await expect(createPost(env, activeUser, { ...input, affiliationIds: ["aff-shared"] })).resolves.toHaveProperty("id");
 	});

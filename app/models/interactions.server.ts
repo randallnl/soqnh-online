@@ -76,30 +76,13 @@ export async function listMentionableMembers(env: Env, actor: AuthenticatedUser,
 		           WHERE membership.user_id = u.id
 		         )
 		     ))
-		     OR (?3 = 'members' AND ?6 = 'event' AND NOT EXISTS (
-		       SELECT 1 FROM post_affiliations WHERE post_id = ?5
-		     ))
 		     OR (?3 = 'members' AND NOT EXISTS (
 		       SELECT 1 FROM post_affiliations WHERE post_id = ?5
-		     ) AND (
-		       ?2 IS NULL
-		       OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = ?2 AND user_id = u.id)
-		       OR EXISTS (
-		         SELECT 1 FROM organization_affiliations AS legacy_affiliation
-		         WHERE legacy_affiliation.organization_id = ?2
-		           AND legacy_affiliation.affiliation_id IN (
-		             SELECT affiliation_id FROM user_affiliations WHERE user_id = u.id
-		             UNION
-		             SELECT inherited.affiliation_id FROM organization_memberships AS membership
-		             JOIN organization_affiliations AS inherited ON inherited.organization_id = membership.organization_id
-		             WHERE membership.user_id = u.id
-		           )
-		       )
 		     ))
 		   )
 		 ORDER BY coalesce(u.name, 'Member') COLLATE NOCASE, u.id
 		 LIMIT 100`,
-	).bind(actor.id, post.organizationId, post.visibility, actor.siteRole === "site_admin" ? 1 : 0, post.id, post.section).all<MentionableMember>();
+	).bind(actor.id, post.organizationId, post.visibility, actor.siteRole === "site_admin" ? 1 : 0, post.id).all<MentionableMember>();
 	return result.results;
 }
 

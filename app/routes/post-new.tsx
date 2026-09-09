@@ -46,12 +46,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		listVisibleMembers(context.cloudflare.env, user),
 		listVisibleOrganizations(context.cloudflare.env, user),
 	]);
-	if (section !== "updates" && user.siteRole !== "site_admin" && organizations.length === 0) throw new Response("Forbidden", { status: 403 });
 	const mentionTargets: MentionTarget[] = [
 		...members.filter((member) => member.id !== user.id).map((member) => ({ id: member.id, type: "person" as const, label: member.name || "Member", detail: member.profileTitle || member.organizationNames, href: `/members/${member.id}` })),
 		...visibleOrganizations.map((organization) => ({ id: organization.id, type: "organization" as const, label: organization.name, detail: organization.summary, href: `/organizations/${organization.slug}` })),
 	];
-	return { section, definition: sectionDefinitions[section], organizations, affiliations, mentionTargets, allowEcosystemWide: user.siteRole === "site_admin" };
+	return { section, definition: sectionDefinitions[section], organizations, affiliations, mentionTargets };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -62,7 +61,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = formSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the post details" };
-	const affiliationIds = result.data.section === "events" && formData.get("ecosystemWide") === "true" ? [] : requestedAffiliationIds;
+	const affiliationIds = formData.get("ecosystemWide") === "true" ? [] : requestedAffiliationIds;
 	if (result.data.section !== "updates" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 	const eventResult = result.data.section === "events" ? parseEventDetails(formData) : null;
 	if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
@@ -92,5 +91,5 @@ export function meta({ data }: Route.MetaArgs) {
 export default function PostNew({ loaderData }: Route.ComponentProps) {
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
-	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">{loaderData.definition.eyebrow}</p><h1>{loaderData.definition.action}</h1><p>{loaderData.section === "events" ? "Submit an event with the details moderators need to review and publish it." : "Create a focused post for the people and organizations who should see it."}</p></div></section><PostEditor affiliations={loaderData.affiliations} allowEcosystemWide={loaderData.allowEcosystemWide} mentionTargets={loaderData.mentionTargets} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
+	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">{loaderData.definition.eyebrow}</p><h1>{loaderData.definition.action}</h1><p>{loaderData.section === "events" ? "Submit an event with the details moderators need to review and publish it." : "Create a focused post for the people and organizations who should see it."}</p></div></section><PostEditor affiliations={loaderData.affiliations} mentionTargets={loaderData.mentionTargets} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
 }

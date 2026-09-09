@@ -274,7 +274,7 @@ export async function importScraperRecords(
 
 		if (exact) {
 			await updateImportedEvent(env, {
-				postId: exact.postId, organizationId: organization.id, externalId,
+				postId: exact.postId, externalId,
 				record, startsAt, endsAt, externalUrl, sourceUrl, imageUrl,
 			});
 			counts.updated += 1;

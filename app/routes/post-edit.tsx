@@ -40,7 +40,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		...members.filter((member) => member.id !== user.id).map((member) => ({ id: member.id, type: "person" as const, label: member.name || "Member", detail: member.profileTitle || member.organizationNames, href: `/members/${member.id}` })),
 		...visibleOrganizations.map((organization) => ({ id: organization.id, type: "organization" as const, label: organization.name, detail: organization.summary, href: `/organizations/${organization.slug}` })),
 	];
-	return { post, section: routeSectionForDatabase(post.section), organizations, affiliations, mentionTargets, mentionUserIds, allowEcosystemWide: user.siteRole === "site_admin" };
+	return { post, section: routeSectionForDatabase(post.section), organizations, affiliations, mentionTargets, mentionUserIds };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -54,7 +54,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	try {
 		const existing = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!existing) throw new PostMutationError("not-found");
-		const affiliationIds = existing.section === "event" && formData.get("ecosystemWide") === "true" ? [] : requestedAffiliationIds;
+		const affiliationIds = formData.get("ecosystemWide") === "true" ? [] : requestedAffiliationIds;
 		if (existing.section !== "update" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 		const eventResult = existing.section === "event" ? parseEventDetails(formData) : null;
 		if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
@@ -78,5 +78,5 @@ export function meta({ data }: Route.MetaArgs) {
 export default function PostEdit({ loaderData }: Route.ComponentProps) {
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
-	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">Content management</p><h1>Edit {loaderData.section === "events" ? "event" : "post"}</h1><p>{loaderData.section === "events" ? "Any saved event changes return it to the moderation queue." : "Update the content, audience, organization, tags, or publication state."}</p></div></section><PostEditor affiliations={loaderData.affiliations} allowEcosystemWide={loaderData.allowEcosystemWide} mentionTargets={loaderData.mentionTargets} mentionUserIds={loaderData.mentionUserIds} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} post={loaderData.post} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
+	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">Content management</p><h1>Edit {loaderData.section === "events" ? "event" : "post"}</h1><p>{loaderData.section === "events" ? "Any saved event changes return it to the moderation queue." : "Update the content, audience, organization, tags, or publication state."}</p></div></section><PostEditor affiliations={loaderData.affiliations} mentionTargets={loaderData.mentionTargets} mentionUserIds={loaderData.mentionUserIds} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} post={loaderData.post} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
 }

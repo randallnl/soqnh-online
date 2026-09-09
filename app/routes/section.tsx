@@ -2,6 +2,7 @@ import { Form, Link, redirect, useActionData, useNavigation } from "react-router
 import { z } from "zod";
 
 import type { Route } from "./+types/section";
+import { AffiliationAudiencePicker } from "~/components/affiliation-audience-picker";
 import { Icon } from "~/components/icon";
 import { IdentityAvatar } from "~/components/identity-avatar";
 import { MentionText, MentionTextarea, type MentionTarget } from "~/components/mention-textarea";
@@ -75,8 +76,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		visibleOrganizations,
 		availableAffiliations,
 		authoringOrganizations,
-		allowEcosystemWide: user.siteRole === "site_admin",
-		canCreate: params.section === "updates" || user.siteRole === "site_admin" || authoringOrganizations.length > 0,
+		canCreate: true,
 		canDeleteUpdates: user.siteRole === "site_admin",
 		canModerateEvents: user.siteRole === "site_admin" || authoringOrganizations.some((organization) => organization.role === "org_admin"),
 		filters: { tag, organizationId, affiliationIds, eventTiming },
@@ -92,7 +92,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	if (params.section !== "updates") throw new Response("Not found", { status: 404 });
 	const formData = await request.formData();
-	const affiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
+	const requestedAffiliationIds = [...new Set(formData.getAll("affiliationId").filter((value): value is string => typeof value === "string" && value.length > 0))];
+	const affiliationIds = formData.get("ecosystemWide") === "true" ? [] : requestedAffiliationIds;
 	const mentionUserIds = [...new Set(formData.getAll("mentionUserId").filter((value): value is string => typeof value === "string" && value.length > 0))];
 	const result = updateActionSchema.safeParse(Object.fromEntries(formData));
 	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check your update" };
@@ -187,11 +188,11 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 						<label>Topics <span>(optional)</span><input maxLength={320} name="tags" placeholder="mutual-aid, celebration, question" /></label>
 					</div>
 					<details className="community-update-audience">
-						<summary>Choose affiliations</summary>
-						<p>Select the coalition spaces this update belongs to. An organization outside State of Queer Digital must choose at least one.</p>
-						{loaderData.availableAffiliations.length > 0 ? <div>{loaderData.availableAffiliations.map((affiliation) => <label key={affiliation.id}><input name="affiliationId" type="checkbox" value={affiliation.id} />{affiliation.name}</label>)}</div> : <p>You do not currently have an affiliation available.</p>}
+						<summary>Choose audience</summary>
+						<p>Community updates default to Ecosystem-wide. Select affiliations to limit this update to those coalition spaces.</p>
+						<AffiliationAudiencePicker affiliations={loaderData.availableAffiliations} />
 					</details>
-					<div className="community-update-composer-actions"><span>Community posts are shared with your selected community spaces.</span><button className="button button--primary" disabled={navigation.state === "submitting" && submittingIntent === "create-update"} type="submit">{navigation.state === "submitting" && submittingIntent === "create-update" ? "Posting…" : "Post update"}</button></div>
+					<div className="community-update-composer-actions"><span>Community posts are shared with your selected audience.</span><button className="button button--primary" disabled={navigation.state === "submitting" && submittingIntent === "create-update"} type="submit">{navigation.state === "submitting" && submittingIntent === "create-update" ? "Posting…" : "Post update"}</button></div>
 				</Form>
 			</details>}
 

@@ -67,12 +67,6 @@ const visiblePostPredicate = `(
 		WHERE organization_id = p.organization_id AND user_id = ?1
 	))
 	OR (
-		p.section = 'event'
-		AND p.visibility = 'members'
-		AND (p.organization_id IS NULL OR o.status = 'active')
-		AND NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id)
-	)
-	OR (
 		p.visibility = 'members'
 		AND (p.organization_id IS NULL OR o.status = 'active')
 		AND (EXISTS (
@@ -81,15 +75,7 @@ const visiblePostPredicate = `(
 			JOIN viewer_affiliations
 			  ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
 			WHERE post_affiliation.post_id = p.id
-		) OR (NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id) AND p.section != 'event' AND (
-			p.organization_id IS NULL
-			OR EXISTS (SELECT 1 FROM organization_memberships WHERE organization_id = p.organization_id AND user_id = ?1)
-			OR EXISTS (
-				SELECT 1 FROM organization_affiliations AS legacy_affiliation
-				JOIN viewer_affiliations ON viewer_affiliations.affiliation_id = legacy_affiliation.affiliation_id
-				WHERE legacy_affiliation.organization_id = p.organization_id
-			)
-		)))
+		) OR NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id))
 	)
 )`;
 
