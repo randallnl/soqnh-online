@@ -22,7 +22,7 @@ export const sectionDefinitions = {
 		databaseValue: "event",
 		title: "Events",
 		eyebrow: "Across New Hampshire",
-		description: "Share gatherings, trainings, actions, and moments of community across the network.",
+		description: "Share gatherings, trainings, actions, and moments of community across the network. Add events manually, or add your events page URL to your organization profile to sync them automatically.",
 		action: "Create event post",
 		icon: "calendar",
 	},
