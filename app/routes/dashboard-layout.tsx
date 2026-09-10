@@ -228,7 +228,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 							<Icon name="bell" />
 							{loaderData.unreadCount > 0 && <span />}
 						</Link>
-						<Link className="button button--primary button--compact" to="/updates#community-update-composer">
+						<Link className="button button--primary button--compact" to="/updates">
 							<Icon name="plus" size={17} />
 							<span>New post</span>
 						</Link>
