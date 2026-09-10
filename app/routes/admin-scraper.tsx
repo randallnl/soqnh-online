@@ -163,7 +163,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 				const candidate = scraperRecordSchema.safeParse(record);
 				return !candidate.success || ((candidate.data.kind || "event") === "event" && candidate.data.start_date >= today);
 			});
-			const result = await importScraperRecords(context.cloudflare.env, records, runId);
+			const result = await importScraperRecords(context.cloudflare.env, records, runId, {
+				requeueRejected: true,
+			});
 			await finishManualScraperRun(context.cloudflare.env, runId, {
 				partners: 1,
 				scraped: payload.data.import_payload.records.length,

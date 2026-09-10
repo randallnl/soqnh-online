@@ -4,7 +4,7 @@ import type { D1Migration } from "@cloudflare/vitest-pool-workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { sanitizeReturnTo } from "../app/lib/auth";
-import { createInvitationEmailContent } from "../app/lib/email.server";
+import { createInvitationEmailContent, createMagicLinkEmailContent } from "../app/lib/email.server";
 import {
 	consumeLoginToken,
 	createRandomSecret,
@@ -693,6 +693,23 @@ describe("partner event scraper imports", () => {
 		});
 	});
 
+	it("normalizes Mobilize 12-hour event times during import", async () => {
+		await seedOrganization();
+		const result = await importScraperRecords(env, [{
+			...scrapedEvent,
+			start_time: "11:00 AM",
+			end_time: "4:00 PM",
+		}], null);
+
+		expect(result).toMatchObject({ imported: 1, new: 1, invalid: 0 });
+		await expect(env.DB.prepare(
+			"SELECT starts_at AS startsAt, ends_at AS endsAt FROM events LIMIT 1",
+		).first<{ startsAt: string; endsAt: string }>()).resolves.toEqual({
+			startsAt: "2026-09-12T11:00",
+			endsAt: "2026-09-12T16:00",
+		});
+	});
+
 	it("does not overwrite an approved scraper event", async () => {
 		await seedOrganization();
 		await importScraperRecords(env, [scrapedEvent], null);
@@ -708,6 +725,31 @@ describe("partner event scraper imports", () => {
 		expect(result).toMatchObject({ imported: 0, new: 0, updated: 0, skipped: 1, duplicates: 1 });
 		await expect(env.DB.prepare("SELECT title FROM posts WHERE id = ?1").bind(postId).first<string>("title"))
 			.resolves.toBe("Queer Community Picnic");
+	});
+
+	it("keeps unchanged rejected scraper events out of moderation until explicitly re-scraped", async () => {
+		await seedSiteAdmin();
+		await seedOrganization();
+		await importScraperRecords(env, [scrapedEvent], null);
+		const postId = await env.DB.prepare("SELECT post_id AS postId FROM events LIMIT 1").first<string>("postId");
+
+		await reviewEvent(env, siteAdmin, {
+			postId: postId!,
+			decision: "reject",
+			reason: "This source record is not an event we want to publish.",
+		});
+		expect(await listPendingEvents(env, siteAdmin)).toEqual([]);
+
+		const scheduledRepeat = await importScraperRecords(env, [scrapedEvent], null);
+		expect(scheduledRepeat).toMatchObject({ imported: 0, updated: 0, skipped: 1, duplicates: 1 });
+		expect(await listPendingEvents(env, siteAdmin)).toEqual([]);
+		await expect(env.DB.prepare(
+			"SELECT moderation_status AS moderationStatus FROM events WHERE post_id = ?1",
+		).bind(postId).first<string>("moderationStatus")).resolves.toBe("rejected");
+
+		const explicitRerun = await importScraperRecords(env, [scrapedEvent], null, { requeueRejected: true });
+		expect(explicitRerun).toMatchObject({ imported: 1, updated: 1, skipped: 0 });
+		expect((await listPendingEvents(env, siteAdmin)).map((event) => event.postId)).toEqual([postId]);
 	});
 });
 
@@ -743,6 +785,36 @@ describe("invitation email content", () => {
 		expect(content.html).toContain("Alex &amp; Taylor");
 		expect(content.html).toContain("token=a&amp;next=&quot;profile&quot;");
 		expect(content.html).not.toContain("Community <Center>");
+	});
+});
+
+describe("magic link email content", () => {
+	it("provides a branded sign-in action and security guidance in both formats", () => {
+		const content = createMagicLinkEmailContent({
+			link: "https://soqnh.example/auth/verify?token=secure-token",
+			logoUrl: "https://soqnh.example/brand/queerlective-round.png",
+		});
+
+		expect(content.subject).toBe("Your secure NH Connect sign-in link");
+		for (const body of [content.text, content.html]) {
+			expect(body).toContain("NH Connect");
+			expect(body).toContain("expires in 15 minutes");
+			expect(body).toContain("only be used once");
+			expect(body).toContain("secure-token");
+		}
+		expect(content.html).toContain("Sign in to NH Connect");
+		expect(content.html).toContain("queerlective-round.png");
+	});
+
+	it("escapes the sign-in and logo URLs in HTML", () => {
+		const content = createMagicLinkEmailContent({
+			link: "https://soqnh.example/auth/verify?token=a&next=\"profile\"",
+			logoUrl: "https://soqnh.example/logo.png?size=small&mode=round",
+		});
+
+		expect(content.html).toContain("token=a&amp;next=&quot;profile&quot;");
+		expect(content.html).toContain("size=small&amp;mode=round");
+		expect(content.html).not.toContain("token=a&next=\"profile\"");
 	});
 });
 

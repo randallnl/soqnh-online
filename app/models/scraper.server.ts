@@ -32,6 +32,21 @@ export const scraperPayloadSchema = z.object({
 type ScraperRecord = z.infer<typeof scraperRecordSchema>;
 type ImportOutcome = "imported" | "updated" | "duplicate" | "invalid";
 
+type ExistingImportedEvent = {
+	postId: string;
+	status: string;
+	moderationStatus: string;
+	title: string;
+	body: string;
+	startsAt: string;
+	endsAt: string | null;
+	locationName: string | null;
+	registrationUrl: string | null;
+	sourceUrl: string | null;
+	externalUrl: string | null;
+	imageUrl: string | null;
+};
+
 export type ScraperRunRecord = {
 	id: string;
 	triggerType: "manual" | "callback";
@@ -71,11 +86,19 @@ export type ScraperOrganizationSource = {
 
 function normalizeTime(value: string) {
 	if (!value) return "00:00";
-	const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value);
+	const match = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?$/i.exec(value.trim());
 	if (!match) return null;
-	const hour = Number(match[1]);
+	let hour = Number(match[1]);
 	const minute = Number(match[2]);
-	if (hour > 23 || minute > 59) return null;
+	const meridiem = match[3]?.toUpperCase();
+	if (minute > 59) return null;
+	if (meridiem) {
+		if (hour < 1 || hour > 12) return null;
+		if (hour === 12) hour = 0;
+		if (meridiem === "PM") hour += 12;
+	} else if (hour > 23) {
+		return null;
+	}
 	return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
@@ -103,6 +126,28 @@ function cleanUrl(value: string) {
 async function sha256(value: string) {
 	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
 	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function importedEventChanged(
+	existing: ExistingImportedEvent,
+	input: {
+		record: ScraperRecord;
+		startsAt: string;
+		endsAt: string | null;
+		externalUrl: string | null;
+		sourceUrl: string | null;
+		imageUrl: string | null;
+	},
+) {
+	return existing.title !== input.record.title
+		|| existing.body !== input.record.description
+		|| existing.startsAt !== input.startsAt
+		|| existing.endsAt !== input.endsAt
+		|| existing.locationName !== (input.record.location || null)
+		|| existing.registrationUrl !== input.externalUrl
+		|| existing.sourceUrl !== input.sourceUrl
+		|| existing.externalUrl !== input.externalUrl
+		|| existing.imageUrl !== input.imageUrl;
 }
 
 async function recordImport(
@@ -186,6 +231,7 @@ export async function importScraperRecords(
 	env: Env,
 	records: unknown[],
 	runId: string | null,
+	options: { requeueRejected?: boolean } = {},
 ) {
 	await env.DB.prepare(
 		`INSERT INTO users
@@ -254,12 +300,16 @@ export async function importScraperRecords(
 			`${organization.id}|${externalUrl ?? sourceUrl ?? ""}|${record.title.toLowerCase()}|${record.start_date}`,
 		);
 		const exact = await env.DB.prepare(
-			`SELECT p.id AS postId, p.status, e.moderation_status AS moderationStatus
+			`SELECT p.id AS postId, p.status, p.title, p.body,
+			        e.moderation_status AS moderationStatus, e.starts_at AS startsAt,
+			        e.ends_at AS endsAt, e.location_name AS locationName,
+			        e.registration_url AS registrationUrl, e.source_url AS sourceUrl,
+			        e.external_url AS externalUrl, e.image_url AS imageUrl
 			 FROM events AS e JOIN posts AS p ON p.id = e.post_id
 			 WHERE e.external_id = ?1 LIMIT 1`,
 		)
 			.bind(externalId)
-			.first<{ postId: string; status: string; moderationStatus: string }>();
+			.first<ExistingImportedEvent>();
 
 		if (exact?.moderationStatus === "approved") {
 			counts.duplicate += 1;
@@ -267,6 +317,19 @@ export async function importScraperRecords(
 				runId, organizationId: organization.id, postId: exact.postId,
 				externalId, outcome: "duplicate", title: record.title, startsAt,
 				sourceUrl, reason: "An approved import already has this scraper identity",
+				payload: record,
+			});
+			continue;
+		}
+
+		if (exact?.moderationStatus === "rejected" && !options.requeueRejected && !importedEventChanged(exact, {
+			record, startsAt, endsAt, externalUrl, sourceUrl, imageUrl,
+		})) {
+			counts.duplicate += 1;
+			await recordImport(env, {
+				runId, organizationId: organization.id, postId: exact.postId,
+				externalId, outcome: "duplicate", title: record.title, startsAt,
+				sourceUrl, reason: "A rejected import is unchanged since review",
 				payload: record,
 			});
 			continue;
