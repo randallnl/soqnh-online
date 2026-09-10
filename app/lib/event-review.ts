@@ -16,3 +16,21 @@ export const eventReviewSchema = z.object({
 	message: "Explain what needs to change before rejecting the event",
 	path: ["reason"],
 });
+
+const eventDateTimeSchema = z.string().trim().regex(
+	/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/,
+	"Choose an event date and time",
+);
+
+export const eventScheduleSchema = z.object({
+	intent: z.literal("update-schedule"),
+	postId: eventPostIdSchema,
+	startsAt: eventDateTimeSchema,
+	endsAt: z.preprocess(
+		(value) => typeof value === "string" && value.trim() ? value.trim() : null,
+		eventDateTimeSchema.nullable(),
+	),
+}).refine((event) => !event.endsAt || event.endsAt >= event.startsAt, {
+	message: "The event end must be after its start",
+	path: ["endsAt"],
+});

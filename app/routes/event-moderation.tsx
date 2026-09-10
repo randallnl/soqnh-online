@@ -3,10 +3,10 @@ import { Form, Link, redirect, useActionData, useNavigation } from "react-router
 import type { Route } from "./+types/event-moderation";
 import { Icon } from "~/components/icon";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
-import { eventReviewSchema } from "~/lib/event-review";
-import { formatEventDateTime } from "~/lib/events";
+import { eventReviewSchema, eventScheduleSchema } from "~/lib/event-review";
+import { eventDateTimeInputValue, formatEventDateTime } from "~/lib/events";
 import { requireSameOrigin } from "~/lib/http.server";
-import { canModerateEvents, EventMutationError, listPendingEvents, reviewEvent } from "~/models/events.server";
+import { canModerateEvents, EventMutationError, listPendingEvents, reviewEvent, updatePendingEventSchedule } from "~/models/events.server";
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
@@ -17,10 +17,17 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const result = eventReviewSchema.safeParse(Object.fromEntries(await request.formData()));
-	if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the review decision" };
+	const values = Object.fromEntries(await request.formData());
 	try {
-		await reviewEvent(context.cloudflare.env, user, result.data);
+		if (values.intent === "update-schedule") {
+			const result = eventScheduleSchema.safeParse(values);
+			if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the event date and time" };
+			await updatePendingEventSchedule(context.cloudflare.env, user, result.data);
+		} else {
+			const result = eventReviewSchema.safeParse(values);
+			if (!result.success) return { ok: false as const, error: result.error.issues[0]?.message ?? "Check the review decision" };
+			await reviewEvent(context.cloudflare.env, user, result.data);
+		}
 		throw redirect("/events/moderation");
 	} catch (error) {
 		if (error instanceof Response) throw error;
@@ -39,5 +46,5 @@ export function meta() {
 export default function EventModeration({ loaderData }: Route.ComponentProps) {
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
-	return <div className="section-page event-moderation-page"><div className="organization-detail-actions"><Link className="back-link" to="/events">← Events</Link></div><section className="page-heading"><div><p className="eyebrow">Event operations</p><h1>Event moderation</h1><p>Review submitted event details before they become visible to members.</p></div><span className="summary-stat"><strong>{loaderData.events.length}</strong><span>Pending</span></span></section>{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}{loaderData.events.length === 0 ? <section className="panel empty-state"><Icon name="calendar" size={28} /><strong>The queue is clear</strong><p>New and revised events will appear here for approval.</p></section> : <section className="moderation-list" aria-label="Pending events">{loaderData.events.map((event) => <article className="panel moderation-card" key={event.postId}>{event.imageUrl && <img alt="" className="event-card-image" referrerPolicy="no-referrer" src={event.imageUrl} />}<div className="moderation-card-body"><div className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(event.startsAt)}</strong>{event.endsAt && <span>to {formatEventDateTime(event.endsAt)}</span>}</div><h2><Link to={`/posts/${event.postId}`}>{event.title}</Link></h2><p>{event.body}</p><div className="content-card-meta"><span>{event.organizationName || "Ecosystem-wide"}</span><span>Submitted by {event.authorName || "Member"}</span>{event.locationName && <span>{event.locationName}</span>}</div><div className="moderation-actions"><Form method="post"><input name="postId" type="hidden" value={event.postId} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Approve and publish</button></Form><Form className="event-reject-form" method="post"><input name="postId" type="hidden" value={event.postId} /><input name="decision" type="hidden" value="reject" /><label>Changes needed<input maxLength={500} name="reason" placeholder="Give the author a clear next step" required /></label><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Reject</button></Form></div></div></article>)}</section>}</div>;
+	return <div className="section-page event-moderation-page"><div className="organization-detail-actions"><Link className="back-link" to="/events">← Events</Link></div><section className="page-heading"><div><p className="eyebrow">Event operations</p><h1>Event moderation</h1><p>Review submitted event details before they become visible to members.</p></div><span className="summary-stat"><strong>{loaderData.events.length}</strong><span>Pending</span></span></section>{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}{loaderData.events.length === 0 ? <section className="panel empty-state"><Icon name="calendar" size={28} /><strong>The queue is clear</strong><p>New and revised events will appear here for approval.</p></section> : <section className="moderation-list" aria-label="Pending events">{loaderData.events.map((event) => <article className="panel moderation-card" key={event.postId}>{event.imageUrl && <img alt="" className="event-card-image" referrerPolicy="no-referrer" src={event.imageUrl} />}<div className="moderation-card-body"><div className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(event.startsAt)}</strong>{event.endsAt && <span>to {formatEventDateTime(event.endsAt)}</span>}</div><Form className="moderation-schedule-form" method="post"><input name="intent" type="hidden" value="update-schedule" /><input name="postId" type="hidden" value={event.postId} /><label>Starts<input defaultValue={eventDateTimeInputValue(event.startsAt)} name="startsAt" required type="datetime-local" /></label><label>Ends <span>(optional)</span><input defaultValue={eventDateTimeInputValue(event.endsAt)} name="endsAt" type="datetime-local" /></label><button className="button button--secondary button--compact" disabled={navigation.state === "submitting"} type="submit">Save date</button></Form><h2><Link to={`/posts/${event.postId}`}>{event.title}</Link></h2><p>{event.body}</p><div className="content-card-meta"><span>{event.organizationName || "Ecosystem-wide"}</span><span>Submitted by {event.authorName || "Member"}</span>{event.locationName && <span>{event.locationName}</span>}</div><div className="moderation-actions"><Form method="post"><input name="postId" type="hidden" value={event.postId} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Approve and publish</button></Form><Form className="event-reject-form" method="post"><input name="postId" type="hidden" value={event.postId} /><input name="decision" type="hidden" value="reject" /><label>Changes needed<input maxLength={500} name="reason" placeholder="Give the author a clear next step" required /></label><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Reject</button></Form></div></div></article>)}</section>}</div>;
 }

@@ -494,7 +494,7 @@ export async function failManualScraperRun(env: Env, runId: string, message: str
 }
 
 export async function getScraperAdministrationData(env: Env) {
-	const [runs, imports, organizations] = await Promise.all([
+	const [runs, imports, organizations, pendingEventCount] = await Promise.all([
 		env.DB.prepare(
 			`SELECT r.id, r.trigger_type AS triggerType, r.status,
 			 u.name AS initiatedByName, r.partners_count AS partnersCount,
@@ -523,8 +523,19 @@ export async function getScraperAdministrationData(env: Env) {
 			id: string; name: string; status: string; eventSourceUrl: string | null;
 			eventParser: string | null; eventScrapingEnabled: number;
 		}>(),
+		env.DB.prepare(
+			`SELECT count(*) AS count
+			 FROM posts AS p JOIN events AS e ON e.post_id = p.id
+			 WHERE p.section = 'event' AND p.status = 'draft'
+			   AND e.moderation_status = 'pending'`,
+		).first<number>("count"),
 	]);
-	return { runs: runs.results, imports: imports.results, organizations: organizations.results };
+	return {
+		runs: runs.results,
+		imports: imports.results,
+		organizations: organizations.results,
+		pendingEventCount: pendingEventCount ?? 0,
+	};
 }
 
 export async function getScraperOrganizationSource(

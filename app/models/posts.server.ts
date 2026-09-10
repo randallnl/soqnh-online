@@ -8,6 +8,7 @@ import type {
 import type { ContentImageAttachment } from "../lib/media";
 
 const PAGE_SIZE = 10;
+const EVENT_PAGE_SIZE = 12;
 
 function todayInNewHampshire() {
 	const parts = new Intl.DateTimeFormat("en-US", {
@@ -228,7 +229,8 @@ export async function listSectionPosts(
 		page: number;
 	},
 ) {
-	const offset = (input.page - 1) * PAGE_SIZE;
+	const pageSize = input.section === "event" ? EVENT_PAGE_SIZE : PAGE_SIZE;
+	const offset = (input.page - 1) * pageSize;
 	const eventTiming = input.section === "event" ? input.eventTiming ?? "upcoming" : "all";
 	const today = todayInNewHampshire();
 	const affiliationIds = input.affiliationIds ?? null;
@@ -377,7 +379,7 @@ export async function listSectionPosts(
 			          p.created_at DESC, p.id DESC
 			 LIMIT ?${8 + (affiliationIds?.length ?? 0)} OFFSET ?${9 + (affiliationIds?.length ?? 0)}`,
 		)
-			.bind(...bindings, PAGE_SIZE, offset)
+			.bind(...bindings, pageSize, offset)
 			.all<PostRow>(),
 		env.DB.prepare(`WITH ${viewerCte}, visible_posts AS (SELECT p.id ${visibleFrom}) SELECT count(*) AS count FROM visible_posts`)
 			.bind(...bindings)
@@ -393,7 +395,7 @@ export async function listSectionPosts(
 		tags: tagResult.results,
 		page: input.page,
 		total,
-		totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+		totalPages: Math.max(1, Math.ceil(total / pageSize)),
 	};
 }
 

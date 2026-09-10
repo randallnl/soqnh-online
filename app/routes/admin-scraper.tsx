@@ -224,7 +224,7 @@ export default function AdminScraper({ loaderData }: Route.ComponentProps) {
 
 			<section className="scraper-summary-grid" aria-label="Scraper summary">
 				<div className="panel"><strong>{enabledCount}</strong><span>Enabled sources</span></div>
-				<div className="panel"><strong>{loaderData.imports.filter((item) => item.outcome === "imported" || item.outcome === "updated").length}</strong><span>Recent imports</span></div>
+				<Link className="panel scraper-summary-link" to="/events/moderation"><strong>{loaderData.pendingEventCount}</strong><span>Awaiting moderation</span><Icon name="chevron-right" size={17} /></Link>
 				<div className="panel"><strong>{loaderData.imports.filter((item) => item.outcome === "duplicate").length}</strong><span>Duplicates caught</span></div>
 				<div className="panel"><strong>{loaderData.runs.filter((run) => run.status === "failed").length}</strong><span>Failed runs</span></div>
 			</section>

@@ -75,7 +75,7 @@ import { uploadContentImage } from "../app/lib/media.server";
 import { getContentImagePostId } from "../app/models/attachments.server";
 import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
 import { parseOrganizationCategories, serializeOrganizationCategories } from "../app/lib/organization-categories";
-import { eventReviewSchema } from "../app/lib/event-review";
+import { eventReviewSchema, eventScheduleSchema } from "../app/lib/event-review";
 import { scraperParsers } from "../app/lib/scraper";
 import {
 	archivePost,
@@ -108,6 +108,7 @@ import {
 	listPendingEvents,
 	removeEvent,
 	reviewEvent,
+	updatePendingEventSchedule,
 } from "../app/models/events.server";
 import {
 	canReadIdentityObject,
@@ -122,6 +123,7 @@ import {
 } from "../app/models/admin.server";
 import {
 	createManualScraperRun,
+	getScraperAdministrationData,
 	importScraperRecords,
 	getScraperOrganizationSource,
 	listScraperPartners,
@@ -671,6 +673,7 @@ describe("partner event scraper imports", () => {
 		await expect(env.DB.prepare(
 			"SELECT count(*) AS count FROM post_affiliations WHERE post_id IN (SELECT id FROM posts WHERE author_user_id = 'system:event-scraper')",
 		).first<number>("count")).resolves.toBe(0);
+		await expect(getScraperAdministrationData(env)).resolves.toMatchObject({ pendingEventCount: 1 });
 
 		const rerunId = await createManualScraperRun(env, siteAdmin);
 		const corrected = await importScraperRecords(env, [{
@@ -1892,6 +1895,52 @@ describe("event moderation", () => {
 		}
 	});
 
+	it("validates inline moderation schedule edits", () => {
+		expect(eventScheduleSchema.safeParse({
+			intent: "update-schedule",
+			postId: "123e4567-e89b-42d3-a456-426614174000",
+			startsAt: "2026-09-12T18:00",
+			endsAt: "2026-09-12T17:00",
+		}).success).toBe(false);
+	});
+
+	it("lets moderators update a pending event schedule without removing it from the queue", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedThirdMember();
+		const event = await createPost(env, activeUser, {
+			organizationId: null,
+			section: "event",
+			title: "Event with corrected schedule",
+			body: "This event needs its date corrected during moderation.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			event: eventDetails,
+		});
+
+		await expect(updatePendingEventSchedule(env, thirdMember, {
+			postId: event.id,
+			startsAt: "2026-09-19T17:30",
+			endsAt: null,
+		})).rejects.toMatchObject({ reason: "forbidden" });
+		await updatePendingEventSchedule(env, siteAdmin, {
+			postId: event.id,
+			startsAt: "2026-09-19T17:30",
+			endsAt: "2026-09-19T19:00",
+		});
+
+		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({
+			eventStartsAt: "2026-09-19T17:30",
+			eventEndsAt: "2026-09-19T19:00",
+			eventModerationStatus: "pending",
+		});
+		expect((await listPendingEvents(env, siteAdmin)).map((item) => item.postId)).toContain(event.id);
+		await expect(env.DB.prepare(
+			"SELECT count(*) AS count FROM audit_log WHERE entity_id = ?1 AND action = 'event.schedule_updated'",
+		).bind(event.id).first<number>("count")).resolves.toBe(1);
+	});
+
 	it("defaults the event feed to upcoming events and applies the date filter", async () => {
 		await seedSiteAdmin();
 		const createApprovedEvent = async (title: string, startsAt: string) => {
@@ -1923,6 +1972,33 @@ describe("event moderation", () => {
 		expect((await listSectionPosts(env, siteAdmin, baseInput)).posts.map((post) => post.id)).toEqual([upcomingId]);
 		expect((await listSectionPosts(env, siteAdmin, { ...baseInput, eventTiming: "past" })).posts.map((post) => post.id)).toEqual([pastId]);
 		expect((await listSectionPosts(env, siteAdmin, { ...baseInput, eventTiming: "all" })).posts.map((post) => post.id)).toEqual([pastId, upcomingId]);
+	});
+
+	it("shows twelve events per page", async () => {
+		await seedSiteAdmin();
+		for (let index = 1; index <= 13; index += 1) {
+			const event = await createPost(env, siteAdmin, {
+				organizationId: null,
+				section: "event",
+				title: `Upcoming event ${index}`,
+				body: `Details for upcoming community event ${index}.`,
+				visibility: "members",
+				status: "published",
+				tags: [],
+				event: {
+					...eventDetails,
+					startsAt: `2099-10-${String(index).padStart(2, "0")}T18:00`,
+				},
+			});
+			await reviewEvent(env, siteAdmin, { postId: event.id, decision: "approve", reason: null });
+		}
+
+		const input = { section: "event" as const, tag: null, organizationId: null, eventTiming: "upcoming" as const };
+		const firstPage = await listSectionPosts(env, siteAdmin, { ...input, page: 1 });
+		const secondPage = await listSectionPosts(env, siteAdmin, { ...input, page: 2 });
+		expect(firstPage.posts).toHaveLength(12);
+		expect(secondPage.posts).toHaveLength(1);
+		expect(firstPage.totalPages).toBe(2);
 	});
 
 	it("shows approved untagged events to every member and scopes tagged events by affiliation", async () => {

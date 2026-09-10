@@ -119,6 +119,53 @@ export async function reviewEvent(
 	return moderationStatus;
 }
 
+export async function updatePendingEventSchedule(
+	env: Env,
+	actor: AuthenticatedUser,
+	input: { postId: string; startsAt: string; endsAt: string | null },
+) {
+	const event = await env.DB.prepare(
+		`SELECT e.moderation_status AS moderationStatus,
+		        CASE WHEN ?3 = 1 OR EXISTS (
+		          SELECT 1 FROM organization_memberships
+		          WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
+		        ) THEN 1 ELSE 0 END AS canModerate
+		 FROM posts AS p JOIN events AS e ON e.post_id = p.id
+		 WHERE p.id = ?2 AND p.section = 'event' AND p.status = 'draft'`,
+	)
+		.bind(actor.id, input.postId, actor.siteRole === "site_admin" ? 1 : 0)
+		.first<{ moderationStatus: string; canModerate: number }>();
+	if (!event) throw new EventMutationError("not-found");
+	if (event.canModerate !== 1) throw new EventMutationError("forbidden");
+	if (event.moderationStatus !== "pending") throw new EventMutationError("already-reviewed");
+
+	const now = new Date().toISOString();
+	const results = await env.DB.batch([
+		env.DB.prepare(
+			`UPDATE events SET starts_at = ?1, ends_at = ?2
+			 WHERE post_id = ?3 AND moderation_status = 'pending'`,
+		).bind(input.startsAt, input.endsAt, input.postId),
+		env.DB.prepare(
+			`UPDATE posts SET updated_at = ?1
+			 WHERE id = ?2 AND EXISTS (
+			   SELECT 1 FROM events WHERE post_id = ?2 AND moderation_status = 'pending'
+			 )`,
+		).bind(now, input.postId),
+		env.DB.prepare(
+			`INSERT INTO audit_log
+			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+			 SELECT ?1, ?2, 'event.schedule_updated', 'event', ?3, ?4, ?5
+			 WHERE EXISTS (
+			   SELECT 1 FROM events WHERE post_id = ?3 AND moderation_status = 'pending'
+			 )`,
+		).bind(crypto.randomUUID(), actor.id, input.postId, JSON.stringify({
+			startsAt: input.startsAt,
+			endsAt: input.endsAt,
+		}), now),
+	]);
+	if (results[0]?.meta.changes !== 1) throw new EventMutationError("already-reviewed");
+}
+
 export async function removeEvent(env: Env, actor: AuthenticatedUser, postId: string) {
 	const event = await env.DB.prepare(
 		`SELECT p.status,
