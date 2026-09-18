@@ -8,7 +8,7 @@ import { communityUpdateTitle, contentSections, isContentSection, normalizeTags,
 import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
 import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
-import type { ContentImageAttachment } from "~/lib/media";
+import { MAX_PROJECT_PHOTOS, type ContentImageAttachment } from "~/lib/media";
 import { createPost, listAvailablePostAffiliations, listPostOrganizations, PostMutationError } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
@@ -61,9 +61,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	try {
-		requireUploadRequestSize(request);
+		requireUploadRequestSize(request, MAX_PROJECT_PHOTOS);
 	} catch (error) {
-		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 10 MB." };
+		if (error instanceof ImageUploadError) return { ok: false as const, error: `Upload no more than ${MAX_PROJECT_PHOTOS} photos, each smaller than 10 MB.` };
 		throw error;
 	}
 	const formData = await request.formData();
@@ -75,11 +75,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (result.data.section !== "updates" && result.data.body.length < 10) return { ok: false as const, error: "Add a little more detail" };
 	const eventResult = result.data.section === "events" ? parseEventDetails(formData) : null;
 	if (eventResult && !eventResult.success) return { ok: false as const, error: eventResult.error.issues[0]?.message ?? "Check the event details" };
-	let uploadedImage: ContentImageAttachment | null = null;
+	const projectPhotos = result.data.section === "projects"
+		? formData.getAll("image").filter((entry): entry is File => entry instanceof File && entry.size > 0)
+		: [];
+	if (projectPhotos.length > MAX_PROJECT_PHOTOS) return { ok: false as const, error: `Choose up to ${MAX_PROJECT_PHOTOS} project photos.` };
+	const uploadedImages: ContentImageAttachment[] = [];
 	let attachmentPersisted = false;
 	try {
-		if (result.data.section === "projects" || result.data.section === "updates") {
-			uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
+		if (result.data.section === "projects") {
+			for (const photo of projectPhotos) {
+				const uploaded = await uploadContentImage(context.cloudflare.env, photo, user.id);
+				if (uploaded) uploadedImages.push(uploaded);
+			}
+		} else if (result.data.section === "updates") {
+			const uploaded = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
+			if (uploaded) uploadedImages.push(uploaded);
 		}
 		const created = await createPost(context.cloudflare.env, user, {
 			...result.data,
@@ -88,14 +98,24 @@ export async function action({ request, context }: Route.ActionArgs) {
 			tags: normalizeTags(result.data.tags),
 			affiliationIds,
 			event: eventResult?.data,
-			attachment: uploadedImage,
+			attachments: uploadedImages,
 		});
 		attachmentPersisted = true;
 		if (result.data.section === "updates") await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
 		throw redirect(`/posts/${created.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
-		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned post image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
+		if (!attachmentPersisted) {
+			await Promise.all(uploadedImages.map((image) =>
+				deleteContentImage(context.cloudflare.env, image.objectKey).catch((cleanupError) => {
+					console.error(JSON.stringify({
+						message: "orphaned post image cleanup failed",
+						objectKey: image.objectKey,
+						error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+					}));
+				}),
+			));
+		}
 		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 10 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
 		if (error instanceof PostMutationError) return { ok: false as const, error: messageFor(error) };
 		console.error(JSON.stringify({ message: "post creation failed", actorUserId: user.id, error: error instanceof Error ? error.message : String(error) }));

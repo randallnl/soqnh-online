@@ -1084,10 +1084,31 @@ h3 {
 	gap: 20px;
 }
 
+.content-section-page {
+	margin-inline: auto;
+}
+
+.content-section-page--events {
+	width: min(100%, 1080px);
+}
+
+.content-section-page--projects {
+	width: min(100%, 920px);
+}
+
+.content-section-page--updates {
+	width: min(100%, 660px);
+}
+
 .post-editor-page,
 .post-detail-page {
 	display: grid;
 	gap: 24px;
+}
+
+.post-detail-page {
+	width: min(100%, 760px);
+	margin-inline: auto;
 }
 
 .content-filter-panel {

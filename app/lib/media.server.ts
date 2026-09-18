@@ -15,9 +15,9 @@ export class ImageUploadError extends Error {
 	}
 }
 
-export function requireUploadRequestSize(request: Request) {
+export function requireUploadRequestSize(request: Request, maximumImages = 1) {
 	const contentLength = Number(request.headers.get("Content-Length") ?? "0");
-	if (contentLength > MAX_IMAGE_BYTES + 256 * 1024) {
+	if (contentLength > MAX_IMAGE_BYTES * maximumImages + 256 * 1024) {
 		throw new ImageUploadError("too-large");
 	}
 }

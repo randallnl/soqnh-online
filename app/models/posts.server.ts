@@ -558,6 +558,7 @@ export async function createPost(
 		affiliationIds?: string[];
 		event?: EventDetailsInput;
 		attachment?: ContentImageAttachment | null;
+		attachments?: ContentImageAttachment[];
 	},
 ) {
 	await requirePostOrganization(env, actor, input.organizationId);
@@ -587,11 +588,11 @@ export async function createPost(
 		...affiliationIds.map((affiliationId) => env.DB.prepare(
 			"INSERT INTO post_affiliations (post_id, affiliation_id, created_at) VALUES (?1, ?2, ?3)",
 		).bind(id, affiliationId, now)),
-		...(input.attachment ? [env.DB.prepare(
+		...(input.attachments ?? (input.attachment ? [input.attachment] : [])).map((attachment) => env.DB.prepare(
 			`INSERT INTO attachments
 			 (id, post_id, comment_id, uploaded_by_user_id, object_key, filename, content_type, byte_size, created_at)
 			 VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8)`,
-		).bind(input.attachment.id, id, actor.id, input.attachment.objectKey, input.attachment.filename, input.attachment.contentType, input.attachment.byteSize, now)] : []),
+		).bind(attachment.id, id, actor.id, attachment.objectKey, attachment.filename, attachment.contentType, attachment.byteSize, now)),
 		env.DB.prepare(
 			`INSERT INTO audit_log
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)

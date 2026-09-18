@@ -1687,8 +1687,12 @@ describe("content feeds and post permissions", () => {
 		const largerImage = await uploadContentImage(env, new File([largerPngBytes], "phone-photo.png", { type: "image/png" }), activeUser.id);
 		expect(largerImage).toMatchObject({ filename: "phone-photo.png", byteSize: 3 * 1024 * 1024 });
 		await env.ASSETS.delete(largerImage!.objectKey);
-		const projectImage = await uploadContentImage(env, new File([pngBytes], "project-poster.png", { type: "image/png" }), activeUser.id);
-		expect(projectImage).not.toBeNull();
+		const projectImages = await Promise.all([
+			"project-poster.png",
+			"project-team.png",
+			"project-space.png",
+		].map((filename) => uploadContentImage(env, new File([pngBytes], filename, { type: "image/png" }), activeUser.id)));
+		expect(projectImages.every(Boolean)).toBe(true);
 		const project = await createPost(env, activeUser, {
 			organizationId: null,
 			section: "project",
@@ -1698,13 +1702,19 @@ describe("content feeds and post permissions", () => {
 			status: "published",
 			tags: [],
 			affiliationIds: [],
-			attachment: projectImage,
+			attachments: projectImages.filter((image): image is NonNullable<typeof image> => image !== null),
 		});
-		await expect(getPostById(env, activeUser, project.id)).resolves.toMatchObject({
-			imageAttachments: [expect.objectContaining({ filename: "project-poster.png", contentType: "image/png", byteSize: 8 })],
-		});
-		await expect(getContentImagePostId(env, projectImage!.objectKey)).resolves.toBe(project.id);
-		expect(await env.ASSETS.get(projectImage!.objectKey)).not.toBeNull();
+		const projectWithImages = await getPostById(env, activeUser, project.id);
+		expect(projectWithImages?.imageAttachments).toHaveLength(3);
+		expect(projectWithImages?.imageAttachments).toEqual(expect.arrayContaining([
+			expect.objectContaining({ filename: "project-poster.png", contentType: "image/png", byteSize: 8 }),
+			expect.objectContaining({ filename: "project-team.png" }),
+			expect.objectContaining({ filename: "project-space.png" }),
+		]));
+		for (const image of projectImages) {
+			await expect(getContentImagePostId(env, image!.objectKey)).resolves.toBe(project.id);
+			expect(await env.ASSETS.get(image!.objectKey)).not.toBeNull();
+		}
 
 		const updateImage = await uploadContentImage(env, new File([pngBytes], "update.png", { type: "image/png" }), activeUser.id);
 		const update = await createPost(env, activeUser, {

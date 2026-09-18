@@ -183,7 +183,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 	const navigation = useNavigation();
 	const submittingIntent = navigation.formData?.get("intent");
 	return (
-		<div className="section-page content-section-page">
+		<div className={`section-page content-section-page content-section-page--${sectionKey}`}>
 			<section className={`section-hero${sectionKey === "updates" ? " section-hero--community" : ""}`}>
 				<div className="section-hero-copy">
 					<span className="section-hero-icon"><Icon name={section.icon} size={24} /></span>
