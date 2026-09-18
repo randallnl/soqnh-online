@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Form, Link } from "react-router";
 
 import type { Route } from "./+types/affiliation-feed";
 import { Icon } from "~/components/icon";
@@ -46,7 +46,11 @@ export default function AffiliationFeed({ loaderData }: Route.ComponentProps) {
 			<div className="section-hero-copy"><span className="section-hero-icon"><Icon name="people" size={24} /></span><div><p className="eyebrow">Your coalition spaces</p><h1>My Affiliations</h1><p>Events, projects, and community updates shared with affiliations you belong to directly or through an organization.</p></div></div>
 		</section>
 		{affiliations.length === 0 ? <section className="panel empty-state content-empty-state"><Icon name="people" size={28} /><strong>No affiliations yet</strong><p>When you or an organization you belong to joins an affiliation, its shared posts will appear here. You can request an affiliation from your profile.</p><Link className="button button--secondary" to="/profile">View your profile</Link></section> : <>
-			<nav aria-label="Your affiliations" className="affiliation-space-list">{affiliations.map((affiliation) => <Link aria-current={affiliation.id === selected?.id ? "page" : undefined} className={`affiliation-space-link${affiliation.id === selected?.id ? " affiliation-space-link--active" : ""}`} key={affiliation.id} to={pageUrl(affiliation.slug, 1)}>{affiliation.name}</Link>)}</nav>
+			<Form className="panel affiliation-space-selector" method="get">
+				<div><strong>Choose an affiliation</strong><p id="affiliation-space-help">Select one of your coalition spaces to view its events, projects, and community updates.</p></div>
+				<label htmlFor="affiliation-space-select">Affiliation<select aria-describedby="affiliation-space-help" defaultValue={selected?.slug} id="affiliation-space-select" key={selected?.id} name="space" onChange={(event) => event.currentTarget.form?.requestSubmit()}>{affiliations.map((affiliation) => <option key={affiliation.id} value={affiliation.slug}>{affiliation.name}</option>)}</select></label>
+				<button className="button button--secondary" type="submit">View feed <Icon name="chevron-right" size={16} /></button>
+			</Form>
 			{selected && <>
 				<div className="affiliation-feed-heading"><div><p className="eyebrow">Affiliation feed</p><h2>{selected.name}</h2><p>{feed.total} {feed.total === 1 ? "post" : "posts"} shared with this affiliation</p></div><div className="section-hero-actions"><Link className="button button--secondary" to={`/posts/new?section=events&affiliation=${encodeURIComponent(selected.slug)}`}><Icon name="calendar" size={16} />Add event</Link><Link className="button button--secondary" to={`/posts/new?section=projects&affiliation=${encodeURIComponent(selected.slug)}`}><Icon name="clipboard" size={16} />Start project</Link><Link className="button button--primary" to={`/posts/new?section=updates&affiliation=${encodeURIComponent(selected.slug)}`}><Icon name="plus" size={16} />Post update</Link></div></div>
 				{feed.posts.length === 0 ? <section className="panel empty-state content-empty-state"><Icon name="message" size={28} /><strong>Nothing shared here yet</strong><p>Start a conversation, project, or event for this affiliation.</p></section> : <section aria-label={`${selected.name} posts`} className="content-feed content-feed--projects affiliation-content-feed">{feed.posts.map((post) => <article className="panel content-card affiliation-content-card" key={post.id}>
