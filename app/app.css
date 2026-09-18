@@ -1411,6 +1411,8 @@ h3 {
 }
 
 .affiliation-feed-heading h2 { margin-top: 4px; }
+.affiliation-feed-heading h2:focus { outline: 3px solid var(--green-100); outline-offset: 4px; }
+#affiliation-results { scroll-margin-top: 24px; }
 .affiliation-feed-heading p:last-child { margin-top: 5px; color: var(--ink-600); font-size: 0.84rem; }
 .affiliation-feed-heading .section-hero-actions { flex-wrap: wrap; }
 .affiliation-content-kind { margin-left: auto; color: var(--green-800); font-size: 0.76rem; font-weight: 760; }

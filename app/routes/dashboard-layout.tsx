@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Form, Link, NavLink, Outlet, redirect, useLocation } from "react-router";
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 
 import type { Route } from "./+types/dashboard-layout";
 import { Icon, type IconName } from "~/components/icon";
@@ -92,6 +93,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		countUnreadNotifications(context.cloudflare.env, user),
 	]);
 	return { user: { ...user, avatarObjectKey: identity?.avatarObjectKey ?? null }, managedOrganizations, unreadCount, profileComplete };
+}
+
+export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+	if (
+		currentUrl.pathname === "/affiliations" &&
+		nextUrl.pathname === "/affiliations" &&
+		currentUrl.search !== nextUrl.search &&
+		(!formMethod || formMethod.toUpperCase() === "GET")
+	) return false;
+	return defaultShouldRevalidate;
 }
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
