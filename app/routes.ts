@@ -26,6 +26,7 @@ export default [
 		route("posts/:postId/edit", "routes/post-edit.tsx"),
 		route("posts/:postId", "routes/post-detail.tsx"),
 		route("organizations", "routes/organizations.tsx"),
+		route("affiliations", "routes/affiliation-feed.tsx"),
 		route("organizations/:slug/manage", "routes/organization-manage.tsx"),
 		route("organizations/:slug", "routes/organization-detail.tsx"),
 		route("admin/affiliations", "routes/admin-affiliations.tsx"),

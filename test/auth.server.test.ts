@@ -82,6 +82,8 @@ import {
 	createPost,
 	deleteCommunityUpdate,
 	getPostById,
+	listAffiliationFeedPosts,
+	listMemberAffiliations,
 	listPostOrganizations,
 	listSectionPosts,
 	updatePost,
@@ -1603,6 +1605,37 @@ describe("NH Connect public directory participation", () => {
 });
 
 describe("content feeds and post permissions", () => {
+	it("shows affiliation feeds only to direct or organization-linked members", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember();
+		await seedThirdMember();
+		await seedOrganization();
+		await seedAffiliation();
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+		await addOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		await setOrganizationMembership(env, siteAdmin, { organizationId: "org-one", userId: secondMember.id, role: "viewer" });
+
+		const update = await createPost(env, activeUser, { organizationId: null, section: "update", title: "Coalition update", body: "Shared with the coalition.", visibility: "members", status: "published", tags: [], affiliationIds: ["aff-shared"] });
+		const project = await createPost(env, activeUser, { organizationId: null, section: "project", title: "Coalition project", body: "Work together on this project.", visibility: "members", status: "published", tags: [], affiliationIds: ["aff-shared"] });
+		const ecosystemPost = await createPost(env, activeUser, { organizationId: null, section: "update", title: "Ecosystem update", body: "Shared with everyone.", visibility: "members", status: "published", tags: [], affiliationIds: [] });
+		const event = await createPost(env, activeUser, { organizationId: null, section: "event", title: "Coalition event", body: "Come together for this coalition event.", visibility: "members", status: "published", tags: [], affiliationIds: ["aff-shared"], event: { startsAt: "2099-10-15T18:00", endsAt: null, locationName: null, locationUrl: null, registrationUrl: null, sourceUrl: null, imageUrl: null } });
+
+		expect((await listMemberAffiliations(env, activeUser)).map((affiliation) => affiliation.id)).toEqual(["aff-shared"]);
+		expect((await listMemberAffiliations(env, secondMember)).map((affiliation) => affiliation.id)).toEqual(["aff-shared"]);
+		expect(await listMemberAffiliations(env, thirdMember)).toEqual([]);
+		const beforeApproval = await listAffiliationFeedPosts(env, secondMember, "aff-shared", 1);
+		expect(beforeApproval.posts.map((post) => post.id).sort()).toEqual([update.id, project.id].sort());
+		expect(beforeApproval.posts.map((post) => post.id)).not.toContain(ecosystemPost.id);
+		expect((await listAffiliationFeedPosts(env, thirdMember, "aff-shared", 1)).posts).toEqual([]);
+		await reviewEvent(env, siteAdmin, { postId: event.id, decision: "approve", reason: null });
+		expect((await listAffiliationFeedPosts(env, secondMember, "aff-shared", 1)).posts.map((post) => post.id).sort()).toEqual([update.id, project.id, event.id].sort());
+		await removeUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+		await removeOrganizationAffiliation(env, siteAdmin, { affiliationId: "aff-shared", organizationId: "org-one" });
+		expect(await listMemberAffiliations(env, secondMember)).toEqual([]);
+		expect((await listAffiliationFeedPosts(env, secondMember, "aff-shared", 1)).posts).toEqual([]);
+	});
+
 	it("stores and loads private images for projects and community updates", async () => {
 		await seedSiteAdmin();
 		await seedUser();
@@ -1862,8 +1895,8 @@ describe("content feeds and post permissions", () => {
 
 describe("event moderation", () => {
 	const eventDetails = {
-		startsAt: "2026-09-12T18:00",
-		endsAt: "2026-09-12T20:00",
+		startsAt: "2099-09-12T18:00",
+		endsAt: "2099-09-12T20:00",
 		locationName: "Community Hall, Concord",
 		locationUrl: "https://example.org/location",
 		registrationUrl: "https://example.org/register",

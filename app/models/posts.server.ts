@@ -143,6 +143,69 @@ export async function listAvailablePostAffiliations(env: Env, actor: Authenticat
 	return result.results;
 }
 
+export async function listMemberAffiliations(env: Env, actor: AuthenticatedUser) {
+	const result = await env.DB.prepare(
+		`SELECT a.id, a.name, a.slug
+		 FROM affiliations AS a
+		 WHERE EXISTS (SELECT 1 FROM user_affiliations AS ua WHERE ua.affiliation_id = a.id AND ua.user_id = ?1)
+		    OR EXISTS (
+		      SELECT 1 FROM organization_memberships AS om
+		      JOIN organizations AS o ON o.id = om.organization_id AND o.status != 'archived'
+		      JOIN organization_affiliations AS oa ON oa.organization_id = o.id
+		      WHERE om.user_id = ?1 AND oa.affiliation_id = a.id
+		    )
+		 ORDER BY a.name COLLATE NOCASE`,
+	).bind(actor.id).all<PostAffiliationOption>();
+	return result.results;
+}
+
+export async function listAffiliationFeedPosts(
+	env: Env,
+	viewer: AuthenticatedUser,
+	affiliationId: string,
+	page: number,
+) {
+	const pageSize = 12;
+	const visiblePosts = `FROM posts AS p
+		 JOIN post_affiliations AS pa ON pa.post_id = p.id AND pa.affiliation_id = ?2
+		 LEFT JOIN organizations AS o ON o.id = p.organization_id
+		 LEFT JOIN events AS e ON e.post_id = p.id
+		 WHERE p.section IN ('event', 'project', 'update')
+		   AND p.status = 'published'
+		   AND (p.section != 'event' OR e.moderation_status = 'approved')
+		   AND (
+		     EXISTS (SELECT 1 FROM user_affiliations AS ua WHERE ua.user_id = ?1 AND ua.affiliation_id = ?2)
+		     OR EXISTS (
+		       SELECT 1 FROM organization_memberships AS affiliation_membership
+		       JOIN organizations AS member_organization
+		         ON member_organization.id = affiliation_membership.organization_id
+		        AND member_organization.status != 'archived'
+		       JOIN organization_affiliations AS oa ON oa.organization_id = member_organization.id
+		       WHERE affiliation_membership.user_id = ?1 AND oa.affiliation_id = ?2
+		     )
+		   )
+		   AND (
+		     (p.visibility = 'members' AND (p.organization_id IS NULL OR o.status = 'active'))
+		     OR (p.visibility = 'organization' AND EXISTS (
+		       SELECT 1 FROM organization_memberships AS om
+		       WHERE om.organization_id = p.organization_id AND om.user_id = ?1
+		     ))
+		   )`;
+	const [ids, count] = await Promise.all([
+		env.DB.prepare(
+			`SELECT p.id ${visiblePosts}
+			 ORDER BY p.created_at DESC, p.id DESC
+			 LIMIT ?3 OFFSET ?4`,
+		).bind(viewer.id, affiliationId, pageSize, (page - 1) * pageSize).all<{ id: string }>(),
+		env.DB.prepare(`SELECT count(*) AS count ${visiblePosts}`)
+			.bind(viewer.id, affiliationId).first<{ count: number }>(),
+	]);
+	// getPostById reapplies the normal post visibility rules and hides inaccessible affiliation labels.
+	const posts = await Promise.all(ids.results.map((row) => getPostById(env, viewer, row.id)));
+	const total = count?.count ?? 0;
+	return { posts: posts.filter((post): post is PostRecord => post !== null), page, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+}
+
 async function requirePostAffiliations(
 	env: Env,
 	actor: AuthenticatedUser,

@@ -40,7 +40,8 @@ function messageFor(error: PostMutationError) {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
-	const requestedSection = new URL(request.url).searchParams.get("section") ?? undefined;
+	const url = new URL(request.url);
+	const requestedSection = url.searchParams.get("section") ?? undefined;
 	const section = isContentSection(requestedSection) ? requestedSection : "updates";
 	const [organizations, affiliations, members, visibleOrganizations] = await Promise.all([
 		listPostOrganizations(context.cloudflare.env, user),
@@ -52,7 +53,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 		...members.filter((member) => member.id !== user.id).map((member) => ({ id: member.id, type: "person" as const, label: member.name || "Member", detail: member.profileTitle || member.organizationNames, href: `/members/${member.id}` })),
 		...visibleOrganizations.map((organization) => ({ id: organization.id, type: "organization" as const, label: organization.name, detail: organization.summary, href: `/organizations/${organization.slug}` })),
 	];
-	return { section, definition: sectionDefinitions[section], organizations, affiliations, mentionTargets };
+	const defaultAffiliation = affiliations.find((affiliation) => affiliation.slug === url.searchParams.get("affiliation"));
+	return { section, definition: sectionDefinitions[section], organizations, affiliations, defaultAffiliationIds: defaultAffiliation ? [defaultAffiliation.id] : [], mentionTargets };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -108,5 +110,5 @@ export function meta({ data }: Route.MetaArgs) {
 export default function PostNew({ loaderData }: Route.ComponentProps) {
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
-	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">{loaderData.definition.eyebrow}</p><h1>{loaderData.definition.action}</h1><p>{loaderData.section === "events" ? "Submit an event with the details moderators need to review and publish it." : "Create a focused post for the people and organizations who should see it."}</p></div></section><PostEditor affiliations={loaderData.affiliations} mentionTargets={loaderData.mentionTargets} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
+	return <div className="post-editor-page"><section className="page-heading"><div><p className="eyebrow">{loaderData.definition.eyebrow}</p><h1>{loaderData.definition.action}</h1><p>{loaderData.section === "events" ? "Submit an event with the details moderators need to review and publish it." : "Create a focused post for the people and organizations who should see it."}</p></div></section><PostEditor affiliations={loaderData.affiliations} defaultAffiliationIds={loaderData.defaultAffiliationIds} key={`${loaderData.section}-${loaderData.defaultAffiliationIds.join("-")}`} mentionTargets={loaderData.mentionTargets} message={actionData ? { ok: actionData.ok, text: actionData.ok ? "" : actionData.error } : undefined} organizations={loaderData.organizations} section={loaderData.section} submitting={navigation.state === "submitting"} /></div>;
 }

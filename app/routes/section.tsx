@@ -46,13 +46,11 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const page = Number.isInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 1000) : 1;
 	const tag = url.searchParams.get("tag")?.trim().toLowerCase() || null;
 	const organizationId = url.searchParams.get("organization")?.trim() || null;
-	const requestedAffiliationIds = [...new Set(url.searchParams.getAll("affiliation").map((value) => value.trim()).filter((value) => value.length > 0 && value.length <= 100))].slice(0, 20);
-	const affiliationIds = url.searchParams.has("affiliations") ? requestedAffiliationIds : null;
 	const requestedTiming = url.searchParams.get("when");
 	const eventTiming: EventTiming = params.section === "events" && isEventTiming(requestedTiming) ? requestedTiming : params.section === "events" ? "upcoming" : "all";
 	const section = sectionDefinitions[params.section];
 	const [feed, visibleOrganizations, authoringOrganizations, visibleMembers, availableAffiliations] = await Promise.all([
-		listSectionPosts(context.cloudflare.env, user, { section: section.databaseValue, tag, organizationId, affiliationIds, eventTiming, page }),
+		listSectionPosts(context.cloudflare.env, user, { section: section.databaseValue, tag, organizationId, eventTiming, page }),
 		listVisibleOrganizations(context.cloudflare.env, user),
 		listPostOrganizations(context.cloudflare.env, user),
 		listVisibleMembers(context.cloudflare.env, user),
@@ -82,7 +80,7 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		canCreate: true,
 		canDeleteUpdates: user.siteRole === "site_admin",
 		canModerateEvents: user.siteRole === "site_admin" || authoringOrganizations.some((organization) => organization.role === "org_admin"),
-		filters: { tag, organizationId, affiliationIds, eventTiming },
+		filters: { tag, organizationId, eventTiming },
 		visibleMemberIds: visibleMembers.map((member) => member.id),
 		mentionTargets,
 		feedCommentPreviews,
@@ -170,15 +168,11 @@ function formatCommentDate(value: string) {
 	return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
-function pageUrl(section: string, page: number, tag: string | null, organizationId: string | null, affiliationIds: string[] | null, eventTiming: EventTiming) {
+function pageUrl(section: string, page: number, tag: string | null, organizationId: string | null, eventTiming: EventTiming) {
 	const search = new URLSearchParams();
 	if (page > 1) search.set("page", String(page));
 	if (tag) search.set("tag", tag);
 	if (organizationId) search.set("organization", organizationId);
-	if (affiliationIds !== null) {
-		search.set("affiliations", "selected");
-		for (const affiliationId of affiliationIds) search.append("affiliation", affiliationId);
-	}
 	if (section === "events" && eventTiming !== "upcoming") search.set("when", eventTiming);
 	return `/${section}${search.size ? `?${search}` : ""}`;
 }
@@ -222,13 +216,11 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 
 			<section className={`panel content-filter-panel${sectionKey === "updates" ? " content-filter-panel--community" : ""}`}>
 				<Form className="content-filter-form" method="get">
-					<input name="affiliations" type="hidden" value="selected" />
 					{sectionKey === "events" && <label>When<select defaultValue={filters.eventTiming} name="when"><option value="upcoming">Upcoming events</option><option value="past">Past events</option><option value="all">All events</option></select></label>}
 					<label>Organization<select defaultValue={filters.organizationId ?? ""} name="organization"><option value="">All visible organizations</option>{loaderData.visibleOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></label>
 					<label>Tag<select defaultValue={filters.tag ?? ""} name="tag"><option value="">All tags</option>{feed.tags.map((tag) => <option key={tag.tag} value={tag.tag}>{tag.tag} ({tag.count})</option>)}</select></label>
-					{loaderData.availableAffiliations.length > 0 && <fieldset className="content-affiliation-filter"><legend>Affiliations</legend><div>{loaderData.availableAffiliations.map((affiliation) => <label key={affiliation.id}><input defaultChecked={filters.affiliationIds === null || filters.affiliationIds.includes(affiliation.id)} name="affiliation" type="checkbox" value={affiliation.id} />{affiliation.name}</label>)}</div></fieldset>}
 					<button className="button button--secondary" type="submit"><Icon name="search" size={16} /> Apply filters</button>
-					{(filters.tag || filters.organizationId || filters.affiliationIds !== null || (sectionKey === "events" && filters.eventTiming !== "upcoming")) && <Link className="content-clear-link" to={`/${sectionKey}`}>Clear</Link>}
+					{(filters.tag || filters.organizationId || (sectionKey === "events" && filters.eventTiming !== "upcoming")) && <Link className="content-clear-link" to={`/${sectionKey}`}>Clear</Link>}
 				</Form>
 				<p>{feed.total} {feed.total === 1 ? "post" : "posts"} visible to you</p>
 			</section>
@@ -251,7 +243,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 							<div className="content-card-link">{post.section !== "update" && <h2><Link to={`/posts/${post.id}`}>{post.title}</Link></h2>}<MentionText targets={loaderData.mentionTargets} text={post.body} /></div>
 							{post.imageAttachments.length > 0 && <div className="content-image-gallery">{post.imageAttachments.map((image) => <img alt={image.filename} key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div>}
 							{post.affiliations.length > 0 && <div className="content-affiliation-row" aria-label="Affiliations">{post.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}
-							{post.tags.length > 0 && <div className="content-tag-row">{post.tags.map((tag) => <Link key={tag} to={pageUrl(sectionKey, 1, tag, filters.organizationId, filters.affiliationIds, filters.eventTiming)}>#{tag}</Link>)}</div>}
+							{post.tags.length > 0 && <div className="content-tag-row">{post.tags.map((tag) => <Link key={tag} to={pageUrl(sectionKey, 1, tag, filters.organizationId, filters.eventTiming)}>#{tag}</Link>)}</div>}
 							{post.section === "update" && <section className="update-comment-preview" aria-label={`Conversation on update from ${post.authorName || "Member"}`}>
 								<div className="update-comment-preview-heading"><strong>Conversation</strong>{post.commentCount > 0 && <Link to={`/posts/${post.id}#conversation`}>View all {post.commentCount}</Link>}</div>
 								{commentPreviews.length > 0 && <div className="update-comment-preview-list">{commentPreviews.map((comment) => <article className="update-comment-preview-item" id={`comment-${comment.id}`} key={comment.id}><IdentityAvatar name={comment.authorName || "Member"} objectKey={comment.authorAvatarObjectKey} /><div><p><strong>{comment.authorName || "Member"}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt)}</time></p><MentionText targets={loaderData.mentionTargets} text={comment.body} />{comment.imageAttachments.map((image) => <img alt={image.filename} className="comment-image" key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div></article>)}</div>}
@@ -263,7 +255,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 				</section>
 			)}
 
-			{feed.totalPages > 1 && <nav aria-label="Post pages" className="content-pagination">{feed.page > 1 && <Link className="button button--secondary" to={pageUrl(sectionKey, feed.page - 1, filters.tag, filters.organizationId, filters.affiliationIds, filters.eventTiming)}>Previous</Link>}<span>Page {feed.page} of {feed.totalPages}</span>{feed.page < feed.totalPages && <Link className="button button--secondary" to={pageUrl(sectionKey, feed.page + 1, filters.tag, filters.organizationId, filters.affiliationIds, filters.eventTiming)}>Next</Link>}</nav>}
+			{feed.totalPages > 1 && <nav aria-label="Post pages" className="content-pagination">{feed.page > 1 && <Link className="button button--secondary" to={pageUrl(sectionKey, feed.page - 1, filters.tag, filters.organizationId, filters.eventTiming)}>Previous</Link>}<span>Page {feed.page} of {feed.totalPages}</span>{feed.page < feed.totalPages && <Link className="button button--secondary" to={pageUrl(sectionKey, feed.page + 1, filters.tag, filters.organizationId, filters.eventTiming)}>Next</Link>}</nav>}
 		</div>
 	);
 }

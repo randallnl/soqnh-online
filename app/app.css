@@ -1377,6 +1377,46 @@ h3 {
 	width: 100%;
 }
 
+.affiliation-space-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 9px;
+}
+
+.affiliation-space-link {
+	padding: 9px 14px;
+	border: 1px solid var(--ink-200);
+	border-radius: 999px;
+	background: var(--surface);
+	color: var(--ink-700);
+	font-size: 0.84rem;
+	font-weight: 720;
+	text-decoration: none;
+}
+
+.affiliation-space-link:hover,
+.affiliation-space-link--active {
+	border-color: var(--green-700);
+	background: var(--green-50);
+	color: var(--green-800);
+}
+
+.affiliation-feed-heading {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 16px;
+}
+
+.affiliation-feed-heading h2 { margin-top: 4px; }
+.affiliation-feed-heading p:last-child { margin-top: 5px; color: var(--ink-600); font-size: 0.84rem; }
+.affiliation-feed-heading .section-hero-actions { flex-wrap: wrap; }
+.affiliation-content-kind { margin-left: auto; color: var(--green-800); font-size: 0.76rem; font-weight: 760; }
+.affiliation-content-card .content-card-link p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.affiliation-content-card .event-date-line { flex-wrap: wrap; }
+.affiliation-content-card footer { flex-wrap: wrap; }
+
 .content-feed--events .content-card,
 .content-feed--projects .content-card {
 	display: flex;

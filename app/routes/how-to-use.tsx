@@ -54,7 +54,7 @@ export default function HowToUse({ loaderData }: Route.ComponentProps) {
 					<div className="guide-section-heading"><span>02</span><div><p className="eyebrow">Audience controls</p><h2>Choose who should see your work</h2></div></div>
 					<div className="guide-audience-grid">
 						<article><strong>Ecosystem-wide</strong><p>Visible to every signed-in member. This is the default for Community Feed updates, manually added events, and automatically synced events.</p></article>
-						<article><strong>Affiliation</strong><p>Visible only to members with approved access to the selected coalition or affiliation. You only see affiliation filters and posting options you can use.</p></article>
+						<article><strong>Affiliation</strong><p>Visible only to members with access to the selected coalition or affiliation. Find its events, projects, and updates together in My Affiliations.</p></article>
 						<article><strong>Organization-only</strong><p>Available for projects that should stay among the direct members of one organization.</p></article>
 					</div>
 					<p className="guide-note"><Icon name="people" size={18} /><span>Choosing <strong>Ecosystem-wide</strong> clears affiliation selections. Choosing an affiliation makes the audience narrower.</span></p>
@@ -80,8 +80,8 @@ export default function HowToUse({ loaderData }: Route.ComponentProps) {
 				<section className="guide-section" id="affiliations">
 					<div className="guide-section-heading"><span>05</span><div><p className="eyebrow">Affiliations</p><h2>Work within coalition spaces</h2></div></div>
 					<p>Affiliations are narrower networks or coalitions inside the broader ecosystem. Members cannot add themselves. Request affiliation access from your profile, then wait for a site administrator to approve or reject it. You may cancel a pending request at any time.</p>
-					<p>Once approved, that affiliation becomes available when you post or filter content. You may also receive affiliation access through an organization’s membership in that coalition.</p>
-					<Link className="button button--primary" to="/profile">View or request affiliations</Link>
+					<p>Once approved, that affiliation becomes available when you post. Open My Affiliations to see its events, projects, and community updates together. You may also receive access through an organization’s membership in that coalition.</p>
+					<div className="guide-action-row"><Link className="button button--primary" to="/affiliations">Open My Affiliations</Link><Link className="button button--secondary" to="/profile">View or request affiliations</Link></div>
 				</section>
 
 				<section className="guide-section" id="privacy">
@@ -89,7 +89,7 @@ export default function HowToUse({ loaderData }: Route.ComponentProps) {
 					<div className="guide-privacy-list">
 						<article><Icon name="user" size={19} /><div><strong>Your member profile</strong><p>Visible to signed-in members unless you set directory visibility to hidden. Your own affiliations remain visible to you and site administrators.</p></div></article>
 						<article><Icon name="building" size={19} /><div><strong>Organization directory</strong><p>Available to all signed-in members. Affiliation labels and filters are only shown where the viewer has access.</p></div></article>
-						<article><Icon name="people" size={19} /><div><strong>Affiliation activity</strong><p>Posts, projects, events, and filters for an affiliation are limited to members with effective access to that affiliation.</p></div></article>
+						<article><Icon name="people" size={19} /><div><strong>Affiliation activity</strong><p>Only members with direct or organization-based access can open that affiliation’s activity feed.</p></div></article>
 					</div>
 				</section>
 

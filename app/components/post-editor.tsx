@@ -15,6 +15,7 @@ export function PostEditor({
 	section,
 	organizations,
 	affiliations,
+	defaultAffiliationIds = [],
 	post,
 	submitting,
 	message,
@@ -24,6 +25,7 @@ export function PostEditor({
 	section: ContentSection;
 	organizations: PostOrganizationOption[];
 	affiliations: PostAffiliationOption[];
+	defaultAffiliationIds?: string[];
 	post?: PostRecord;
 	submitting: boolean;
 	message?: { ok: boolean; text: string };
@@ -50,7 +52,7 @@ export function PostEditor({
 				<fieldset className="post-affiliation-picker wide-field" disabled={visibility === "organization"}>
 					<legend>{isEvent ? "Event audience" : "Audience"}</legend>
 					<p>{visibility === "members" ? "Choose Ecosystem-wide to share with every signed-in member, or select affiliations to limit this post to those coalition spaces." : "Organization-only content is not shared through affiliations."}</p>
-					<AffiliationAudiencePicker affiliations={affiliations} defaultSelectedIds={post?.affiliations.map((affiliation) => affiliation.id)} />
+					<AffiliationAudiencePicker affiliations={affiliations} defaultSelectedIds={post?.affiliations.map((affiliation) => affiliation.id) ?? defaultAffiliationIds} />
 				</fieldset>
 			</div>
 			<p className="field-help">{isEvent ? "Events are submitted for moderator approval. Saving changes to an approved event returns it to the queue. Ecosystem-wide events reach every signed-in member; affiliation selections create a narrower audience. " : ""}Use up to eight comma-separated topic tags.{!isEvent && " Ecosystem-wide posts reach every signed-in member; affiliation selections create a narrower audience. Organization-only posts require direct membership."}</p>

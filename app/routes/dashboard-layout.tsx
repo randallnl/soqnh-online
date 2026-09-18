@@ -20,6 +20,7 @@ const primaryNavigation: NavigationItem[] = [
 	{ label: "Events", to: "/events", icon: "calendar" },
 	{ label: "Projects", to: "/projects", icon: "clipboard" },
 	{ label: "Community Feed", to: "/updates", icon: "message" },
+	{ label: "My Affiliations", to: "/affiliations", icon: "people" },
 ];
 
 const communityNavigation: NavigationItem[] = [
@@ -33,7 +34,7 @@ const adminNavigation: NavigationItem[] = [
 	{ label: "Admin overview", to: "/admin", icon: "dashboard" },
 	{ label: "Event scraper", to: "/admin/scraper", icon: "sparkles" },
 	{ label: "Organization admin", to: "/admin/organizations", icon: "building" },
-	{ label: "Affiliations", to: "/admin/affiliations", icon: "people" },
+	{ label: "Manage affiliations", to: "/admin/affiliations", icon: "people" },
 	{ label: "Member access", to: "/admin/members", icon: "people" },
 	{ label: "Invitations", to: "/admin/invitations", icon: "user" },
 	{ label: "Audit log", to: "/admin/audit", icon: "activity" },
