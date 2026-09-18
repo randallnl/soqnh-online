@@ -341,6 +341,32 @@ export async function getOrganizationAdministrationData(env: Env) {
 	};
 }
 
+export async function listOrganizationAdministrationPage(
+	env: Env,
+	options: { query?: string; page?: number; pageSize?: number } = {},
+) {
+	const query = (options.query ?? "").trim().slice(0, 120);
+	const pageSize = Math.min(50, Math.max(1, options.pageSize ?? 20));
+	const requestedPage = Number.isSafeInteger(options.page) && (options.page ?? 0) > 0 ? options.page! : 1;
+	const filter = `WHERE (?1 = '' OR instr(lower(o.name), lower(?1)) > 0 OR instr(lower(o.slug), lower(?1)) > 0)`;
+	const count = await env.DB.prepare(`SELECT count(*) AS total FROM organizations AS o ${filter}`)
+		.bind(query).first<{ total: number }>();
+	const total = count?.total ?? 0;
+	const totalPages = Math.max(1, Math.ceil(total / pageSize));
+	const page = Math.min(requestedPage, totalPages);
+	const result = await env.DB.prepare(
+		`SELECT o.id, o.name, o.slug, o.status,
+		        o.directory_status AS directoryStatus,
+		        (SELECT count(*) FROM organization_memberships WHERE organization_id = o.id) AS memberCount
+		 FROM organizations AS o
+		 ${filter}
+		 ORDER BY CASE o.status WHEN 'active' THEN 0 WHEN 'inactive' THEN 1 ELSE 2 END,
+		          o.name COLLATE NOCASE
+		 LIMIT ?2 OFFSET ?3`,
+	).bind(query, pageSize, (page - 1) * pageSize).all<Pick<OrganizationRecord, "id" | "name" | "slug" | "status" | "directoryStatus" | "memberCount">>();
+	return { organizations: result.results, query, page, pageSize, total, totalPages };
+}
+
 export async function listDirectoryReviewQueue(env: Env) {
 	const result = await env.DB.prepare(
 		`SELECT o.id, o.name, o.slug, o.summary, o.description, o.category,

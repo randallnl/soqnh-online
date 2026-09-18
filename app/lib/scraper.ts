@@ -7,4 +7,5 @@ export const scraperParsers = [
 	"shopify_blog_events",
 	"embedded_calendar",
 	"mobilize_events",
+	"wix_events",
 ] as const;

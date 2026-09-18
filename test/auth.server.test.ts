@@ -51,6 +51,7 @@ import {
 	getOrganizationAdministrationData,
 	getOrganizationBySlug,
 	getOrganizationManagementData,
+	listOrganizationAdministrationPage,
 	listDirectoryReviewQueue,
 	listManagedOrganizations,
 	listVisibleOrganizations,
@@ -620,6 +621,25 @@ describe("partner event scraper imports", () => {
 	it("offers every parser supported by the scraper Worker", () => {
 		expect(scraperParsers).toContain("embedded_calendar");
 		expect(scraperParsers).toContain("mobilize_events");
+		expect(scraperParsers).toContain("wix_events");
+	});
+
+	it("accepts Wix Events as an organization scraper source", async () => {
+		await seedSiteAdmin();
+		await seedOrganization();
+		await updateOrganizationScraperSettings(env, siteAdmin, {
+			organizationId: "org-one",
+			eventSourceUrl: "https://example.org/event-list",
+			eventParser: "wix_events",
+			eventScrapingEnabled: true,
+		});
+		expect(await listScraperPartners(env)).toEqual([
+			{ name: "Community Center", url: "https://example.org/event-list", parser: "wix_events" },
+		]);
+		expect(await getScraperOrganizationSource(env, "org-one")).toMatchObject({
+			eventSourceUrl: "https://example.org/event-list",
+			eventParser: "wix_events",
+		});
 	});
 
 	it("publishes only enabled active organizations to the scraper", async () => {
@@ -1141,6 +1161,28 @@ describe("member access management", () => {
 });
 
 describe("organization administration", () => {
+	it("paginates lightweight organization results and searches names literally", async () => {
+		await seedOrganization();
+		const statements = Array.from({ length: 24 }, (_, index) => env.DB.prepare(
+			`INSERT INTO organizations (id, name, slug, status, directory_status, created_at, updated_at)
+			 VALUES (?1, ?2, ?3, 'active', 'not_listed', ?4, ?4)`,
+		).bind(`admin-list-${index}`, `Admin Listing ${String(index).padStart(2, "0")}`, `admin-listing-${index}`, new Date().toISOString()));
+		await env.DB.batch(statements);
+
+		const first = await listOrganizationAdministrationPage(env);
+		expect(first.total).toBe(25);
+		expect(first.totalPages).toBe(2);
+		expect(first.organizations).toHaveLength(20);
+		expect(first.organizations[0]).toHaveProperty("memberCount");
+		expect(first.organizations[0]).not.toHaveProperty("description");
+		const second = await listOrganizationAdministrationPage(env, { page: 2 });
+		expect(second.organizations).toHaveLength(5);
+		const search = await listOrganizationAdministrationPage(env, { query: "Community Center" });
+		expect(search.organizations.map((item) => item.slug)).toEqual(["community-center"]);
+		expect((await listOrganizationAdministrationPage(env, { query: "%" })).total).toBe(0);
+		expect((await listOrganizationAdministrationPage(env, { page: 999 })).page).toBe(2);
+	});
+
 	it("normalizes multiple organization categories while preserving legacy values", () => {
 		expect(serializeOrganizationCategories(["Arts & Culture", "Health & Wellness", "Arts & Culture"])).toBe("Arts & Culture\nHealth & Wellness");
 		expect(parseOrganizationCategories("Community services\nHealth & Wellness")).toEqual(["Community services", "Health & Wellness"]);

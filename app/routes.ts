@@ -33,6 +33,7 @@ export default [
 		route("admin", "routes/admin.tsx"),
 		route("admin/audit", "routes/admin-audit.tsx"),
 		route("admin/organizations", "routes/admin-organizations.tsx"),
+		route("admin/organizations/:slug", "routes/admin-organization-detail.tsx"),
 		route("admin/scraper", "routes/admin-scraper.tsx"),
 		route("admin/invitations", "routes/admin-invitations.tsx"),
 		route("admin/members", "routes/admin-members.tsx"),
