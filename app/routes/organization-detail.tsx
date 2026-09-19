@@ -15,6 +15,22 @@ import {
 
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
 
+function leadershipIdentityTags(value: string | null) {
+	if (!value) return [];
+	const normalized = value.trim().toLocaleLowerCase();
+	if (normalized === "yes, both" || (normalized.includes("queer-led") && normalized.includes("bipoc-led"))) return [
+		{ label: "Queer-led", tone: "plum" },
+		{ label: "BIPOC-led", tone: "gold" },
+	];
+	if (normalized === "yes, queer-led" || normalized === "queer-led") return [{ label: "Queer-led", tone: "plum" }];
+	if (normalized === "yes, bipoc-led" || normalized === "bipoc-led") return [{ label: "BIPOC-led", tone: "gold" }];
+	if (normalized === "no") return [{ label: "Not queer/BIPOC-led", tone: "blue" }];
+	if (normalized === "prefer not to say") return [{ label: "Prefer not to say", tone: "blue" }];
+	if (normalized === "not sure") return [{ label: "Not sure", tone: "blue" }];
+	if (normalized.startsWith("is this resource ")) return [];
+	return value.split(/[;\n]+/).map((label) => label.trim()).filter(Boolean).map((label) => ({ label: label.replace(/^yes,\s*/i, ""), tone: "blue" }));
+}
+
 function socialUrl(platform: string | null, handle: string) {
 	if (/^https?:\/\//i.test(handle)) return handle;
 	const account = handle.replace(/^@/, "").replace(/^\/+|\/+$/g, "");
@@ -77,6 +93,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 	const participating = organization.directoryStatus === "pending" || organization.directoryStatus === "published";
 	const organizationSocialUrl = organization.socialHandle ? socialUrl(organization.socialPlatform, organization.socialHandle) : null;
 	const sourceImageUrls = organization.sourceImageUrls?.split(/\n+/).map((url) => url.trim()).filter(Boolean) ?? [];
+	const leadershipTags = leadershipIdentityTags(organization.leadershipIdentity);
 	return (
 		<div className="organization-detail-page">
 			<div className="organization-detail-actions">
@@ -93,12 +110,12 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 					</div>
 				</div>
 				{organization.description && <p className="organization-description">{organization.description}</p>}
-				{(organization.category || organization.townCity || organization.region || organization.operatesStatewide !== null || organization.leadershipIdentity) && <dl className="organization-profile-facts">
+				{(organization.category || organization.townCity || organization.region || organization.operatesStatewide !== null || leadershipTags.length > 0) && <dl className="organization-profile-facts">
 					{organization.category && <div><dt>Categories</dt><dd className="organization-category-row">{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</dd></div>}
 					{organization.townCity && <div><dt>Town or city</dt><dd>{organization.townCity}</dd></div>}
 					{organization.region && <div><dt>Region</dt><dd>{organization.region}</dd></div>}
 					{organization.operatesStatewide !== null && <div><dt>Statewide services</dt><dd>{organization.operatesStatewide === 1 ? "Yes" : "No"}</dd></div>}
-					{organization.leadershipIdentity && <div><dt>Queer and/or BIPOC-led</dt><dd>{organization.leadershipIdentity}</dd></div>}
+					{leadershipTags.length > 0 && <div><dt>Queer and/or BIPOC-led</dt><dd className="organization-category-row">{leadershipTags.map((tag) => <span className={`organization-category-chip organization-category-tone--${tag.tone}`} key={tag.label}>{tag.label}</span>)}</dd></div>}
 				</dl>}
 				{organization.listingRationale && <div className="organization-profile-note"><p className="eyebrow">Why this resource is included</p><p>{organization.listingRationale}</p></div>}
 				{organization.affiliations.length > 0 && (

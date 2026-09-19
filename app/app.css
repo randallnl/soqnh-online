@@ -1531,7 +1531,8 @@ h3 {
 	color: inherit;
 }
 
-.content-card-link > p {
+.content-card-link > p,
+.project-description-link > p {
 	display: -webkit-box;
 	overflow: hidden;
 	margin-top: 9px;
@@ -1540,6 +1541,38 @@ h3 {
 	line-height: 1.65;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 3;
+}
+
+.project-description-link {
+	position: relative;
+	cursor: pointer;
+}
+
+.project-description-link > p {
+	pointer-events: none;
+}
+
+.project-description-link .inline-mention {
+	position: relative;
+	z-index: 2;
+	pointer-events: auto;
+}
+
+.project-description-overlay {
+	position: absolute;
+	z-index: 1;
+	inset: 0;
+	border-radius: 6px;
+}
+
+.project-description-overlay:focus-visible,
+.project-image-gallery-link:focus-visible {
+	outline: 3px solid var(--green-100);
+	outline-offset: 3px;
+}
+
+.project-image-gallery-link {
+	cursor: pointer;
 }
 
 .content-image-gallery {
@@ -1710,6 +1743,25 @@ h3 {
 	cursor: pointer;
 	font: inherit;
 	font-weight: 720;
+}
+
+.content-card-action-button {
+	padding: 0;
+	border: 0;
+	color: var(--danger);
+	background: transparent;
+	cursor: pointer;
+	font: inherit;
+	font-weight: 720;
+}
+
+.content-card-action-button:hover:not(:disabled) {
+	text-decoration: underline;
+}
+
+.content-card-action-button:disabled {
+	cursor: wait;
+	opacity: 0.6;
 }
 
 .update-delete-button:hover:not(:disabled) {
