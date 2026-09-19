@@ -76,6 +76,6 @@ export function OrganizationProfileFields({ organization }: { organization?: Par
 		<label className="wide-field">Description<textarea defaultValue={organization?.description ?? ""} maxLength={4000} name="description" rows={5} /></label>
 		<label className="wide-field">Why should this listing be included?<textarea defaultValue={organization?.listingRationale ?? ""} maxLength={2000} name="listingRationale" rows={3} /></label>
 		<label>Is this organization queer and/or BIPOC-led?<input defaultValue={organization?.leadershipIdentity ?? ""} maxLength={100} name="leadershipIdentity" placeholder="Yes, queer-led; yes, BIPOC-led…" /></label>
-		<label className="wide-field">Logo or photo links<textarea defaultValue={organization?.sourceImageUrls ?? ""} maxLength={4000} name="sourceImageUrls" placeholder="One source image URL per line" rows={3} /></label>
+		<label className="wide-field">Source image links <small>(optional references)</small><textarea defaultValue={organization?.sourceImageUrls ?? ""} maxLength={4000} name="sourceImageUrls" placeholder="One source image URL per line" rows={3} /></label>
 	</>;
 }

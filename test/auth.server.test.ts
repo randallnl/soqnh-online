@@ -19,6 +19,8 @@ import {
 	acceptInvitation,
 	createInvitation,
 	getInvitationByToken,
+	invalidateInvitation,
+	listPendingOrganizationInvitations,
 } from "../app/models/invitations.server";
 import {
 	changeMemberStatus,
@@ -60,6 +62,7 @@ import {
 	reviewDirectoryParticipation,
 	setOrganizationMembership,
 	updateOrganization,
+	updateOrganizationImages,
 	updateManagedOrganizationProfile,
 	withdrawDirectoryParticipation,
 } from "../app/models/organizations.server";
@@ -72,7 +75,7 @@ import {
 	submitOrganizationClaim,
 } from "../app/models/organization-claims.server";
 import { normalizeTags } from "../app/lib/content";
-import { uploadContentImage } from "../app/lib/media.server";
+import { uploadContentImage, uploadIdentityImage } from "../app/lib/media.server";
 import { getContentImagePostId } from "../app/models/attachments.server";
 import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
 import { parseOrganizationCategories, serializeOrganizationCategories } from "../app/lib/organization-categories";
@@ -947,6 +950,46 @@ describe("database-backed sessions", () => {
 });
 
 describe("member invitations", () => {
+	it("shows only pending organization invitations to that organization's administrators", async () => {
+		await Promise.all([seedSiteAdmin(), seedUser(), seedSecondMember(), seedThirdMember()]);
+		await Promise.all([seedOrganization(), seedSecondOrganization()]);
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "org_admin",
+		});
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-two",
+			userId: secondMember.id,
+			role: "org_admin",
+		});
+
+		const invitation = await createInvitation(env, siteAdmin, {
+			email: "pending.member@example.org",
+			organizationId: "org-one",
+			invitedRole: "contributor",
+		});
+		await createInvitation(env, siteAdmin, {
+			email: "other.member@example.org",
+			organizationId: "org-two",
+			invitedRole: "viewer",
+		});
+
+		await expect(listPendingOrganizationInvitations(env, activeUser, "org-one")).resolves.toEqual([
+			expect.objectContaining({
+				id: invitation.id,
+				email: "pending.member@example.org",
+				invitedRole: "contributor",
+				invitedByEmail: siteAdmin.email,
+			}),
+		]);
+		await expect(listPendingOrganizationInvitations(env, secondMember, "org-one")).resolves.toEqual([]);
+		await expect(listPendingOrganizationInvitations(env, thirdMember, "org-one")).resolves.toEqual([]);
+
+		await invalidateInvitation(env, invitation.id);
+		await expect(listPendingOrganizationInvitations(env, siteAdmin, "org-one")).resolves.toEqual([]);
+	});
+
 	it("stores only the invitation hash and creates an invited account", async () => {
 		await seedSiteAdmin();
 		const invitation = await createInvitation(env, siteAdmin, {
@@ -1246,6 +1289,14 @@ describe("organization administration", () => {
 			operatesStatewide: 1,
 			status: "active",
 		});
+		const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+		const logoObjectKey = await uploadIdentityImage(env, new File([pngBytes], "logo.png", { type: "image/png" }), "org-logos", created.id);
+		const profilePhotoObjectKey = await uploadIdentityImage(env, new File([pngBytes], "profile.png", { type: "image/png" }), "org-photos", created.id);
+		await updateOrganizationImages(env, siteAdmin, {
+			organizationId: created.id,
+			logoObjectKey,
+			profilePhotoObjectKey,
+		});
 
 		const profile = await getOrganizationBySlug(env, "seacoast-pride-nh", siteAdmin);
 		expect(profile?.organization).toMatchObject({
@@ -1256,8 +1307,13 @@ describe("organization administration", () => {
 			contactPhone: "(603) 555-0142",
 			region: "Seacoast",
 			operatesStatewide: 1,
+			logoObjectKey,
+			profilePhotoObjectKey,
 			memberCount: 0,
 		});
+		expect(await env.ASSETS.get(logoObjectKey!)).not.toBeNull();
+		expect(await env.ASSETS.get(profilePhotoObjectKey!)).not.toBeNull();
+		await expect(canReadIdentityObject(env, siteAdmin, profilePhotoObjectKey!)).resolves.toBe(true);
 		const auditCount = await env.DB.prepare(
 			`SELECT count(*) AS count FROM audit_log
 			 WHERE action IN ('organization.created', 'organization.updated')`,
@@ -1415,8 +1471,9 @@ describe("affiliation visibility and administration", () => {
 		const adminDirectory = await listVisibleOrganizations(env, siteAdmin);
 		expect(adminDirectory).toHaveLength(2);
 		expect(adminDirectory.every((organization) => organization.affiliations.length === 0)).toBe(true);
-		await env.DB.prepare("UPDATE organizations SET logo_object_key = 'org-logos/community.png' WHERE id = 'org-one'").run();
+		await env.DB.prepare("UPDATE organizations SET logo_object_key = 'org-logos/community.png', profile_photo_object_key = 'org-photos/community.jpg' WHERE id = 'org-one'").run();
 		await expect(canReadIdentityObject(env, activeUser, "org-logos/community.png")).resolves.toBe(true);
+		await expect(canReadIdentityObject(env, activeUser, "org-photos/community.jpg")).resolves.toBe(true);
 	});
 
 	it("does not reveal hidden organization members to ordinary viewers", async () => {

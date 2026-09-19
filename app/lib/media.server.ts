@@ -32,7 +32,7 @@ function matchesSignature(bytes: Uint8Array, type: keyof typeof extensions) {
 export async function uploadIdentityImage(
 	env: Env,
 	file: FormDataEntryValue | null,
-	kind: "profile-photos" | "org-logos",
+	kind: "profile-photos" | "org-logos" | "org-photos",
 	ownerId: string,
 ) {
 	if (!(file instanceof File) || file.size === 0) return null;
@@ -76,7 +76,7 @@ export async function uploadContentImage(
 }
 
 export async function deleteIdentityImage(env: Env, objectKey: string | null) {
-	if (!objectKey || (!objectKey.startsWith("profile-photos/") && !objectKey.startsWith("org-logos/"))) return;
+	if (!objectKey || (!objectKey.startsWith("profile-photos/") && !objectKey.startsWith("org-logos/") && !objectKey.startsWith("org-photos/"))) return;
 	await env.ASSETS.delete(objectKey);
 }
 

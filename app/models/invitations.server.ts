@@ -28,6 +28,16 @@ export type InvitationDetails = InvitationRow & {
 	status: "pending" | "accepted" | "expired";
 };
 
+export type PendingOrganizationInvitation = {
+	id: string;
+	email: string;
+	invitedRole: OrganizationRole;
+	invitedByName: string | null;
+	invitedByEmail: string | null;
+	expiresAt: string;
+	createdAt: string;
+};
+
 export class InvitationConflictError extends Error {
 	constructor(
 		public readonly reason: "active" | "suspended" | "organization-unavailable",
@@ -73,6 +83,47 @@ export async function listRecentInvitations(env: Env) {
 		...row,
 		status: invitationStatus(row),
 	}));
+}
+
+export async function listPendingOrganizationInvitations(
+	env: Env,
+	actor: AuthenticatedUser,
+	organizationId: string,
+) {
+	const result = await env.DB.prepare(
+		`SELECT i.id,
+		        i.email,
+		        i.invited_role AS invitedRole,
+		        inviter.name AS invitedByName,
+		        inviter.email AS invitedByEmail,
+		        i.expires_at AS expiresAt,
+		        i.created_at AS createdAt
+		 FROM invitations AS i
+		 LEFT JOIN users AS inviter ON inviter.id = i.invited_by_user_id
+		 WHERE i.organization_id = ?2
+		   AND i.accepted_at IS NULL
+		   AND i.expires_at > ?3
+		   AND (
+		     ?4 = 1
+		     OR EXISTS (
+		       SELECT 1
+		       FROM organization_memberships AS reviewer_membership
+		       WHERE reviewer_membership.organization_id = i.organization_id
+		         AND reviewer_membership.user_id = ?1
+		         AND reviewer_membership.role = 'org_admin'
+		     )
+		   )
+		 ORDER BY i.created_at ASC, i.id ASC`,
+	)
+		.bind(
+			actor.id,
+			organizationId,
+			new Date().toISOString(),
+			actor.siteRole === "site_admin" ? 1 : 0,
+		)
+		.all<PendingOrganizationInvitation>();
+
+	return result.results;
 }
 
 export async function createInvitation(

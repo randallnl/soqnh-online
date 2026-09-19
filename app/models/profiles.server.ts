@@ -167,5 +167,16 @@ export async function canReadIdentityObject(env: Env, viewer: AuthenticatedUser,
 			 LIMIT 1`,
 		).bind(viewer.id, objectKey, viewer.siteRole === "site_admin" ? 1 : 0).first<number>("1")) !== null;
 	}
+	if (objectKey.startsWith("org-photos/")) {
+		return (await env.DB.prepare(
+			`SELECT 1 FROM organizations AS o
+			 WHERE o.profile_photo_object_key = ?2
+			   AND (o.status = 'active' OR ?3 = 1 OR EXISTS (
+			     SELECT 1 FROM organization_memberships
+			     WHERE organization_id = o.id AND user_id = ?1
+			   ))
+			 LIMIT 1`,
+		).bind(viewer.id, objectKey, viewer.siteRole === "site_admin" ? 1 : 0).first<number>("1")) !== null;
+	}
 	return false;
 }

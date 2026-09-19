@@ -5,6 +5,7 @@ import { Icon } from "~/components/icon";
 import { IdentityAvatar, OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
+import { mediaUrl } from "~/lib/media";
 import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 import {
 	getOrganizationBySlug,
@@ -109,6 +110,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 						<p>{organization.summary || "A member organization in the NH Connect community network."}</p>
 					</div>
 				</div>
+				{organization.profilePhotoObjectKey && <img alt={`${organization.name} profile`} className="organization-profile-photo" src={mediaUrl(organization.profilePhotoObjectKey) ?? undefined} />}
 				{organization.description && <p className="organization-description">{organization.description}</p>}
 				{(organization.category || organization.townCity || organization.region || organization.operatesStatewide !== null || leadershipTags.length > 0) && <dl className="organization-profile-facts">
 					{organization.category && <div><dt>Categories</dt><dd className="organization-category-row">{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</dd></div>}

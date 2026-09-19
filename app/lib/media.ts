@@ -1,4 +1,4 @@
-const mediaPrefixes = ["profile-photos/", "org-logos/", "content-images/"] as const;
+const mediaPrefixes = ["profile-photos/", "org-logos/", "org-photos/", "content-images/"] as const;
 
 export const imageUploadAccept = "image/png,image/jpeg,image/webp,image/gif";
 export const MAX_PROJECT_PHOTOS = 4;

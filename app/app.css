@@ -3703,6 +3703,16 @@ h3 {
 	gap: 22px;
 }
 
+.organization-profile-photo {
+	display: block;
+	width: 100%;
+	height: clamp(220px, 32vw, 360px);
+	margin-top: 24px;
+	border-radius: 14px;
+	background: var(--paper);
+	object-fit: cover;
+}
+
 .organization-monogram--large {
 	flex: 0 0 auto;
 	width: 78px;
@@ -3880,6 +3890,13 @@ h3 {
 	color: var(--ink-700);
 	font-size: 0.75rem;
 	font-weight: 720;
+}
+
+.organization-edit-form label small {
+	color: var(--ink-500);
+	font-size: 0.72rem;
+	font-weight: 500;
+	line-height: 1.45;
 }
 
 .organization-create-form input,
@@ -4912,6 +4929,9 @@ h3 {
 .organization-logo-editor { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; padding: 0 24px 24px; border-bottom: 1px solid var(--ink-100); }
 .profile-photo-editor p,
 .organization-logo-editor p { margin: 4px 0 8px; color: var(--ink-500); font-size: .84rem; }
+.organization-photo-editor { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 18px; margin-bottom: 26px; padding: 0 24px 24px; border-bottom: 1px solid var(--ink-100); }
+.organization-photo-editor img { display: block; width: 180px; height: 110px; border-radius: 12px; background: var(--paper); object-fit: cover; }
+.organization-photo-editor p { margin: 4px 0 8px; color: var(--ink-500); font-size: .84rem; }
 .profile-editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .profile-editor-form label,
 .profile-affiliation-picker { display: grid; gap: 7px; font-size: .78rem; font-weight: 700; }
@@ -4959,6 +4979,14 @@ h3 {
 .organization-claim-reject-form { display: flex; align-items: center; gap: 7px; }
 .organization-claim-reject-form input { width: min(240px, 26vw); }
 .managed-claim-queue { padding: 20px 24px; border-bottom: 1px solid var(--ink-100); background: var(--green-50); }
+.membership-moderation-groups { display: grid; gap: 20px; margin-top: 16px; }
+.membership-moderation-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 6px; color: var(--ink-600); font-size: .78rem; }
+.membership-moderation-label span { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; color: var(--plum-700); background: var(--plum-100); font-weight: 800; }
+.organization-invitation-list { display: grid; }
+.organization-invitation-list article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--ink-100); }
+.organization-invitation-list p { margin: 3px 0 0; color: var(--ink-500); font-size: .8rem; }
+.organization-invitation-meta { display: grid; justify-items: end; gap: 5px; }
+.organization-invitation-meta small { color: var(--ink-500); font-size: .74rem; }
 .status-pill--approved { color: var(--green-800); background: var(--green-50); }
 .status-pill--rejected { color: #963d35; background: #fff0ee; }
 .status-pill--cancelled { color: var(--ink-600); background: var(--ink-100); }
@@ -5037,9 +5065,13 @@ h3 {
 	.member-profile-identity,
 	.profile-photo-editor,
 	.organization-logo-editor { align-items: flex-start; flex-direction: column; }
+	.organization-photo-editor { grid-template-columns: 1fr; }
+	.organization-photo-editor img { width: 100%; height: 180px; }
 	.member-profile-card { grid-template-columns: 1fr; }
 	.profile-claim-history article,
-	.organization-claim-review-list article { grid-template-columns: 1fr; }
+	.organization-claim-review-list article,
+	.organization-invitation-list article { grid-template-columns: 1fr; }
+	.organization-invitation-meta { justify-items: start; }
 	.organization-claim-actions,
 	.organization-claim-reject-form { align-items: stretch; flex-direction: column; }
 	.organization-claim-reject-form input { width: 100%; }

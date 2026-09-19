@@ -105,6 +105,7 @@ export const organizations = sqliteTable(
 		sourceImageUrls: text("source_image_urls"),
 		operatesStatewide: integer("operates_statewide", { mode: "boolean" }),
 		logoObjectKey: text("logo_object_key"),
+		profilePhotoObjectKey: text("profile_photo_object_key"),
 		status: text("status", { enum: ["active", "inactive", "archived"] })
 			.notNull()
 			.default("active"),

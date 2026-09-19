@@ -7,10 +7,12 @@ import { OrganizationIdentity } from "~/components/identity-avatar";
 import { OrganizationProfileFields } from "~/components/organization-profile-fields";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
+import { imageUploadAccept, mediaUrl } from "~/lib/media";
 import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
 import { serializeOrganizationCategories } from "~/lib/organization-categories";
 import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import { organizationRoles } from "~/lib/organizations";
+import { listPendingOrganizationInvitations } from "~/models/invitations.server";
 import { listReviewableOrganizationClaims, OrganizationClaimMutationError, reviewOrganizationClaim } from "~/models/organization-claims.server";
 import {
 	getOrganizationManagementData,
@@ -19,7 +21,9 @@ import {
 	requestDirectoryParticipation,
 	setOrganizationMembership,
 	updateManagedOrganizationProfile,
+	updateOrganizationImages,
 	updateOrganizationLogo,
+	updateOrganizationProfilePhoto,
 	withdrawDirectoryParticipation,
 } from "~/models/organizations.server";
 
@@ -61,6 +65,7 @@ const actionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("set-membership"), organizationId: identifier, userId: identifier, role: z.enum(organizationRoles) }),
 	z.object({ intent: z.literal("remove-membership"), organizationId: identifier, userId: identifier }),
 	z.object({ intent: z.literal("remove-logo"), organizationId: identifier }),
+	z.object({ intent: z.literal("remove-profile-photo"), organizationId: identifier }),
 ]);
 
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
@@ -74,7 +79,11 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	try {
 		const data = await getOrganizationManagementData(context.cloudflare.env, user, params.slug);
 		if (!data) throw new Response("Organization not found", { status: 404 });
-		return { ...data, pendingClaims: await listReviewableOrganizationClaims(context.cloudflare.env, user, data.organization.id) };
+		const [pendingClaims, pendingInvitations] = await Promise.all([
+			listReviewableOrganizationClaims(context.cloudflare.env, user, data.organization.id),
+			listPendingOrganizationInvitations(context.cloudflare.env, user, data.organization.id),
+		]);
+		return { ...data, pendingClaims, pendingInvitations };
 	} catch (error) {
 		if (error instanceof OrganizationMutationError) {
 			throw new Response(error.reason === "not-found" ? "Organization not found" : "Forbidden", {
@@ -85,11 +94,19 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 	}
 }
 
+function formatInvitationDate(value: string) {
+	return new Intl.DateTimeFormat("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	}).format(new Date(value));
+}
+
 export async function action({ request, context, params }: Route.ActionArgs) {
 	requireSameOrigin(request);
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
 	try {
-		requireUploadRequestSize(request);
+		requireUploadRequestSize(request, 2);
 	} catch (error) {
 		if (error instanceof ImageUploadError) return { ok: false as const, error: "Upload an image smaller than 10 MB." };
 		throw error;
@@ -126,14 +143,21 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			const directoryOptIn = formData.get("directoryOptIn") === "on";
 			const wasParticipating = managed.organization.directoryStatus === "pending" || managed.organization.directoryStatus === "published";
 			const newLogoKey = await uploadIdentityImage(context.cloudflare.env, formData.get("logo"), "org-logos", result.data.organizationId);
+			const newProfilePhotoKey = await uploadIdentityImage(context.cloudflare.env, formData.get("profilePhoto"), "org-photos", result.data.organizationId);
 			try {
 				await updateManagedOrganizationProfile(context.cloudflare.env, user, result.data);
-				if (newLogoKey) {
-					const oldLogoKey = await updateOrganizationLogo(context.cloudflare.env, user, { organizationId: result.data.organizationId, logoObjectKey: newLogoKey });
-					if (oldLogoKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, oldLogoKey));
+				if (newLogoKey || newProfilePhotoKey) {
+					const oldImages = await updateOrganizationImages(context.cloudflare.env, user, {
+						organizationId: result.data.organizationId,
+						...(newLogoKey ? { logoObjectKey: newLogoKey } : {}),
+						...(newProfilePhotoKey ? { profilePhotoObjectKey: newProfilePhotoKey } : {}),
+					});
+					if (newLogoKey && oldImages.logoObjectKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, oldImages.logoObjectKey));
+					if (newProfilePhotoKey && oldImages.profilePhotoObjectKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, oldImages.profilePhotoObjectKey));
 				}
 			} catch (error) {
 				if (newLogoKey) await deleteIdentityImage(context.cloudflare.env, newLogoKey);
+				if (newProfilePhotoKey) await deleteIdentityImage(context.cloudflare.env, newProfilePhotoKey);
 				throw error;
 			}
 			if (directoryOptIn && !wasParticipating) {
@@ -150,6 +174,11 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			const oldLogoKey = await updateOrganizationLogo(context.cloudflare.env, user, { organizationId: result.data.organizationId, logoObjectKey: null });
 			if (oldLogoKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, oldLogoKey));
 			return { ok: true as const, message: "Organization logo removed." };
+		}
+		if (result.data.intent === "remove-profile-photo") {
+			const oldPhotoKey = await updateOrganizationProfilePhoto(context.cloudflare.env, user, { organizationId: result.data.organizationId, profilePhotoObjectKey: null });
+			if (oldPhotoKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, oldPhotoKey));
+			return { ok: true as const, message: "Organization profile photo removed." };
 		}
 		if (result.data.intent === "set-membership") {
 			await setOrganizationMembership(context.cloudflare.env, user, result.data);
@@ -185,6 +214,7 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 	const submitting = navigation.state === "submitting";
 	const { organization, memberships } = loaderData;
 	const directoryParticipating = organization.directoryStatus === "pending" || organization.directoryStatus === "published";
+	const pendingAccessCount = loaderData.pendingClaims.length + loaderData.pendingInvitations.length;
 
 	return (
 		<div className="organization-manage-page">
@@ -197,9 +227,11 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 			<section className="panel managed-profile-panel">
 				<div className="panel-heading"><div><p className="eyebrow">Organization information</p><h2>Organization profile</h2></div><span className={`status-pill status-pill--${organization.status}`}>{organization.status}</span></div>
 				<div className="organization-logo-editor"><OrganizationIdentity large logoObjectKey={organization.logoObjectKey} name={organization.name} /><div><strong>Organization logo</strong><p>PNG, JPG, WebP, or GIF. Maximum 10 MB.</p>{organization.logoObjectKey && <Form method="post"><input name="intent" type="hidden" value="remove-logo" /><input name="organizationId" type="hidden" value={organization.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Remove logo</button></Form>}</div></div>
+				{organization.profilePhotoObjectKey && <div className="organization-photo-editor"><img alt={`${organization.name} profile`} src={mediaUrl(organization.profilePhotoObjectKey) ?? undefined} /><div><strong>Organization profile photo</strong><p>This larger image appears on the organization profile.</p><Form method="post"><input name="intent" type="hidden" value="remove-profile-photo" /><input name="organizationId" type="hidden" value={organization.id} /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Remove photo</button></Form></div></div>}
 				<Form className="organization-edit-form" encType="multipart/form-data" method="post">
 					<input name="intent" type="hidden" value="update-profile" /><input name="organizationId" type="hidden" value={organization.id} />
-					<label>Organization logo<input accept="image/png,image/jpeg,image/webp,image/gif" name="logo" type="file" /></label>
+					<label>Organization logo<input accept={imageUploadAccept} name="logo" type="file" /><small>Square images work best. Maximum 10 MB.</small></label>
+					<label>Profile photo<input accept={imageUploadAccept} name="profilePhoto" type="file" /><small>Use a wider photo that represents the organization. Maximum 10 MB.</small></label>
 					<OrganizationProfileFields organization={organization} />
 					<div className={`directory-profile-opt-in directory-profile-opt-in--${organization.directoryStatus}`}>
 						<label>
@@ -224,7 +256,45 @@ export default function OrganizationManage({ loaderData }: Route.ComponentProps)
 
 			<section className="panel managed-members-panel">
 				<div className="panel-heading"><div><p className="eyebrow">Participation</p><h2>Organization members</h2></div><span>{memberships.length}</span></div>
-				<div className="managed-claim-queue"><div className="subsection-heading"><div><p className="eyebrow">Membership moderation</p><h3>Pending claims</h3></div><span>{loaderData.pendingClaims.length}</span></div>{loaderData.pendingClaims.length === 0 ? <p className="muted-empty">No membership claims are awaiting review.</p> : <div className="organization-claim-review-list">{loaderData.pendingClaims.map((claim) => <article key={claim.id}><div><strong>{claim.userName || claim.userEmail}</strong><p>{claim.userName ? `${claim.userEmail} · ` : ""}Requests {organizationRoleLabels[claim.requestedRole]}{claim.currentRole ? ` · currently ${organizationRoleLabels[claim.currentRole]}` : ""}</p></div><div className="organization-claim-actions"><Form method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary button--compact" disabled={submitting} type="submit">Approve</button></Form><Form className="organization-claim-reject-form" method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="reject" /><input aria-label={`Reason for rejecting ${claim.userName || claim.userEmail}`} maxLength={500} name="reason" placeholder="Reason for rejection" required /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Reject</button></Form></div></article>)}</div>}</div>
+				<div className="managed-claim-queue">
+					<div className="subsection-heading">
+						<div><p className="eyebrow">Membership moderation</p><h3>Pending access</h3></div>
+						<span>{pendingAccessCount}</span>
+					</div>
+					{pendingAccessCount === 0 ? (
+						<p className="muted-empty">No membership claims or invitations are pending.</p>
+					) : (
+						<div className="membership-moderation-groups">
+							{loaderData.pendingClaims.length > 0 && (
+								<section>
+									<div className="membership-moderation-label"><strong>Claims awaiting review</strong><span>{loaderData.pendingClaims.length}</span></div>
+									<div className="organization-claim-review-list">
+										{loaderData.pendingClaims.map((claim) => <article key={claim.id}><div><strong>{claim.userName || claim.userEmail}</strong><p>{claim.userName ? `${claim.userEmail} · ` : ""}Requests {organizationRoleLabels[claim.requestedRole]}{claim.currentRole ? ` · currently ${organizationRoleLabels[claim.currentRole]}` : ""}</p></div><div className="organization-claim-actions"><Form method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="approve" /><button className="button button--primary button--compact" disabled={submitting} type="submit">Approve</button></Form><Form className="organization-claim-reject-form" method="post"><input name="intent" type="hidden" value="review-organization-claim" /><input name="claimId" type="hidden" value={claim.id} /><input name="decision" type="hidden" value="reject" /><input aria-label={`Reason for rejecting ${claim.userName || claim.userEmail}`} maxLength={500} name="reason" placeholder="Reason for rejection" required /><button className="member-action-button member-action-button--suspend" disabled={submitting} type="submit">Reject</button></Form></div></article>)}
+									</div>
+								</section>
+							)}
+							{loaderData.pendingInvitations.length > 0 && (
+								<section>
+									<div className="membership-moderation-label"><strong>Invitations awaiting acceptance</strong><span>{loaderData.pendingInvitations.length}</span></div>
+									<div className="organization-invitation-list">
+										{loaderData.pendingInvitations.map((invitation) => (
+											<article key={invitation.id}>
+												<div>
+													<strong>{invitation.email}</strong>
+													<p>Invited as {organizationRoleLabels[invitation.invitedRole]}{invitation.invitedByName || invitation.invitedByEmail ? ` by ${invitation.invitedByName || invitation.invitedByEmail}` : ""}</p>
+												</div>
+												<div className="organization-invitation-meta">
+													<span className="status-pill status-pill--pending">Invitation sent</span>
+													<small>Expires <time dateTime={invitation.expiresAt}>{formatInvitationDate(invitation.expiresAt)}</time></small>
+												</div>
+											</article>
+										))}
+									</div>
+								</section>
+							)}
+						</div>
+					)}
+				</div>
 				<div className="organization-membership-manager">
 					<Form className="membership-add-form" method="post">
 						<input name="intent" type="hidden" value="set-membership" /><input name="organizationId" type="hidden" value={organization.id} />
