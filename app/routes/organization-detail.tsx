@@ -3,6 +3,7 @@ import { Form, Link, useActionData, useNavigation } from "react-router";
 import type { Route } from "./+types/organization-detail";
 import { Icon } from "~/components/icon";
 import { IdentityAvatar, OrganizationIdentity } from "~/components/identity-avatar";
+import { MentionText } from "~/components/mention-textarea";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { mediaUrl } from "~/lib/media";
@@ -111,7 +112,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 					</div>
 				</div>
 				{organization.profilePhotoObjectKey && <img alt={`${organization.name} profile`} className="organization-profile-photo" src={mediaUrl(organization.profilePhotoObjectKey) ?? undefined} />}
-				{organization.description && <p className="organization-description">{organization.description}</p>}
+				{organization.description && <div className="organization-description"><MentionText targets={[]} text={organization.description} /></div>}
 				{(organization.category || organization.townCity || organization.region || organization.operatesStatewide !== null || leadershipTags.length > 0) && <dl className="organization-profile-facts">
 					{organization.category && <div><dt>Categories</dt><dd className="organization-category-row">{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</dd></div>}
 					{organization.townCity && <div><dt>Town or city</dt><dd>{organization.townCity}</dd></div>}
@@ -119,7 +120,7 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 					{organization.operatesStatewide !== null && <div><dt>Statewide services</dt><dd>{organization.operatesStatewide === 1 ? "Yes" : "No"}</dd></div>}
 					{leadershipTags.length > 0 && <div><dt>Queer and/or BIPOC-led</dt><dd className="organization-category-row">{leadershipTags.map((tag) => <span className={`organization-category-chip organization-category-tone--${tag.tone}`} key={tag.label}>{tag.label}</span>)}</dd></div>}
 				</dl>}
-				{organization.listingRationale && <div className="organization-profile-note"><p className="eyebrow">Why this resource is included</p><p>{organization.listingRationale}</p></div>}
+				{organization.listingRationale && <div className="organization-profile-note"><p className="eyebrow">Why this resource is included</p><MentionText targets={[]} text={organization.listingRationale} /></div>}
 				{organization.affiliations.length > 0 && (
 					<div className="organization-affiliations">
 						<p className="eyebrow">Affiliations</p>

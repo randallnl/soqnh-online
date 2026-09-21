@@ -1573,7 +1573,8 @@ h3 {
 	pointer-events: none;
 }
 
-.project-description-link .inline-mention {
+.project-description-link .inline-mention,
+.project-description-link .inline-link {
 	position: relative;
 	z-index: 2;
 	pointer-events: auto;
@@ -2076,6 +2077,19 @@ h3 {
 }
 
 .inline-mention:hover {
+	text-decoration-color: currentColor;
+}
+
+.inline-link {
+	color: var(--blue-700);
+	font-weight: 700;
+	text-decoration: underline;
+	text-decoration-color: color-mix(in srgb, var(--blue-700) 35%, transparent);
+	text-underline-offset: 2px;
+	overflow-wrap: anywhere;
+}
+
+.inline-link:hover {
 	text-decoration-color: currentColor;
 }
 
@@ -2614,7 +2628,7 @@ h3 {
 	font-weight: 570;
 }
 
-.moderation-card h2 + p {
+.moderation-description {
 	display: -webkit-box;
 	overflow: hidden;
 	margin-top: 9px;
@@ -2623,6 +2637,10 @@ h3 {
 	line-height: 1.6;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 3;
+}
+
+.moderation-description p + p {
+	margin-top: 8px;
 }
 
 .moderation-card .content-card-meta {

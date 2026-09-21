@@ -1,6 +1,8 @@
 import { Link } from "react-router";
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { findExternalUrls } from "~/lib/rich-text";
+
 export type MentionTarget = {
 	id: string;
 	type: "person" | "organization";
@@ -134,22 +136,34 @@ function escapePattern(value: string) {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function linkifyText(value: string, keyPrefix: string): ReactNode[] {
+	const pieces: ReactNode[] = [];
+	let lastIndex = 0;
+	for (const match of findExternalUrls(value)) {
+		if (match.index > lastIndex) pieces.push(value.slice(lastIndex, match.index));
+		pieces.push(<a className="inline-link" href={match.href} key={`${keyPrefix}-${match.index}`} rel="noopener noreferrer" target="_blank">{match.text}</a>);
+		lastIndex = match.index + match.text.length;
+	}
+	if (lastIndex < value.length) pieces.push(value.slice(lastIndex));
+	return pieces;
+}
+
 export function MentionText({ text, targets }: { text: string; targets: MentionTarget[] }) {
 	const uniqueTargets = [...new Map(targets.map((target) => [target.label.toLocaleLowerCase(), target])).values()]
 		.sort((a, b) => b.label.length - a.label.length);
 	const pattern = uniqueTargets.length > 0 ? new RegExp(`@(${uniqueTargets.map((target) => escapePattern(target.label)).join("|")})(?![\\p{L}\\p{N}_])`, "giu") : null;
 	return <>{text.split(/\n{2,}/).map((paragraph, paragraphIndex) => {
-		if (!pattern) return <p key={`${paragraphIndex}-${paragraph.slice(0, 20)}`}>{paragraph}</p>;
+		if (!pattern) return <p key={`${paragraphIndex}-${paragraph.slice(0, 20)}`}>{linkifyText(paragraph, `paragraph-${paragraphIndex}`)}</p>;
 		const pieces: ReactNode[] = [];
 		let lastIndex = 0;
 		for (const match of paragraph.matchAll(pattern)) {
 			const index = match.index;
-			if (index > lastIndex) pieces.push(paragraph.slice(lastIndex, index));
+			if (index > lastIndex) pieces.push(...linkifyText(paragraph.slice(lastIndex, index), `paragraph-${paragraphIndex}-${lastIndex}`));
 			const target = uniqueTargets.find((item) => item.label.toLocaleLowerCase() === match[1].toLocaleLowerCase());
 			pieces.push(target ? <Link className="inline-mention" key={`${index}-${target.type}-${target.id}`} to={target.href}>@{match[1]}</Link> : match[0]);
 			lastIndex = index + match[0].length;
 		}
-		if (lastIndex < paragraph.length) pieces.push(paragraph.slice(lastIndex));
+		if (lastIndex < paragraph.length) pieces.push(...linkifyText(paragraph.slice(lastIndex), `paragraph-${paragraphIndex}-${lastIndex}`));
 		return <p key={`${paragraphIndex}-${paragraph.slice(0, 20)}`}>{pieces}</p>;
 	})}</>;
 }

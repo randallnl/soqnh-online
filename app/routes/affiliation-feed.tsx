@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useNavigation } from "react-router";
 import type { Route } from "./+types/affiliation-feed";
 import { Icon } from "~/components/icon";
 import { IdentityAvatar } from "~/components/identity-avatar";
+import { MentionText } from "~/components/mention-textarea";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { formatEventDateTime } from "~/lib/events";
 import { mediaUrl } from "~/lib/media";
@@ -92,7 +93,7 @@ export default function AffiliationFeed({ loaderData }: Route.ComponentProps) {
 					{post.eventImageUrl && <img alt="" className="event-card-image" loading="lazy" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
 					<div className="content-card-meta"><IdentityAvatar name={post.authorName || "Member"} objectKey={post.authorAvatarObjectKey} /><div><strong>{post.authorName || "Member"}</strong><p>{post.organizationName || "Member post"} · {formatDate(post.createdAt)}</p></div><span className="affiliation-content-kind">{post.section === "update" ? "Update" : post.section === "event" ? "Event" : "Project"}</span></div>
 					{post.eventStartsAt && <p className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(post.eventStartsAt)}</strong>{post.eventLocationName && <span>· {post.eventLocationName}</span>}</p>}
-					<div className="content-card-link">{post.section !== "update" && <h2><Link to={`/posts/${post.id}`}>{post.title}</Link></h2>}{post.section === "project" ? <div className="project-description-link"><p>{post.body}</p><Link aria-label={`Open project: ${post.title}`} className="project-description-overlay" to={`/posts/${post.id}`} /></div> : <p>{post.body}</p>}</div>
+					<div className="content-card-link">{post.section !== "update" && <h2><Link to={`/posts/${post.id}`}>{post.title}</Link></h2>}{post.section === "project" ? <div className="project-description-link"><MentionText targets={[]} text={post.body} /><Link aria-label={`Open project: ${post.title}`} className="project-description-overlay" to={`/posts/${post.id}`} /></div> : <MentionText targets={[]} text={post.body} />}</div>
 					{post.imageAttachments.length > 0 && (post.section === "project" ? <Link aria-label={`Open project: ${post.title}`} className="content-image-gallery project-image-gallery-link" to={`/posts/${post.id}`}>{post.imageAttachments.map((image) => <img alt={image.filename} key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</Link> : <div className="content-image-gallery">{post.imageAttachments.map((image) => <img alt={image.filename} key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div>)}
 					{post.affiliations.length > 0 && <div aria-label="Affiliations" className="content-affiliation-row">{post.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}
 					<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span><span><Icon name="heart" size={15} /> {post.supportCount} supports</span><Link to={`/posts/${post.id}`}>Open {post.section} <Icon name="chevron-right" size={15} /></Link></footer>
