@@ -2453,12 +2453,6 @@ h3 {
 	color: var(--ink-600);
 }
 
-.event-date-line .event-visibility-pill {
-	margin-left: auto;
-	color: var(--blue-700);
-	background: var(--blue-50);
-}
-
 .event-host-meta {
 	display: flex;
 	align-items: center;
