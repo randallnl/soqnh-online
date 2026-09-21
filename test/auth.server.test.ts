@@ -79,6 +79,7 @@ import { uploadContentImage, uploadIdentityImage } from "../app/lib/media.server
 import { getContentImagePostId } from "../app/models/attachments.server";
 import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
 import { parseOrganizationCategories, serializeOrganizationCategories } from "../app/lib/organization-categories";
+import { parseOrganizationLeadership, serializeOrganizationLeadership } from "../app/lib/organization-leadership";
 import { eventReviewSchema, eventScheduleSchema } from "../app/lib/event-review";
 import { scraperParsers } from "../app/lib/scraper";
 import {
@@ -1230,6 +1231,15 @@ describe("organization administration", () => {
 	it("normalizes multiple organization categories while preserving legacy values", () => {
 		expect(serializeOrganizationCategories(["Arts & Culture", "Health & Wellness", "Arts & Culture"])).toBe("Arts & Culture\nHealth & Wellness");
 		expect(parseOrganizationCategories("Community services\nHealth & Wellness")).toEqual(["Community services", "Health & Wellness"]);
+	});
+
+	it("normalizes multiselect organization leadership values and legacy responses", () => {
+		expect(parseOrganizationLeadership("Yes, both")).toEqual(["Queer-led", "BIPOC-led"]);
+		expect(parseOrganizationLeadership("Yes, queer-led")).toEqual(["Queer-led"]);
+		expect(serializeOrganizationLeadership(["Queer-led", "BIPOC-led"])).toBe("Queer-led\nBIPOC-led");
+		expect(serializeOrganizationLeadership(["Queer-led", "Not sure"])).toBe("Not sure");
+		expect(serializeOrganizationLeadership(["Legacy response"])).toBe("Legacy response");
+		expect(serializeOrganizationLeadership([])).toBe("");
 	});
 
 	it("lists only organization profile content visible to the viewer", async () => {

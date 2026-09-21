@@ -9,6 +9,7 @@ import { requireSameOrigin } from "~/lib/http.server";
 import { imageUploadAccept, mediaUrl } from "~/lib/media";
 import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
 import { serializeOrganizationCategories } from "~/lib/organization-categories";
+import { serializeOrganizationLeadership } from "~/lib/organization-leadership";
 import { organizationRoles, organizationStatuses } from "~/lib/organizations";
 import {
 	deleteOrganization,
@@ -94,7 +95,10 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	const raw = Object.fromEntries(formData);
 	const intent = typeof raw.intent === "string" ? raw.intent : "";
 	if (raw.organizationId !== data.organization.id) return { ok: false as const, intent, error: "This organization changed. Reload the page and try again." };
-	if (intent === "update") raw.category = serializeOrganizationCategories(formData.getAll("category"));
+	if (intent === "update") {
+		raw.category = serializeOrganizationCategories(formData.getAll("category"));
+		raw.leadershipIdentity = serializeOrganizationLeadership(formData.getAll("leadershipIdentity"));
+	}
 	const parsed = intent === "update" ? updateSchema.safeParse(raw) : membershipSchema.safeParse(raw);
 	if (!parsed.success) return { ok: false as const, intent, error: parsed.error.issues[0]?.message ?? "Check the submitted details." };
 

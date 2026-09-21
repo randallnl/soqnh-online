@@ -7,6 +7,7 @@ import { OrganizationProfileFields } from "~/components/organization-profile-fie
 import { requireSiteAdmin } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { serializeOrganizationCategories } from "~/lib/organization-categories";
+import { serializeOrganizationLeadership } from "~/lib/organization-leadership";
 import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import {
 	slugifyOrganizationName,
@@ -115,6 +116,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		raw.slug = slugifyOrganizationName(raw.name);
 	}
 	raw.category = serializeOrganizationCategories(formData.getAll("category"));
+	raw.leadershipIdentity = serializeOrganizationLeadership(formData.getAll("leadershipIdentity"));
 	const result = createSchema.safeParse(raw);
 	if (!result.success) {
 		return { ok: false as const, intent: "create", error: result.error.issues[0]?.message ?? "Check the organization details" };

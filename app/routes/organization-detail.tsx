@@ -9,6 +9,7 @@ import { requireSameOrigin } from "~/lib/http.server";
 import { formatEventDateTime } from "~/lib/events";
 import { mediaUrl } from "~/lib/media";
 import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
+import { parseOrganizationLeadership } from "~/lib/organization-leadership";
 import {
 	getOrganizationBySlug,
 	OrganizationMutationError,
@@ -20,19 +21,12 @@ import { listOrganizationProfileContent, type OrganizationProfilePost } from "~/
 const roleLabels = { viewer: "Viewer", contributor: "Contributor", org_admin: "Organization admin" } as const;
 
 function leadershipIdentityTags(value: string | null) {
-	if (!value) return [];
-	const normalized = value.trim().toLocaleLowerCase();
-	if (normalized === "yes, both" || (normalized.includes("queer-led") && normalized.includes("bipoc-led"))) return [
-		{ label: "Queer-led", tone: "plum" },
-		{ label: "BIPOC-led", tone: "gold" },
-	];
-	if (normalized === "yes, queer-led" || normalized === "queer-led") return [{ label: "Queer-led", tone: "plum" }];
-	if (normalized === "yes, bipoc-led" || normalized === "bipoc-led") return [{ label: "BIPOC-led", tone: "gold" }];
-	if (normalized === "no") return [{ label: "Not queer/BIPOC-led", tone: "blue" }];
-	if (normalized === "prefer not to say") return [{ label: "Prefer not to say", tone: "blue" }];
-	if (normalized === "not sure") return [{ label: "Not sure", tone: "blue" }];
-	if (normalized.startsWith("is this resource ")) return [];
-	return value.split(/[;\n]+/).map((label) => label.trim()).filter(Boolean).map((label) => ({ label: label.replace(/^yes,\s*/i, ""), tone: "blue" }));
+	return parseOrganizationLeadership(value)
+		.filter((label) => !label.toLocaleLowerCase().startsWith("is this resource "))
+		.map((label) => ({
+			label,
+			tone: label === "Queer-led" ? "plum" : label === "BIPOC-led" ? "gold" : label === "Not sure" ? "coral" : label === "Prefer not to say" ? "rose" : "blue",
+		}));
 }
 
 function socialUrl(platform: string | null, handle: string) {

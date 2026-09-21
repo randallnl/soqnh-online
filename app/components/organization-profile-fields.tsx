@@ -1,5 +1,8 @@
+import { useState } from "react";
+
 import type { OrganizationRecord } from "~/models/organizations.server";
 import { organizationCategoryOptions, organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
+import { isOrganizationLeadershipStatus, organizationLeadershipOptions, parseOrganizationLeadership } from "~/lib/organization-leadership";
 
 const regionOptions = [
 	"Great North Woods",
@@ -49,6 +52,9 @@ function ProfileSelect({
 export function OrganizationProfileFields({ organization }: { organization?: Partial<OrganizationRecord> }) {
 	const selectedCategories = parseOrganizationCategories(organization?.category);
 	const categoryOptions = [...new Set([...organizationCategoryOptions, ...selectedCategories])];
+	const initialLeadership = parseOrganizationLeadership(organization?.leadershipIdentity);
+	const leadershipOptions = [...new Set([...organizationLeadershipOptions, ...initialLeadership])];
+	const [selectedLeadership, setSelectedLeadership] = useState(() => new Set(initialLeadership));
 	return <>
 		<label>Name<input defaultValue={organization?.name ?? ""} maxLength={120} name="name" placeholder="Organization name" required /></label>
 		<fieldset className="organization-category-picker wide-field">
@@ -75,7 +81,32 @@ export function OrganizationProfileFields({ organization }: { organization?: Par
 		<label className="wide-field">Short summary<input defaultValue={organization?.summary ?? ""} maxLength={240} name="summary" placeholder="A short description for organization cards" /></label>
 		<label className="wide-field">Description<textarea defaultValue={organization?.description ?? ""} maxLength={4000} name="description" rows={5} /></label>
 		<label className="wide-field">Why should this listing be included?<textarea defaultValue={organization?.listingRationale ?? ""} maxLength={2000} name="listingRationale" rows={3} /></label>
-		<label>Is this organization queer and/or BIPOC-led?<input defaultValue={organization?.leadershipIdentity ?? ""} maxLength={100} name="leadershipIdentity" placeholder="Yes, queer-led; yes, BIPOC-led…" /></label>
+		<fieldset className="organization-category-picker organization-leadership-picker wide-field">
+			<legend>Is this organization queer and/or BIPOC-led?</legend>
+			<p>Select all that apply. “Neither,” “Not sure,” and “Prefer not to say” cannot be combined with other choices.</p>
+			<div className="organization-category-options">
+				{leadershipOptions.map((option) => {
+					const status = isOrganizationLeadershipStatus(option);
+					const tone = option === "Queer-led" ? "plum" : option === "BIPOC-led" ? "gold" : option === "Not queer/BIPOC-led" ? "blue" : option === "Not sure" ? "coral" : "rose";
+					return <label className={`organization-category-option organization-category-tone--${tone}`} key={option}>
+						<input checked={selectedLeadership.has(option)} name="leadershipIdentity" onChange={(event) => {
+							const checked = event.currentTarget.checked;
+							setSelectedLeadership((current) => {
+								const next = new Set(current);
+								if (!checked) next.delete(option);
+								else if (status) return new Set([option]);
+								else {
+									for (const value of next) if (isOrganizationLeadershipStatus(value)) next.delete(value);
+									next.add(option);
+								}
+								return next;
+							});
+						}} type="checkbox" value={option} />
+						<span>{organizationLeadershipOptions.includes(option as typeof organizationLeadershipOptions[number]) ? option : `Current: ${option}`}</span>
+					</label>;
+				})}
+			</div>
+		</fieldset>
 		<label className="wide-field">Source image links <small>(optional references)</small><textarea defaultValue={organization?.sourceImageUrls ?? ""} maxLength={4000} name="sourceImageUrls" placeholder="One source image URL per line" rows={3} /></label>
 	</>;
 }

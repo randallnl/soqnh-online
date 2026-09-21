@@ -10,6 +10,7 @@ import { requireSameOrigin } from "~/lib/http.server";
 import { imageUploadAccept, mediaUrl } from "~/lib/media";
 import { deleteIdentityImage, ImageUploadError, requireUploadRequestSize, uploadIdentityImage } from "~/lib/media.server";
 import { serializeOrganizationCategories } from "~/lib/organization-categories";
+import { serializeOrganizationLeadership } from "~/lib/organization-leadership";
 import { organizationRoleLabels, reviewOrganizationClaimSchema } from "~/lib/organization-claims";
 import { organizationRoles } from "~/lib/organizations";
 import { listPendingOrganizationInvitations } from "~/models/invitations.server";
@@ -130,6 +131,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	}
 	if (raw.intent === "update-profile") {
 		raw.category = serializeOrganizationCategories(formData.getAll("category"));
+		raw.leadershipIdentity = serializeOrganizationLeadership(formData.getAll("leadershipIdentity"));
 	}
 	const result = actionSchema.safeParse(raw);
 	if (!result.success) {
