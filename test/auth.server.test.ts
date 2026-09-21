@@ -87,6 +87,7 @@ import {
 	deleteCommunityUpdate,
 	getPostById,
 	listAffiliationFeedPosts,
+	listOrganizationProfileContent,
 	listMemberAffiliations,
 	listPostOrganizations,
 	listSectionPosts,
@@ -1229,6 +1230,55 @@ describe("organization administration", () => {
 	it("normalizes multiple organization categories while preserving legacy values", () => {
 		expect(serializeOrganizationCategories(["Arts & Culture", "Health & Wellness", "Arts & Culture"])).toBe("Arts & Culture\nHealth & Wellness");
 		expect(parseOrganizationCategories("Community services\nHealth & Wellness")).toEqual(["Community services", "Health & Wellness"]);
+	});
+
+	it("lists only organization profile content visible to the viewer", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedOrganization();
+		const update = await createPost(env, siteAdmin, {
+			organizationId: "org-one",
+			section: "update",
+			title: "Community update",
+			body: "An ecosystem-wide update from this organization.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			attachments: [{
+				id: "profile-content-image",
+				objectKey: "content-images/profile-content.jpg",
+				filename: "profile-content.jpg",
+				contentType: "image/jpeg",
+				byteSize: 1024,
+			}],
+		});
+		const privateProject = await createPost(env, siteAdmin, {
+			organizationId: "org-one",
+			section: "project",
+			title: "Internal project",
+			body: "A project for organization members only.",
+			visibility: "organization",
+			status: "published",
+			tags: [],
+		});
+
+		const ordinaryView = await listOrganizationProfileContent(env, activeUser, "org-one");
+		expect(ordinaryView.updates).toEqual([
+			expect.objectContaining({ id: update.id, thumbnailObjectKey: "content-images/profile-content.jpg" }),
+		]);
+		expect(ordinaryView.projects).toEqual([]);
+		expect(ordinaryView.totals).toEqual({ events: 0, projects: 0, updates: 1 });
+
+		const adminView = await listOrganizationProfileContent(env, siteAdmin, "org-one");
+		expect(adminView.projects).toEqual([expect.objectContaining({ id: privateProject.id })]);
+
+		await setOrganizationMembership(env, siteAdmin, {
+			organizationId: "org-one",
+			userId: activeUser.id,
+			role: "viewer",
+		});
+		expect((await listOrganizationProfileContent(env, activeUser, "org-one")).projects)
+			.toEqual([expect.objectContaining({ id: privateProject.id })]);
 	});
 
 	it("lets a site administrator permanently delete an organization", async () => {

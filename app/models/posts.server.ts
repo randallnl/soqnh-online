@@ -80,6 +80,28 @@ export type EventDetailsInput = {
 	imageUrl: string | null;
 };
 
+export type OrganizationProfilePost = {
+	id: string;
+	section: "event" | "project" | "update";
+	title: string;
+	body: string;
+	createdAt: string;
+	commentCount: number;
+	supportCount: number;
+	thumbnailObjectKey: string | null;
+	thumbnailUrl: string | null;
+	eventStartsAt: string | null;
+	eventLocationName: string | null;
+	sectionTotal: number;
+};
+
+export type OrganizationProfileContent = {
+	events: OrganizationProfilePost[];
+	projects: OrganizationProfilePost[];
+	updates: OrganizationProfilePost[];
+	totals: { events: number; projects: number; updates: number };
+};
+
 type PostRow = Omit<PostRecord, "tags" | "affiliations" | "imageAttachments" | "canEdit" | "canModerateEvent" | "viewerSupported"> & {
 	tagList: string | null;
 	affiliationJson: string;
@@ -459,6 +481,97 @@ export async function listSectionPosts(
 		page: input.page,
 		total,
 		totalPages: Math.max(1, Math.ceil(total / pageSize)),
+	};
+}
+
+export async function listOrganizationProfileContent(
+	env: Env,
+	viewer: AuthenticatedUser,
+	organizationId: string,
+): Promise<OrganizationProfileContent> {
+	const result = await env.DB.prepare(
+		`WITH viewer_affiliations AS (
+		   SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1
+		   UNION
+		   SELECT oa.affiliation_id
+		   FROM organization_memberships AS membership
+		   JOIN organizations AS member_organization
+		     ON member_organization.id = membership.organization_id
+		    AND member_organization.status != 'archived'
+		   JOIN organization_affiliations AS oa ON oa.organization_id = membership.organization_id
+		   WHERE membership.user_id = ?1
+		 ), visible_content AS (
+		   SELECT p.id, p.section, p.title, p.body,
+		          p.created_at AS createdAt,
+		          e.starts_at AS eventStartsAt,
+		          e.location_name AS eventLocationName,
+		          CASE WHEN p.section = 'event' THEN e.image_url ELSE NULL END AS thumbnailUrl,
+		          (SELECT attachment.object_key
+		           FROM attachments AS attachment
+		           WHERE attachment.post_id = p.id
+		           ORDER BY attachment.created_at ASC, attachment.id ASC
+		           LIMIT 1) AS thumbnailObjectKey,
+		          (SELECT count(*) FROM comments
+		           WHERE post_id = p.id AND status = 'published') AS commentCount,
+		          (SELECT count(*) FROM post_reactions
+		           WHERE post_id = p.id AND reaction = 'support') AS supportCount,
+		          row_number() OVER (
+		            PARTITION BY p.section
+		            ORDER BY CASE WHEN p.section = 'event' THEN e.starts_at END ASC,
+		                     p.created_at DESC, p.id DESC
+		          ) AS sectionRank,
+		          count(*) OVER (PARTITION BY p.section) AS sectionTotal
+		   FROM posts AS p
+		   JOIN organizations AS o ON o.id = p.organization_id
+		   LEFT JOIN events AS e ON e.post_id = p.id
+		   WHERE p.organization_id = ?2
+		     AND p.section IN ('event', 'project', 'update')
+		     AND p.status = 'published'
+		     AND (p.section != 'event' OR (e.moderation_status = 'approved' AND substr(e.starts_at, 1, 10) >= ?4))
+		     AND (
+		       ?3 = 1
+		       OR p.author_user_id = ?1
+		       OR EXISTS (
+		         SELECT 1 FROM organization_memberships
+		         WHERE organization_id = p.organization_id AND user_id = ?1 AND role = 'org_admin'
+		       )
+		       OR (p.visibility = 'organization' AND EXISTS (
+		         SELECT 1 FROM organization_memberships
+		         WHERE organization_id = p.organization_id AND user_id = ?1
+		       ))
+		       OR (p.visibility = 'members' AND o.status = 'active' AND (
+		         EXISTS (
+		           SELECT 1
+		           FROM post_affiliations AS post_affiliation
+		           JOIN viewer_affiliations
+		             ON viewer_affiliations.affiliation_id = post_affiliation.affiliation_id
+		           WHERE post_affiliation.post_id = p.id
+		         )
+		         OR NOT EXISTS (SELECT 1 FROM post_affiliations WHERE post_id = p.id)
+		       ))
+		     )
+		 )
+		 SELECT id, section, title, body, createdAt, commentCount, supportCount,
+		        thumbnailObjectKey, thumbnailUrl, eventStartsAt, eventLocationName, sectionTotal
+		 FROM visible_content
+		 WHERE sectionRank <= 3
+		 ORDER BY CASE section WHEN 'event' THEN 0 WHEN 'project' THEN 1 ELSE 2 END,
+		          sectionRank`,
+	)
+		.bind(viewer.id, organizationId, viewer.siteRole === "site_admin" ? 1 : 0, todayInNewHampshire())
+		.all<OrganizationProfilePost>();
+	const events = result.results.filter((post) => post.section === "event");
+	const projects = result.results.filter((post) => post.section === "project");
+	const updates = result.results.filter((post) => post.section === "update");
+	return {
+		events,
+		projects,
+		updates,
+		totals: {
+			events: events[0]?.sectionTotal ?? 0,
+			projects: projects[0]?.sectionTotal ?? 0,
+			updates: updates[0]?.sectionTotal ?? 0,
+		},
 	};
 }
 
