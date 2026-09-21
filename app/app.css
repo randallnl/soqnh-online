@@ -837,7 +837,7 @@ h3 {
 
 .feed-item {
 	display: grid;
-	grid-template-columns: auto 1fr auto;
+	grid-template-columns: auto minmax(0, 1fr) auto auto;
 	gap: 13px;
 	align-items: start;
 	padding: 15px 12px;
@@ -891,6 +891,27 @@ h3 {
 	margin-top: 8px;
 	color: var(--ink-500);
 	font-size: 0.75rem;
+}
+
+.feed-thumbnail {
+	display: block;
+	width: 96px;
+	height: 72px;
+	overflow: hidden;
+	border-radius: 9px;
+	background: var(--ink-100);
+}
+
+.feed-thumbnail img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 180ms ease;
+}
+
+.feed-thumbnail:hover img {
+	transform: scale(1.04);
 }
 
 .subtle-button {
@@ -2430,6 +2451,81 @@ h3 {
 
 .event-date-line span {
 	color: var(--ink-600);
+}
+
+.event-host-meta {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px;
+	margin-bottom: 2px;
+	border: 1px solid var(--green-100);
+	border-radius: 11px;
+	background: var(--green-50);
+}
+
+.event-host-logo-link,
+.event-host-placeholder {
+	display: block;
+	flex: 0 0 auto;
+}
+
+.event-host-logo-link .organization-monogram,
+.event-host-placeholder {
+	width: 52px;
+	height: 52px;
+	border-radius: 12px;
+}
+
+.event-host-placeholder {
+	display: grid;
+	place-items: center;
+	color: var(--green-700);
+	background: var(--green-100);
+}
+
+.event-host-copy {
+	min-width: 0;
+}
+
+.event-host-copy p {
+	margin-bottom: 3px;
+	color: var(--green-700);
+	font-size: 0.68rem;
+	font-weight: 800;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.event-host-copy strong {
+	display: block;
+	overflow: hidden;
+	font-family: Nunito, ui-rounded, sans-serif;
+	font-size: 0.95rem;
+	font-weight: 850;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.event-host-copy strong a {
+	color: inherit;
+}
+
+.event-host-copy strong a:hover {
+	color: var(--green-700);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.event-host-copy small {
+	display: block;
+	margin-top: 4px;
+	color: var(--ink-500);
+	font-size: 0.7rem;
+}
+
+.event-host-meta .visibility-pill {
+	flex: 0 0 auto;
 }
 
 .event-detail-image {
@@ -4555,7 +4651,7 @@ h3 {
 	}
 
 	.feed-item {
-		grid-template-columns: auto 1fr;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 	}
 
 	.feed-item .subtle-button {
@@ -4652,6 +4748,15 @@ h3 {
 	.content-card-meta {
 		align-items: flex-start;
 		flex-wrap: wrap;
+	}
+
+	.event-host-meta {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.event-host-meta .visibility-pill {
+		margin-left: 64px;
 	}
 
 	.visibility-pill {

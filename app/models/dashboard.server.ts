@@ -15,6 +15,8 @@ export type DashboardPost = {
 	title: string;
 	body: string;
 	organizationName: string | null;
+	thumbnailObjectKey: string | null;
+	thumbnailUrl: string | null;
 	createdAt: string;
 	commentCount: number;
 };
@@ -123,7 +125,14 @@ export async function getDashboardData(
 		env.DB.prepare(
 			`WITH ${viewerAffiliations}
 			 SELECT p.id, p.section, p.title, p.body,
-			        o.name AS organizationName, p.created_at AS createdAt,
+			        o.name AS organizationName,
+			        (SELECT attachment.object_key
+			         FROM attachments AS attachment
+			         WHERE attachment.post_id = p.id
+			         ORDER BY attachment.created_at ASC, attachment.id ASC
+			         LIMIT 1) AS thumbnailObjectKey,
+			        CASE WHEN p.section = 'event' THEN e.image_url ELSE NULL END AS thumbnailUrl,
+			        p.created_at AS createdAt,
 			        (SELECT count(*) FROM comments
 			         WHERE post_id = p.id AND status = 'published') AS commentCount
 			 FROM posts AS p

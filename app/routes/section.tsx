@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Route } from "./+types/section";
 import { AffiliationAudiencePicker } from "~/components/affiliation-audience-picker";
 import { Icon } from "~/components/icon";
-import { IdentityAvatar } from "~/components/identity-avatar";
+import { IdentityAvatar, OrganizationIdentity } from "~/components/identity-avatar";
 import { MentionText, MentionTextarea, type MentionTarget } from "~/components/mention-textarea";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { communityUpdateTitle, isContentSection, isEventTiming, normalizeTags, sectionDefinitions, type EventTiming } from "~/lib/content";
@@ -246,11 +246,29 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 						return <article className={`panel content-card${post.section === "event" ? " event-content-card" : ""}${post.section === "update" ? " update-content-card" : ""}`} id={`post-${post.id}`} key={post.id}>
 							{post.eventImageUrl && <img alt="" className="event-card-image" loading="lazy" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
 							{post.eventStartsAt && <div className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(post.eventStartsAt)}</strong>{post.eventEndsAt && <span>to {formatEventDateTime(post.eventEndsAt)}</span>}{post.eventLocationName && <span>· {post.eventLocationName}</span>}</div>}
-							<div className="content-card-meta">
-								<IdentityAvatar name={post.authorName || "Member"} objectKey={post.authorAvatarObjectKey} />
-								<div>{loaderData.visibleMemberIds.includes(post.authorUserId) ? <Link className="identity-name-link" to={`/members/${post.authorUserId}`}><strong>{post.authorName || "Member"}</strong></Link> : <strong>{post.authorName || "Member"}</strong>}<p>{post.organizationName ? <Link to={`/organizations/${post.organizationSlug}`}>{post.organizationName}</Link> : "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div>
-								{post.section !== "update" && <span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>}
-							</div>
+							{post.section === "event" ? (
+								<div className="event-host-meta">
+									{post.organizationName && post.organizationSlug ? (
+										<Link aria-label={`View ${post.organizationName}`} className="event-host-logo-link" to={`/organizations/${post.organizationSlug}`}>
+											<OrganizationIdentity logoObjectKey={post.organizationLogoObjectKey} name={post.organizationName} />
+										</Link>
+									) : (
+										<span className="event-host-placeholder"><Icon name="building" size={21} /></span>
+									)}
+									<div className="event-host-copy">
+										<p>Host organization</p>
+										<strong>{post.organizationName && post.organizationSlug ? <Link to={`/organizations/${post.organizationSlug}`}>{post.organizationName}</Link> : "Not specified"}</strong>
+										<small>{post.authorUserId === "system:event-scraper" ? "Automatically synced" : `Added by ${post.authorName || "Member"}`} · {formatDate(post.createdAt)}</small>
+									</div>
+									<span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>
+								</div>
+							) : (
+								<div className="content-card-meta">
+									<IdentityAvatar name={post.authorName || "Member"} objectKey={post.authorAvatarObjectKey} />
+									<div>{loaderData.visibleMemberIds.includes(post.authorUserId) ? <Link className="identity-name-link" to={`/members/${post.authorUserId}`}><strong>{post.authorName || "Member"}</strong></Link> : <strong>{post.authorName || "Member"}</strong>}<p>{post.organizationName ? <Link to={`/organizations/${post.organizationSlug}`}>{post.organizationName}</Link> : "Ecosystem-wide"} · {formatDate(post.createdAt)}</p></div>
+									{post.section !== "update" && <span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>}
+								</div>
+							)}
 							<div className="content-card-link">{post.section !== "update" && <h2><Link to={`/posts/${post.id}`}>{post.title}</Link></h2>}{post.section === "project" ? <div className="project-description-link"><MentionText targets={loaderData.mentionTargets} text={post.body} /><Link aria-label={`Open project: ${post.title}`} className="project-description-overlay" to={`/posts/${post.id}`} /></div> : <MentionText targets={loaderData.mentionTargets} text={post.body} />}</div>
 							{post.imageAttachments.length > 0 && (post.section === "project" ? <Link aria-label={`Open project: ${post.title}`} className="content-image-gallery project-image-gallery-link" to={`/posts/${post.id}`}>{post.imageAttachments.map((image) => <img alt={image.filename} key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</Link> : <div className="content-image-gallery">{post.imageAttachments.map((image) => <img alt={image.filename} key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div>)}
 							{post.affiliations.length > 0 && <div className="content-affiliation-row" aria-label="Affiliations">{post.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}

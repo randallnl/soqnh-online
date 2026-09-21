@@ -7,6 +7,7 @@ import {
 	routeSectionForDatabase,
 	sectionDefinitions,
 } from "~/lib/content";
+import { mediaUrl } from "~/lib/media";
 import { getDashboardData } from "~/models/dashboard.server";
 import { canModerateEvents } from "~/models/events.server";
 
@@ -235,6 +236,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								{dashboard.recentPosts.map((post) => {
 									const routeSection = routeSectionForDatabase(post.section);
 									const section = sectionDefinitions[routeSection];
+									const thumbnailUrl = mediaUrl(post.thumbnailObjectKey) ?? post.thumbnailUrl;
 									return (
 										<article className="feed-item" key={post.id}>
 											<span className={`feed-icon feed-icon--${feedColors[post.section]}`}>
@@ -248,6 +250,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 													{post.organizationName || "Ecosystem-wide"} · {formatPostDate(post.createdAt)} · {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}
 												</small>
 											</div>
+											{thumbnailUrl && (
+												<Link aria-label={`Open ${post.title}`} className="feed-thumbnail" to={`/posts/${post.id}`}>
+													<img alt="" loading="lazy" referrerPolicy={post.thumbnailObjectKey ? undefined : "no-referrer"} src={thumbnailUrl} />
+												</Link>
+											)}
 											<Link aria-label={`Open ${post.title}`} className="icon-button subtle-button" to={`/posts/${post.id}`}>
 												<Icon name="chevron-right" size={18} />
 											</Link>

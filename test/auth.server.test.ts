@@ -2327,6 +2327,13 @@ describe("dashboard data", () => {
 			visibility: "members",
 			status: "published",
 			tags: [],
+			attachments: [{
+				id: "dashboard-image",
+				objectKey: "content-images/dashboard-image.jpg",
+				filename: "community-update.jpg",
+				contentType: "image/jpeg",
+				byteSize: 1024,
+			}],
 		});
 		const privatePost = await createPost(env, activeUser, {
 			organizationId: "org-one",
@@ -2347,6 +2354,10 @@ describe("dashboard data", () => {
 		expect(memberDashboard.recentPosts.map((post) => post.id)).toEqual(
 			expect.arrayContaining([networkPost.id, privatePost.id]),
 		);
+		expect(memberDashboard.recentPosts.find((post) => post.id === networkPost.id)).toMatchObject({
+			thumbnailObjectKey: "content-images/dashboard-image.jpg",
+			thumbnailUrl: null,
+		});
 		expect(memberDashboard.recentActivity).toEqual([
 			expect.objectContaining({ postId: networkPost.id }),
 		]);
@@ -2391,7 +2402,7 @@ describe("dashboard data", () => {
 				locationUrl: null,
 				registrationUrl: null,
 				sourceUrl: null,
-				imageUrl: null,
+				imageUrl: "https://example.org/community-gathering.jpg",
 			},
 		});
 
@@ -2410,6 +2421,10 @@ describe("dashboard data", () => {
 		expect(dashboard.upcomingEvents).toEqual([
 			expect.objectContaining({ postId: event.id, locationName: "Concord" }),
 		]);
+		expect(dashboard.recentPosts.find((post) => post.id === event.id)).toMatchObject({
+			thumbnailObjectKey: null,
+			thumbnailUrl: "https://example.org/community-gathering.jpg",
+		});
 	});
 });
 
