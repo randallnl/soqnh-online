@@ -26,6 +26,8 @@ export type DashboardEvent = {
 	title: string;
 	startsAt: string;
 	locationName: string | null;
+	thumbnailObjectKey: string | null;
+	thumbnailUrl: string | null;
 };
 
 export type DashboardActivity = {
@@ -33,6 +35,8 @@ export type DashboardActivity = {
 	postId: string;
 	postTitle: string;
 	authorName: string | null;
+	thumbnailObjectKey: string | null;
+	thumbnailUrl: string | null;
 	createdAt: string;
 };
 
@@ -147,9 +151,15 @@ export async function getDashboardData(
 			.bind(viewer.id, isSiteAdmin)
 			.all<DashboardPost>(),
 		env.DB.prepare(
-			`WITH ${viewerAffiliations}
+			 `WITH ${viewerAffiliations}
 			 SELECT p.id AS postId, p.title, e.starts_at AS startsAt,
-			        e.location_name AS locationName
+			        e.location_name AS locationName,
+			        (SELECT attachment.object_key
+			         FROM attachments AS attachment
+			         WHERE attachment.post_id = p.id
+			         ORDER BY attachment.created_at ASC, attachment.id ASC
+			         LIMIT 1) AS thumbnailObjectKey,
+			        e.image_url AS thumbnailUrl
 			 FROM posts AS p
 			 JOIN events AS e ON e.post_id = p.id
 			 LEFT JOIN organizations AS o ON o.id = p.organization_id
@@ -164,9 +174,16 @@ export async function getDashboardData(
 			.bind(viewer.id, isSiteAdmin, now)
 			.all<DashboardEvent>(),
 		env.DB.prepare(
-			`WITH ${viewerAffiliations}
+			 `WITH ${viewerAffiliations}
 			 SELECT c.id AS commentId, c.post_id AS postId, p.title AS postTitle,
-			        u.name AS authorName, c.created_at AS createdAt
+			        u.name AS authorName,
+			        (SELECT attachment.object_key
+			         FROM attachments AS attachment
+			         WHERE attachment.post_id = p.id
+			         ORDER BY attachment.created_at ASC, attachment.id ASC
+			         LIMIT 1) AS thumbnailObjectKey,
+			        CASE WHEN p.section = 'event' THEN e.image_url ELSE NULL END AS thumbnailUrl,
+			        c.created_at AS createdAt
 			 FROM comments AS c
 			 JOIN posts AS p ON p.id = c.post_id
 			 JOIN users AS u ON u.id = c.author_user_id

@@ -302,6 +302,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							<div className="event-list">
 								{dashboard.upcomingEvents.map((event) => {
 									const date = getEventDateParts(event.startsAt);
+									const thumbnailUrl = mediaUrl(event.thumbnailObjectKey) ?? event.thumbnailUrl;
 									return (
 										<article className="event-row" key={event.postId}>
 											<time dateTime={event.startsAt}>
@@ -312,6 +313,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 												<h3><Link to={`/posts/${event.postId}`}>{event.title}</Link></h3>
 												<p>{date.time}{event.locationName ? ` · ${event.locationName}` : ""}</p>
 											</div>
+											{thumbnailUrl && <Link aria-label={`Open ${event.title}`} className="event-row-thumbnail" to={`/posts/${event.postId}`}><img alt="" loading="lazy" referrerPolicy={event.thumbnailObjectKey ? undefined : "no-referrer"} src={thumbnailUrl} /></Link>}
 										</article>
 									);
 								})}
@@ -331,13 +333,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							</div>
 						) : (
 							<div className="activity-list">
-								{dashboard.recentActivity.map((item, index) => (
-									<article className="activity-row" key={item.commentId}>
-										<span className={`mini-avatar mini-avatar--${["violet", "blue", "rose"][index % 3]}`}>{initials(item.authorName)}</span>
+								{dashboard.recentActivity.map((item, index) => {
+									const thumbnailUrl = mediaUrl(item.thumbnailObjectKey) ?? item.thumbnailUrl;
+									return <article className="activity-row" key={item.commentId}>
+										{thumbnailUrl ? <Link aria-label={`Open ${item.postTitle}`} className="activity-thumbnail" to={`/posts/${item.postId}#comment-${item.commentId}`}><img alt="" loading="lazy" referrerPolicy={item.thumbnailObjectKey ? undefined : "no-referrer"} src={thumbnailUrl} /></Link> : <span className={`mini-avatar mini-avatar--${["violet", "blue", "rose"][index % 3]}`}>{initials(item.authorName)}</span>}
 										<p><strong>{item.authorName || "Member"}</strong> commented on <Link to={`/posts/${item.postId}#comment-${item.commentId}`}>{item.postTitle}</Link></p>
 										<time dateTime={item.createdAt}>{formatRelativeTime(item.createdAt, loaderData.generatedAt)}</time>
-									</article>
-								))}
+									</article>;
+								})}
 							</div>
 						)}
 					</section>

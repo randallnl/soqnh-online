@@ -2359,7 +2359,11 @@ describe("dashboard data", () => {
 			thumbnailUrl: null,
 		});
 		expect(memberDashboard.recentActivity).toEqual([
-			expect.objectContaining({ postId: networkPost.id }),
+			expect.objectContaining({
+				postId: networkPost.id,
+				thumbnailObjectKey: "content-images/dashboard-image.jpg",
+				thumbnailUrl: null,
+			}),
 		]);
 
 		const unrelatedDashboard = await getDashboardData(env, thirdMember);
@@ -2419,7 +2423,12 @@ describe("dashboard data", () => {
 		expect(dashboard.counts.pendingEvents).toBe(0);
 		expect(dashboard.counts.upcomingEvents).toBe(1);
 		expect(dashboard.upcomingEvents).toEqual([
-			expect.objectContaining({ postId: event.id, locationName: "Concord" }),
+			expect.objectContaining({
+				postId: event.id,
+				locationName: "Concord",
+				thumbnailObjectKey: null,
+				thumbnailUrl: "https://example.org/community-gathering.jpg",
+			}),
 		]);
 		expect(dashboard.recentPosts.find((post) => post.id === event.id)).toMatchObject({
 			thumbnailObjectKey: null,
