@@ -245,7 +245,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 						const commentMentionTargets = loaderData.commentMentionTargetsByPost[post.id] ?? [];
 						return <article className={`panel content-card${post.section === "event" ? " event-content-card" : ""}${post.section === "update" ? " update-content-card" : ""}`} id={`post-${post.id}`} key={post.id}>
 							{post.eventImageUrl && <img alt="" className="event-card-image" loading="lazy" referrerPolicy="no-referrer" src={post.eventImageUrl} />}
-							{post.eventStartsAt && <div className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(post.eventStartsAt)}</strong>{post.eventEndsAt && <span>to {formatEventDateTime(post.eventEndsAt)}</span>}{post.eventLocationName && <span>· {post.eventLocationName}</span>}</div>}
+							{post.eventStartsAt && <div className="event-date-line"><Icon name="calendar" size={17} /><strong>{formatEventDateTime(post.eventStartsAt)}</strong>{post.eventEndsAt && <span>to {formatEventDateTime(post.eventEndsAt)}</span>}{post.eventLocationName && <span>· {post.eventLocationName}</span>}<span className="visibility-pill event-visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span></div>}
 							{post.section === "event" ? (
 								<div className="event-host-meta">
 									{post.organizationName && post.organizationSlug ? (
@@ -260,7 +260,6 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 										<strong>{post.organizationName && post.organizationSlug ? <Link to={`/organizations/${post.organizationSlug}`}>{post.organizationName}</Link> : "Not specified"}</strong>
 										<small>{post.authorUserId === "system:event-scraper" ? "Automatically synced" : `Added by ${post.authorName || "Member"}`} · {formatDate(post.createdAt)}</small>
 									</div>
-									<span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>
 								</div>
 							) : (
 								<div className="content-card-meta">
