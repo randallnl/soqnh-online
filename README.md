@@ -27,7 +27,7 @@ A private collaboration hub for New Hampshire's queer community ecosystem. This 
 - Workers-runtime authentication tests against a migrated local D1 database
 - CI-ready type generation, typecheck, production build, and Wrangler dry run
 
-The production deployment target is the `soqnh-online` Worker. A custom production domain is not configured yet, so the app currently runs at its `workers.dev` URL.
+The production deployment target is the `soqnh-online` Worker at `https://connect.queerlective.com`. The `workers.dev` URL remains available for diagnostics, but authentication emails must use the custom domain so their host-only session cookies apply to the primary site.
 
 ## Local development
 

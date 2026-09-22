@@ -106,10 +106,10 @@ This application-level throttle is intentionally modest. A Cloudflare rate-limit
 
 - Email Sending domain: `nhsolidarityecosystem.com` (enabled when this slice was implemented)
 - Allowed sender: `no-reply@nhsolidarityecosystem.com`
-- Canonical email origin: `https://soqnh-online.randall-d53.workers.dev`
+- Canonical email origin: `https://connect.queerlective.com`
 - Production database contains active accounts, including an active site administrator, so deployment will not create an administrative lockout.
 
-When the custom domain is connected, update `APP_ORIGIN` in `wrangler.jsonc`, regenerate Worker types, and deploy that configuration before sending new links.
+Keep `APP_ORIGIN` in `wrangler.jsonc` set to `https://connect.queerlective.com` so magic links establish their host-only session cookie on the primary site.
 
 ## Verification commands
 
