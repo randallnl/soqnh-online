@@ -17,7 +17,7 @@ type NavigationItem = {
 };
 
 const primaryNavigation: NavigationItem[] = [
-	{ label: "Overview", to: "/", icon: "dashboard" },
+	{ label: "Overview", to: "/home", icon: "dashboard" },
 	{ label: "Events", to: "/events", icon: "calendar" },
 	{ label: "Projects", to: "/projects", icon: "clipboard" },
 	{ label: "Community Feed", to: "/updates", icon: "message" },
@@ -60,7 +60,7 @@ function NavigationGroup({
 					className={({ isActive }) =>
 						`nav-item${isActive ? " nav-item--active" : ""}`
 					}
-					end={item.to === "/"}
+					end={item.to === "/home"}
 					key={item.to}
 					onClick={onNavigate}
 					to={item.to}
@@ -143,7 +143,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 			)}
 			<aside className={`sidebar${menuOpen ? " sidebar--open" : ""}`}>
 				<div className="sidebar-header">
-					<Link className="brand-lockup" to="/" onClick={() => setMenuOpen(false)}>
+					<Link className="brand-lockup" to="/home" onClick={() => setMenuOpen(false)}>
 						<img alt="" className="brand-logo" src="/brand/queerlective-round.png" />
 						<span>
 							<strong>NH Connect</strong>

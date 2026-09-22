@@ -15,7 +15,7 @@ export const meta: Route.MetaFunction = () => [
 	{
 		name: "description",
 		content:
-			"A private collaboration hub for New Hampshire's queer community ecosystem.",
+			"A public directory and private collaboration hub for New Hampshire's queer community ecosystem.",
 	},
 ];
 
@@ -79,7 +79,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 				<h1>{message}</h1>
 				<p>{details}</p>
 				<a className="button button--primary" href="/">
-					Return to dashboard
+					Return to the directory
 				</a>
 			</div>
 			{stack && (

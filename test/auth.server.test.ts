@@ -67,6 +67,11 @@ import {
 	withdrawDirectoryParticipation,
 } from "../app/models/organizations.server";
 import {
+	getPublishedOrganizationBySlug,
+	getPublishedOrganizationMediaKey,
+	listPublishedOrganizations,
+} from "../app/models/public-directory.server";
+import {
 	cancelOrganizationClaim,
 	listClaimableOrganizations,
 	listOwnOrganizationClaims,
@@ -865,8 +870,8 @@ describe("authentication primitives", () => {
 		expect(sanitizeReturnTo("/events?view=month")).toBe(
 			"/events?view=month",
 		);
-		expect(sanitizeReturnTo("https://attacker.example/path")).toBe("/");
-		expect(sanitizeReturnTo("//attacker.example/path")).toBe("/");
+		expect(sanitizeReturnTo("https://attacker.example/path")).toBe("/home");
+		expect(sanitizeReturnTo("//attacker.example/path")).toBe("/home");
 	});
 
 	it("creates stable organization slugs", () => {
@@ -1702,6 +1707,42 @@ describe("organization-admin self-service", () => {
 });
 
 describe("NH Connect public directory participation", () => {
+	it("exposes only active, approved organizations through the public data boundary", async () => {
+		await seedOrganization();
+		await seedSecondOrganization();
+		await env.DB.batch([
+			env.DB.prepare(
+				`UPDATE organizations
+				 SET directory_status = 'published', summary = 'Public summary',
+				     description = 'Public description', website_url = 'https://example.org',
+				     contact_email = 'hello@example.org', logo_object_key = 'org-logos/public.png',
+				     profile_photo_object_key = 'org-photos/public.jpg',
+				     event_source_url = 'https://private.example.org/scraper',
+				     source_image_urls = 'https://private.example.org/source',
+				     directory_review_note = 'Internal review note'
+				 WHERE id = 'org-one'`,
+			),
+			env.DB.prepare("UPDATE organizations SET directory_status = 'pending' WHERE id = 'org-two'"),
+		]);
+
+		expect(await listPublishedOrganizations(env)).toEqual([
+			expect.objectContaining({ name: "Community Center", slug: "community-center", hasLogo: 1, hasProfilePhoto: 1 }),
+		]);
+		const publicProfile = await getPublishedOrganizationBySlug(env, "community-center");
+		expect(publicProfile).toMatchObject({ summary: "Public summary", contactEmail: "hello@example.org" });
+		expect(publicProfile).not.toHaveProperty("eventSourceUrl");
+		expect(publicProfile).not.toHaveProperty("sourceImageUrls");
+		expect(publicProfile).not.toHaveProperty("directoryReviewNote");
+		expect(publicProfile).not.toHaveProperty("affiliations");
+		expect(await getPublishedOrganizationMediaKey(env, "community-center", "logo")).toBe("org-logos/public.png");
+		expect(await getPublishedOrganizationMediaKey(env, "community-center", "photo")).toBe("org-photos/public.jpg");
+		expect(await getPublishedOrganizationBySlug(env, "shared-network-org")).toBeNull();
+
+		await env.DB.prepare("UPDATE organizations SET directory_status = 'opted_out' WHERE id = 'org-one'").run();
+		expect(await getPublishedOrganizationBySlug(env, "community-center")).toBeNull();
+		expect(await getPublishedOrganizationMediaKey(env, "community-center", "logo")).toBeNull();
+	});
+
 	it("supports request, review, notification, audit, and withdrawal", async () => {
 		await seedSiteAdmin();
 		await seedUser();

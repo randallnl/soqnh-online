@@ -7,6 +7,11 @@ import {
 
 export default [
 	route("health", "routes/health.ts"),
+	route("directory/:slug/media/:kind", "routes/public-organization-media.ts"),
+	layout("routes/public-layout.tsx", [
+		index("routes/public-directory.tsx"),
+		route("directory/:slug", "routes/public-organization-detail.tsx"),
+	]),
 	route("login", "routes/login.tsx"),
 	route("auth/verify", "routes/auth-verify.ts"),
 	route("api/scraper/organizations", "routes/api-scraper-organizations.ts"),
@@ -15,7 +20,7 @@ export default [
 	route("logout", "routes/logout.ts"),
 	route("media/*", "routes/media.ts"),
 	layout("routes/dashboard-layout.tsx", [
-		index("routes/home.tsx"),
+		route("home", "routes/home.tsx"),
 		route("members", "routes/members.tsx"),
 		route("members/:memberId", "routes/member-detail.tsx"),
 		route("profile", "routes/profile.tsx"),

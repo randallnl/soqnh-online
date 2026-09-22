@@ -153,7 +153,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			throw error;
 		}
 		if (newAvatarKey && editor.profile.avatarObjectKey) context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, editor.profile.avatarObjectKey));
-		if (!profileComplete) throw redirect("/");
+		if (!profileComplete) throw redirect("/home");
 		return { ok: true as const, message: "Profile updated." };
 	} catch (error) {
 		if (error instanceof Response) throw error;
