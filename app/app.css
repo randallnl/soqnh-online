@@ -5675,33 +5675,41 @@ h3 {
 .public-menu-button { display: none; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid var(--ink-200); border-radius: 10px; color: var(--ink-900); background: #fff; cursor: pointer; }
 
 .public-directory-hero {
+	position: relative;
 	display: grid;
 	grid-template-columns: minmax(0, 1.5fr) minmax(280px, .65fr);
 	align-items: end;
 	gap: 56px;
-	width: min(100% - 48px, 1320px);
-	padding: clamp(44px, 7vw, 88px);
-	margin: 0 auto;
-	border-radius: 28px;
-	background: #f8c4d5;
+	width: 100%;
+	padding: clamp(36px, 4vw, 58px) max(24px, calc((100% - 1320px) / 2 + 48px));
+	margin: 0;
+	color: #fff;
+	background-color: var(--ink-900);
+	background-image: linear-gradient(90deg, rgba(31, 15, 31, .84) 0%, rgba(31, 15, 31, .68) 52%, rgba(31, 15, 31, .45) 100%), url("/images/manchester-parade-quilt-hero.jpg");
+	background-position: center 46%;
+	background-size: cover;
+	box-shadow: 0 18px 50px rgba(29, 19, 29, .18);
 }
 
 .public-directory-hero-copy { max-width: 820px; }
-.public-directory-hero .eyebrow { color: #6f2b72; }
+.public-directory-hero .eyebrow { color: #ffd9e7; }
 .public-directory-hero h1 {
 	max-width: 760px;
 	margin-top: 10px;
+	color: #fff;
 	font-family: Nunito, ui-rounded, sans-serif;
 	font-size: clamp(2.7rem, 6.2vw, 5.5rem);
 	font-weight: 900;
 	letter-spacing: -.055em;
 	line-height: .98;
+	text-shadow: 0 3px 24px rgba(20, 9, 20, .34);
 }
-.public-directory-hero-copy > p:last-child { max-width: 690px; margin-top: 22px; color: #4d344c; font-size: clamp(1rem, 1.8vw, 1.22rem); line-height: 1.65; }
-.public-directory-hero-note { display: flex; align-items: flex-start; gap: 14px; padding: 20px; border: 1px solid rgba(74, 34, 73, .12); border-radius: 16px; background: rgba(255, 255, 255, .52); }
+.public-directory-hero-copy > p:last-child { max-width: 690px; margin-top: 22px; color: rgba(255, 255, 255, .9); font-size: clamp(1rem, 1.8vw, 1.22rem); line-height: 1.65; text-shadow: 0 2px 14px rgba(20, 9, 20, .32); }
+.public-directory-hero-note { display: flex; align-items: flex-start; gap: 14px; padding: 20px; border: 1px solid rgba(255, 255, 255, .56); border-radius: 16px; color: var(--ink-900); background: rgba(255, 255, 255, .9); box-shadow: 0 12px 34px rgba(20, 9, 20, .2); backdrop-filter: blur(8px); }
 .public-directory-hero-note svg { flex: 0 0 auto; color: var(--plum-700); }
 .public-directory-hero-note strong { font-size: .88rem; }
 .public-directory-hero-note p { margin-top: 4px; color: #5f4960; font-size: .78rem; line-height: 1.5; }
+.public-directory-photo-credit { position: absolute; right: 14px; bottom: 10px; padding: 4px 8px; border-radius: 999px; color: rgba(255, 255, 255, .9); background: rgba(20, 9, 20, .58); font-size: .65rem; font-weight: 650; letter-spacing: .01em; line-height: 1.2; backdrop-filter: blur(5px); }
 
 .public-directory-content,
 .public-organization-page {
@@ -5865,10 +5873,9 @@ a.public-upcoming-event-card:hover { box-shadow: var(--shadow-md); transform: tr
 	.public-social-links { gap: 5px; }
 	.public-social-links a { width: 25px; height: 25px; }
 	.public-social-links svg { width: 14px; height: 14px; }
-	.public-directory-hero,
 	.public-directory-content,
 	.public-organization-page { width: min(100% - 28px, 1320px); }
-	.public-directory-hero { padding: 38px 25px; border-radius: 20px; }
+	.public-directory-hero { width: 100%; padding: 34px 25px; }
 	.public-directory-hero h1 { font-size: clamp(2.4rem, 13vw, 4rem); }
 	.public-directory-content { padding: 48px 0 70px; }
 	.public-directory-heading { align-items: flex-start; flex-direction: column; gap: 8px; }

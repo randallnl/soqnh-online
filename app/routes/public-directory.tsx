@@ -56,6 +56,7 @@ export default function PublicDirectory({ loaderData }: Route.ComponentProps) {
 				<p>Explore organizations, businesses, services, and gathering spaces that have chosen to be part of this public directory.</p>
 			</div>
 			<div className="public-directory-hero-note"><Icon name="heart" size={24} /><div><strong>Community-maintained</strong><p>Listings are reviewed and updated directly with participating organizations.</p></div></div>
+			<p className="public-directory-photo-credit">Photo by Steven Hamilton</p>
 		</section>
 
 		<section className="public-directory-content">

@@ -8,4 +8,5 @@ export const scraperParsers = [
 	"embedded_calendar",
 	"mobilize_events",
 	"wix_events",
+	"wp_event_manager",
 ] as const;

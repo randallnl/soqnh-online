@@ -633,6 +633,7 @@ describe("partner event scraper imports", () => {
 		expect(scraperParsers).toContain("embedded_calendar");
 		expect(scraperParsers).toContain("mobilize_events");
 		expect(scraperParsers).toContain("wix_events");
+		expect(scraperParsers).toContain("wp_event_manager");
 	});
 
 	it("accepts Wix Events as an organization scraper source", async () => {
