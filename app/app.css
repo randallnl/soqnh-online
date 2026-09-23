@@ -5627,13 +5627,14 @@ h3 {
 	border-radius: 7px;
 	color: var(--ink-900);
 	background: rgba(43, 32, 43, .055);
-	font-size: .62rem;
-	font-weight: 900;
-	letter-spacing: -.02em;
 	text-decoration: none;
-	text-transform: uppercase;
+	transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
 }
-.public-social-links a:hover { color: #fff; background: var(--plum-700); }
+.public-social-links a:hover { color: #fff; background: var(--plum-700); transform: translateY(-1px); }
+.public-social-links a:focus-visible { outline: 3px solid rgba(111, 45, 111, .24); outline-offset: 2px; }
+.public-social-links svg { width: 15px; height: 15px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.public-social-links .social-icon-dot,
+.public-social-links .social-icon-play { fill: currentColor; stroke: none; }
 .public-utility-inner nav { gap: 22px; }
 .public-utility-inner nav a { color: var(--ink-800); font-size: .72rem; font-weight: 700; text-decoration: none; }
 .public-utility-inner nav a:hover { color: var(--plum-700); }
@@ -5765,7 +5766,7 @@ h3 {
 
 .public-organization-page { padding: 38px 0 90px; }
 .public-directory-back { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 22px; color: var(--green-800); font-size: .8rem; font-weight: 750; text-decoration: none; }
-.public-organization-profile { overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr); min-height: 400px; border: 1px solid var(--ink-100); border-radius: 24px; background: #fff; box-shadow: var(--shadow-sm); }
+.public-organization-profile { overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); min-height: 400px; border: 1px solid var(--ink-100); border-radius: 24px; background: #fff; box-shadow: var(--shadow-sm); }
 .public-organization-photo,
 .public-organization-photo-placeholder { align-self: start; width: 100%; height: 400px; min-height: 0; max-height: 400px; }
 .public-organization-photo { display: block; object-fit: cover; }
@@ -5862,7 +5863,8 @@ a.public-upcoming-event-card:hover { box-shadow: var(--shadow-md); transform: tr
 	.public-utility-inner nav { gap: 13px; }
 	.public-utility-inner nav a { font-size: .66rem; }
 	.public-social-links { gap: 5px; }
-	.public-social-links a { width: 24px; height: 24px; font-size: .54rem; }
+	.public-social-links a { width: 25px; height: 25px; }
+	.public-social-links svg { width: 14px; height: 14px; }
 	.public-directory-hero,
 	.public-directory-content,
 	.public-organization-page { width: min(100% - 28px, 1320px); }
