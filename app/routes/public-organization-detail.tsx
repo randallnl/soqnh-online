@@ -3,10 +3,11 @@ import { Link } from "react-router";
 import type { Route } from "./+types/public-organization-detail";
 import { Icon } from "~/components/icon";
 import { MentionText } from "~/components/mention-textarea";
+import { formatEventDateTime } from "~/lib/events";
 import { initials } from "~/lib/media";
 import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 import { parseOrganizationLeadership } from "~/lib/organization-leadership";
-import { getPublishedOrganizationBySlug } from "~/models/public-directory.server";
+import { getPublishedOrganizationBySlug, listPublishedOrganizationUpcomingEvents } from "~/models/public-directory.server";
 
 function socialUrl(platform: string | null, handle: string) {
 	if (/^https?:\/\//i.test(handle)) return handle;
@@ -15,6 +16,16 @@ function socialUrl(platform: string | null, handle: string) {
 	if (platform?.toLowerCase() === "facebook") return `https://www.facebook.com/${account}`;
 	if (platform?.toLowerCase() === "tiktok") return `https://www.tiktok.com/@${account}`;
 	return null;
+}
+
+function safeHttpUrl(value: string | null) {
+	if (!value) return null;
+	try {
+		const url = new URL(value);
+		return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+	} catch {
+		return null;
+	}
 }
 
 export function meta({ data }: Route.MetaArgs) {
@@ -30,13 +41,16 @@ export function headers() {
 }
 
 export async function loader({ context, params }: Route.LoaderArgs) {
-	const organization = await getPublishedOrganizationBySlug(context.cloudflare.env, params.slug);
+	const [organization, upcomingEvents] = await Promise.all([
+		getPublishedOrganizationBySlug(context.cloudflare.env, params.slug),
+		listPublishedOrganizationUpcomingEvents(context.cloudflare.env, params.slug),
+	]);
 	if (!organization) throw new Response("Organization not found", { status: 404 });
-	return { organization };
+	return { organization, upcomingEvents };
 }
 
 export default function PublicOrganizationDetail({ loaderData }: Route.ComponentProps) {
-	const { organization } = loaderData;
+	const { organization, upcomingEvents } = loaderData;
 	const categories = parseOrganizationCategories(organization.category);
 	const leadership = parseOrganizationLeadership(organization.leadershipIdentity).filter((label) => label !== "Prefer not to say");
 	const organizationSocialUrl = organization.socialHandle ? socialUrl(organization.socialPlatform, organization.socialHandle) : null;
@@ -53,12 +67,36 @@ export default function PublicOrganizationDetail({ loaderData }: Route.Component
 				{location && <span className="public-organization-location"><Icon name="building" size={16} /> {location}</span>}
 			</div>
 		</section>
+		{upcomingEvents.length > 0 && <section aria-labelledby="public-upcoming-events-heading" className="public-upcoming-events">
+			<header>
+				<div><p className="eyebrow">Gather with them</p><h2 id="public-upcoming-events-heading">Upcoming events</h2></div>
+				<span>{upcomingEvents.length} {upcomingEvents.length === 1 ? "event" : "events"}</span>
+			</header>
+			<div className="public-upcoming-event-grid">
+				{upcomingEvents.map((event) => {
+					const eventUrl = safeHttpUrl(event.registrationUrl) || safeHttpUrl(event.externalUrl) || safeHttpUrl(event.sourceUrl);
+					const imageUrl = safeHttpUrl(event.imageUrl);
+					const contents = <>
+						<div className="public-upcoming-event-image">{imageUrl ? <img alt="" loading="lazy" referrerPolicy="no-referrer" src={imageUrl} /> : <Icon name="calendar" size={28} />}</div>
+						<div className="public-upcoming-event-body">
+							<p>{formatEventDateTime(event.startsAt)}</p>
+							<h3>{event.title}</h3>
+							{event.locationName && <span><Icon name="building" size={15} /> {event.locationName}</span>}
+							{eventUrl && <strong>View event <Icon name="chevron-right" size={15} /></strong>}
+						</div>
+					</>;
+					return eventUrl
+						? <a className="public-upcoming-event-card" href={eventUrl} key={`${event.startsAt}-${event.title}`} rel="noopener noreferrer" target="_blank">{contents}</a>
+						: <article className="public-upcoming-event-card" key={`${event.startsAt}-${event.title}`}>{contents}</article>;
+				})}
+			</div>
+		</section>}
 
 		<div className="public-organization-columns">
 			<div className="public-organization-main">
 				{organization.description && <section><p className="eyebrow">About</p><div className="public-organization-description"><MentionText targets={[]} text={organization.description} /></div></section>}
-				{categories.length > 0 && <section><p className="eyebrow">What they offer</p><div className="public-directory-tags public-directory-tags--large">{categories.map((category) => <span className={`organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</div></section>}
-				{leadership.length > 0 && <section><p className="eyebrow">Community identity</p><div className="public-directory-tags public-directory-tags--large">{leadership.map((label) => <span className={label === "Queer-led" ? "organization-category-tone--plum" : label === "BIPOC-led" ? "organization-category-tone--gold" : "organization-category-tone--blue"} key={label}>{label}</span>)}</div></section>}
+				{categories.length > 0 && <section><p className="eyebrow">What they offer</p><div className="public-directory-tags public-directory-tags--large">{categories.map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</div></section>}
+				{leadership.length > 0 && <section><p className="eyebrow">Community identity</p><div className="public-directory-tags public-directory-tags--large">{leadership.map((label) => <span className={`organization-category-chip ${label === "Queer-led" ? "organization-category-tone--plum" : label === "BIPOC-led" ? "organization-category-tone--gold" : "organization-category-tone--blue"}`} key={label}>{label}</span>)}</div></section>}
 				{organization.listingRationale && <section className="public-organization-note"><p className="eyebrow">Why it is included</p><MentionText targets={[]} text={organization.listingRationale} /></section>}
 			</div>
 			<aside className="public-organization-connect">

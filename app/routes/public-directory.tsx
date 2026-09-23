@@ -76,7 +76,7 @@ export default function PublicDirectory({ loaderData }: Route.ComponentProps) {
 						<span className="public-directory-logo">{organization.hasLogo ? <img alt="" loading="lazy" src={`/directory/${encodeURIComponent(organization.slug)}/media/logo`} /> : initials(organization.name, "Organization")}</span>
 						<h3>{organization.name}</h3>
 						<p>{organization.summary || "An affirming organization in New Hampshire’s community ecosystem."}</p>
-						{categories.length > 0 && <div className="public-directory-tags">{categories.slice(0, 3).map((category) => <span className={`organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</div>}
+						{categories.length > 0 && <div className="public-directory-tags">{categories.slice(0, 3).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</div>}
 					</div>
 					<footer><span>{organization.operatesStatewide === 1 ? "Statewide" : [organization.townCity, organization.region].filter(Boolean).join(" · ") || "New Hampshire"}</span><span>View profile <Icon name="chevron-right" size={16} /></span></footer>
 				</Link>;

@@ -69,6 +69,7 @@ import {
 import {
 	getPublishedOrganizationBySlug,
 	getPublishedOrganizationMediaKey,
+	listPublishedOrganizationUpcomingEvents,
 	listPublishedOrganizations,
 } from "../app/models/public-directory.server";
 import {
@@ -1708,8 +1709,10 @@ describe("organization-admin self-service", () => {
 
 describe("NH Connect public directory participation", () => {
 	it("exposes only active, approved organizations through the public data boundary", async () => {
+		await seedSiteAdmin();
 		await seedOrganization();
 		await seedSecondOrganization();
+		await seedAffiliation();
 		await env.DB.batch([
 			env.DB.prepare(
 				`UPDATE organizations
@@ -1723,6 +1726,29 @@ describe("NH Connect public directory participation", () => {
 				 WHERE id = 'org-one'`,
 			),
 			env.DB.prepare("UPDATE organizations SET directory_status = 'pending' WHERE id = 'org-two'"),
+			env.DB.prepare(
+				`INSERT INTO posts
+				 (id, organization_id, author_user_id, section, title, body, visibility, status, created_at, updated_at)
+				 VALUES
+				 ('public-event', 'org-one', ?1, 'event', 'Community open house', 'Public event details', 'members', 'published', '2030-01-01T10:00:00Z', '2030-01-01T10:00:00Z'),
+				 ('affiliation-event', 'org-one', ?1, 'event', 'Coalition planning', 'Private coalition details', 'members', 'published', '2030-01-01T10:00:00Z', '2030-01-01T10:00:00Z'),
+				 ('organization-event', 'org-one', ?1, 'event', 'Staff gathering', 'Organization-only details', 'organization', 'published', '2030-01-01T10:00:00Z', '2030-01-01T10:00:00Z'),
+				 ('past-event', 'org-one', ?1, 'event', 'Past gathering', 'Past details', 'members', 'published', '2029-01-01T10:00:00Z', '2029-01-01T10:00:00Z'),
+				 ('pending-event', 'org-one', ?1, 'event', 'Unreviewed gathering', 'Pending details', 'members', 'published', '2030-01-01T10:00:00Z', '2030-01-01T10:00:00Z')`,
+			).bind(siteAdmin.id),
+			env.DB.prepare(
+				`INSERT INTO events
+				 (post_id, starts_at, location_name, registration_url, image_url, moderation_status)
+				 VALUES
+				 ('public-event', '2030-06-15T18:00', 'Community Center', 'https://example.org/register', 'https://example.org/event.jpg', 'approved'),
+				 ('affiliation-event', '2030-06-16T18:00', 'Private room', NULL, NULL, 'approved'),
+				 ('organization-event', '2030-06-17T18:00', 'Office', NULL, NULL, 'approved'),
+				 ('past-event', '2029-06-15T18:00', 'Community Center', NULL, NULL, 'approved'),
+				 ('pending-event', '2030-06-18T18:00', 'Community Center', NULL, NULL, 'pending')`,
+			),
+			env.DB.prepare(
+				"INSERT INTO post_affiliations (post_id, affiliation_id) VALUES ('affiliation-event', 'aff-shared')",
+			),
 		]);
 
 		expect(await listPublishedOrganizations(env)).toEqual([
@@ -1737,10 +1763,18 @@ describe("NH Connect public directory participation", () => {
 		expect(await getPublishedOrganizationMediaKey(env, "community-center", "logo")).toBe("org-logos/public.png");
 		expect(await getPublishedOrganizationMediaKey(env, "community-center", "photo")).toBe("org-photos/public.jpg");
 		expect(await getPublishedOrganizationBySlug(env, "shared-network-org")).toBeNull();
+		const upcomingEvents = await listPublishedOrganizationUpcomingEvents(env, "community-center", "2030-01-01");
+		expect(upcomingEvents).toEqual([
+			expect.objectContaining({ title: "Community open house", startsAt: "2030-06-15T18:00", locationName: "Community Center" }),
+		]);
+		expect(upcomingEvents[0]).not.toHaveProperty("body");
+		expect(upcomingEvents[0]).not.toHaveProperty("postId");
+		expect(upcomingEvents.map((event) => event.title)).not.toContain("Coalition planning");
 
 		await env.DB.prepare("UPDATE organizations SET directory_status = 'opted_out' WHERE id = 'org-one'").run();
 		expect(await getPublishedOrganizationBySlug(env, "community-center")).toBeNull();
 		expect(await getPublishedOrganizationMediaKey(env, "community-center", "logo")).toBeNull();
+		expect(await listPublishedOrganizationUpcomingEvents(env, "community-center", "2030-01-01")).toEqual([]);
 	});
 
 	it("supports request, review, notification, audit, and withdrawal", async () => {

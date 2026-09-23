@@ -5775,6 +5775,22 @@ h3 {
 .public-organization-intro h1 { margin-top: 7px; font-family: Nunito, ui-rounded, sans-serif; font-size: clamp(2rem, 4vw, 3.65rem); font-weight: 900; letter-spacing: -.045em; line-height: 1; }
 .public-organization-intro > p:not(.eyebrow) { margin-top: 17px; color: var(--ink-600); font-size: 1rem; line-height: 1.65; }
 .public-organization-location { display: inline-flex; align-items: center; gap: 7px; margin-top: 22px; color: var(--green-800); font-size: .8rem; font-weight: 750; }
+.public-upcoming-events { margin-top: 48px; }
+.public-upcoming-events > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.public-upcoming-events > header h2 { margin-top: 4px; font-family: Nunito, ui-rounded, sans-serif; font-size: clamp(1.7rem, 3vw, 2.35rem); font-weight: 900; letter-spacing: -.025em; }
+.public-upcoming-events > header > span { padding: 6px 10px; border-radius: 999px; color: var(--plum-700); background: var(--plum-50); font-size: .72rem; font-weight: 800; }
+.public-upcoming-event-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.public-upcoming-event-card { overflow: hidden; display: grid; grid-template-columns: minmax(108px, .7fr) minmax(0, 1.3fr); min-height: 168px; border: 1px solid var(--ink-100); border-radius: 18px; color: inherit; background: #fff; box-shadow: var(--shadow-sm); text-decoration: none; transition: transform 160ms ease, box-shadow 160ms ease; }
+a.public-upcoming-event-card:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); }
+.public-upcoming-event-image { display: grid; place-items: center; min-height: 168px; color: var(--plum-700); background: #f4e9f4; }
+.public-upcoming-event-grid > :nth-child(2) .public-upcoming-event-image { color: #8a470e; background: var(--gold-50); }
+.public-upcoming-event-grid > :nth-child(3) .public-upcoming-event-image { color: var(--green-700); background: var(--green-50); }
+.public-upcoming-event-image img { display: block; width: 100%; height: 100%; min-height: 168px; object-fit: cover; }
+.public-upcoming-event-body { display: flex; align-items: flex-start; flex-direction: column; min-width: 0; padding: 18px; }
+.public-upcoming-event-body > p { color: var(--plum-700); font-size: .68rem; font-weight: 850; letter-spacing: .02em; text-transform: uppercase; }
+.public-upcoming-event-body h3 { margin-top: 8px; font-family: Nunito, ui-rounded, sans-serif; font-size: 1rem; font-weight: 900; line-height: 1.25; }
+.public-upcoming-event-body > span { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; color: var(--ink-500); font-size: .72rem; line-height: 1.35; }
+.public-upcoming-event-body > strong { display: inline-flex; align-items: center; gap: 2px; margin-top: auto; padding-top: 13px; color: var(--green-800); font-size: .72rem; }
 .public-organization-columns { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .62fr); gap: 52px; align-items: start; margin-top: 48px; }
 .public-organization-main { display: grid; gap: 38px; }
 .public-organization-main > section { padding-bottom: 38px; border-bottom: 1px solid var(--ink-100); }
@@ -5807,6 +5823,8 @@ h3 {
 	.public-organization-photo,
 	.public-organization-photo-placeholder { height: 330px; min-height: 330px; }
 	.public-organization-columns { grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; }
+	.public-upcoming-event-grid { grid-template-columns: 1fr; }
+	.public-upcoming-event-card { grid-template-columns: 180px minmax(0, 1fr); }
 }
 
 @media (max-width: 900px) {
@@ -5863,6 +5881,9 @@ h3 {
 	.public-organization-photo,
 	.public-organization-photo-placeholder { height: 240px; min-height: 240px; }
 	.public-organization-intro { padding: 30px 24px 38px; }
+	.public-upcoming-events { margin-top: 34px; }
+	.public-upcoming-events > header { align-items: flex-start; flex-direction: column; gap: 8px; }
+	.public-upcoming-event-card { grid-template-columns: 112px minmax(0, 1fr); }
 	.public-organization-columns { grid-template-columns: 1fr; margin-top: 34px; }
 	.public-organization-connect { position: static; }
 }
