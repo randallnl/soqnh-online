@@ -69,6 +69,7 @@ import {
 import {
 	getPublishedOrganizationBySlug,
 	getPublishedOrganizationMediaKey,
+	listPublishedCalendarEvents,
 	listPublishedOrganizationUpcomingEvents,
 	listPublishedOrganizations,
 } from "../app/models/public-directory.server";
@@ -1771,11 +1772,23 @@ describe("NH Connect public directory participation", () => {
 		expect(upcomingEvents[0]).not.toHaveProperty("body");
 		expect(upcomingEvents[0]).not.toHaveProperty("postId");
 		expect(upcomingEvents.map((event) => event.title)).not.toContain("Coalition planning");
+		const calendarEvents = await listPublishedCalendarEvents(env, "2030-06-01", "2030-07-01");
+		expect(calendarEvents).toEqual([
+			expect.objectContaining({
+				title: "Community open house",
+				organizationName: "Community Center",
+				organizationSlug: "community-center",
+				organizationHasLogo: 1,
+			}),
+		]);
+		expect(calendarEvents[0]).not.toHaveProperty("body");
+		expect(calendarEvents[0]).not.toHaveProperty("postId");
 
 		await env.DB.prepare("UPDATE organizations SET directory_status = 'opted_out' WHERE id = 'org-one'").run();
 		expect(await getPublishedOrganizationBySlug(env, "community-center")).toBeNull();
 		expect(await getPublishedOrganizationMediaKey(env, "community-center", "logo")).toBeNull();
 		expect(await listPublishedOrganizationUpcomingEvents(env, "community-center", "2030-01-01")).toEqual([]);
+		expect(await listPublishedCalendarEvents(env, "2030-06-01", "2030-07-01")).toEqual([]);
 	});
 
 	it("supports request, review, notification, audit, and withdrawal", async () => {

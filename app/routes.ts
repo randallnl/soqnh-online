@@ -10,6 +10,7 @@ export default [
 	route("directory/:slug/media/:kind", "routes/public-organization-media.ts"),
 	layout("routes/public-layout.tsx", [
 		index("routes/public-directory.tsx"),
+		route("calendar", "routes/public-calendar.tsx"),
 		route("directory/:slug", "routes/public-organization-detail.tsx"),
 	]),
 	route("login", "routes/login.tsx"),

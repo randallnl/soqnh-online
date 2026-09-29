@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Outlet } from "react-router";
+import { Link, Outlet, useLocation } from "react-router";
 
 import { Icon } from "~/components/icon";
 
@@ -32,8 +32,11 @@ const publicLinks = [
 
 export default function PublicLayout() {
 	const [menuOpen, setMenuOpen] = useState(false);
+	const location = useLocation();
+	const directoryActive = location.pathname === "/" || location.pathname.startsWith("/directory/");
+	const calendarActive = location.pathname === "/calendar";
 	return <div className="public-site">
-		<a className="skip-link" href="#public-main">Skip to directory</a>
+		<a className="skip-link" href="#public-main">Skip to main content</a>
 		<div className="public-utility-bar">
 			<div className="public-utility-inner">
 				<div aria-label="Queerlective social media" className="public-social-links">
@@ -55,13 +58,14 @@ export default function PublicLayout() {
 			</button>
 			<nav aria-label="Public navigation" className="public-primary-nav">
 				{publicLinks.map((item) => <a href={item.href} key={item.label} onClick={() => setMenuOpen(false)}>{item.label}</a>)}
-				<Link aria-current="page" className="public-nav-active" onClick={() => setMenuOpen(false)} to="/">Directory</Link>
+				<Link aria-current={calendarActive ? "page" : undefined} className={calendarActive ? "public-nav-active" : undefined} onClick={() => setMenuOpen(false)} to="/calendar">Calendar</Link>
+				<Link aria-current={directoryActive ? "page" : undefined} className={directoryActive ? "public-nav-active" : undefined} onClick={() => setMenuOpen(false)} to="/">Directory</Link>
 				<Link className="button button--primary button--compact" onClick={() => setMenuOpen(false)} to="/login?returnTo=/home">Member sign in</Link>
 			</nav>
 		</header>
 		<main id="public-main"><Outlet /></main>
 		<footer className="public-footer">
-			<div><strong>NH Connect</strong><p>A public guide to affirming organizations and businesses across New Hampshire.</p></div>
+			<div><strong>NH Connect</strong><p>A public guide to affirming organizations, businesses, and community events across New Hampshire.</p></div>
 			<div><span>Built and stewarded by Queerlective</span><Link to="/login?returnTo=/home">Member workspace</Link></div>
 		</footer>
 	</div>;
