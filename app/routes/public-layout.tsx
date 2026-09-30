@@ -24,16 +24,15 @@ function SocialIcon({ name }: { name: SocialIconName }) {
 }
 
 const publicLinks = [
-	{ label: "Home", href: "https://queerlective.com/" },
 	{ label: "About", href: "https://queerlective.com/pages/about" },
-	{ label: "Events", href: "https://queerlective.com/blogs/upcoming-events" },
 	{ label: "Donate", href: "https://givebutter.com/queerlective" },
 ];
 
 export default function PublicLayout() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const location = useLocation();
-	const directoryActive = location.pathname === "/" || location.pathname.startsWith("/directory/");
+	const homeActive = location.pathname === "/";
+	const directoryActive = location.pathname === "/directory" || location.pathname.startsWith("/directory/");
 	const calendarActive = location.pathname === "/calendar";
 	return <div className="public-site">
 		<a className="skip-link" href="#public-main">Skip to main content</a>
@@ -57,9 +56,10 @@ export default function PublicLayout() {
 				<Icon name={menuOpen ? "x" : "menu"} size={22} />
 			</button>
 			<nav aria-label="Public navigation" className="public-primary-nav">
+				<Link aria-current={homeActive ? "page" : undefined} className={homeActive ? "public-nav-active" : undefined} onClick={() => setMenuOpen(false)} to="/">Home</Link>
 				{publicLinks.map((item) => <a href={item.href} key={item.label} onClick={() => setMenuOpen(false)}>{item.label}</a>)}
-				<Link aria-current={calendarActive ? "page" : undefined} className={calendarActive ? "public-nav-active" : undefined} onClick={() => setMenuOpen(false)} to="/calendar">Calendar</Link>
-				<Link aria-current={directoryActive ? "page" : undefined} className={directoryActive ? "public-nav-active" : undefined} onClick={() => setMenuOpen(false)} to="/">Directory</Link>
+				<Link aria-current={calendarActive ? "page" : undefined} className={calendarActive ? "public-nav-active" : undefined} onClick={() => setMenuOpen(false)} to="/calendar">Community Calendar</Link>
+				<Link aria-current={directoryActive ? "page" : undefined} className={directoryActive ? "public-nav-active" : undefined} onClick={() => setMenuOpen(false)} to="/directory">Directory</Link>
 				<Link className="button button--primary button--compact" onClick={() => setMenuOpen(false)} to="/login?returnTo=/home">Member sign in</Link>
 			</nav>
 		</header>

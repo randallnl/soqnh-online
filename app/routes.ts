@@ -9,7 +9,8 @@ export default [
 	route("health", "routes/health.ts"),
 	route("directory/:slug/media/:kind", "routes/public-organization-media.ts"),
 	layout("routes/public-layout.tsx", [
-		index("routes/public-directory.tsx"),
+		index("routes/public-home.tsx"),
+		route("directory", "routes/public-directory.tsx"),
 		route("calendar", "routes/public-calendar.tsx"),
 		route("directory/:slug", "routes/public-organization-detail.tsx"),
 	]),

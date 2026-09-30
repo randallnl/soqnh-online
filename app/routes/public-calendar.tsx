@@ -5,8 +5,6 @@ import { Icon } from "~/components/icon";
 import { initials } from "~/lib/media";
 import { listPublishedCalendarEvents } from "~/models/public-directory.server";
 
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
 function monthValue(date = new Date()) {
 	const parts = new Intl.DateTimeFormat("en-CA", {
 		year: "numeric",
@@ -42,6 +40,7 @@ function safeHttpUrl(value: string | null) {
 }
 
 function eventTime(value: string) {
+	if (/T00:00(?::00)?(?:Z|[+-]\d{2}:?\d{2})?$/.test(value)) return "Time not listed";
 	const local = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
 	const date = local
 		? new Date(Date.UTC(Number(local[1]), Number(local[2]) - 1, Number(local[3]), Number(local[4]), Number(local[5])))
@@ -51,6 +50,19 @@ function eventTime(value: string) {
 		minute: "2-digit",
 		timeZone: local ? "UTC" : "America/New_York",
 	}).format(date);
+}
+
+function eventDateParts(value: string) {
+	const local = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+	const date = local
+		? new Date(Date.UTC(Number(local[1]), Number(local[2]) - 1, Number(local[3])))
+		: new Date(value);
+	const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { ...options, timeZone: local ? "UTC" : "America/New_York" }).format(date);
+	return {
+		month: format({ month: "short" }),
+		day: format({ day: "numeric" }),
+		weekday: format({ weekday: "short" }),
+	};
 }
 
 export function meta() {
@@ -79,20 +91,11 @@ export default function PublicCalendar({ loaderData }: Route.ComponentProps) {
 	const [year, month] = loaderData.selectedMonth.split("-").map(Number);
 	const monthDate = new Date(Date.UTC(year, month - 1, 1));
 	const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(monthDate);
-	const firstWeekday = monthDate.getUTCDay();
-	const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-	const cellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
-	const eventsByDay = new Map<number, typeof loaderData.events>();
-	for (const event of loaderData.events) {
-		const day = Number(event.startsAt.slice(8, 10));
-		if (!Number.isInteger(day) || day < 1 || day > daysInMonth) continue;
-		eventsByDay.set(day, [...(eventsByDay.get(day) ?? []), event]);
-	}
 
 	return <div className="public-calendar-page">
 		<section className="public-calendar-heading">
-			<div><p className="eyebrow">Community calendar</p><h1>Gather across New Hampshire.</h1><p>Explore public events shared by organizations participating in the NH Connect directory.</p></div>
-			<Link className="button button--secondary" to="/">Browse organizations</Link>
+			<div><p className="eyebrow">Community Calendar</p><h1>Gather across New Hampshire.</h1><p>Browse a chronological feed of public events shared by organizations participating in NH Connect.</p></div>
+			<Link className="button button--secondary" to="/directory">Browse organizations</Link>
 		</section>
 
 		<section aria-labelledby="calendar-month-heading" className="public-calendar-panel">
@@ -102,31 +105,24 @@ export default function PublicCalendar({ loaderData }: Route.ComponentProps) {
 				<Link aria-label="Next month" className="public-calendar-arrow" to={`/calendar?month=${shiftMonth(loaderData.selectedMonth, 1)}`}>→</Link>
 			</header>
 
-			<div aria-hidden="true" className="public-calendar-weekdays">{WEEKDAYS.map((day) => <span key={day}>{day.slice(0, 3)}</span>)}</div>
-			<div className="public-calendar-grid">
-				{Array.from({ length: cellCount }, (_, index) => {
-					const day = index - firstWeekday + 1;
-					if (day < 1 || day > daysInMonth) return <div aria-hidden="true" className="public-calendar-day public-calendar-day--outside" key={`outside-${index}`} />;
-					const events = eventsByDay.get(day) ?? [];
-					const fullDate = new Date(Date.UTC(year, month - 1, day));
-					const dayLabel = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(fullDate);
-					return <section aria-label={dayLabel} className={`public-calendar-day${events.length ? " public-calendar-day--has-events" : ""}`} key={day}>
-						<header><span>{WEEKDAYS[fullDate.getUTCDay()].slice(0, 3)}</span><strong>{day}</strong></header>
-						{events.map((event) => {
-							const eventUrl = safeHttpUrl(event.registrationUrl) || safeHttpUrl(event.externalUrl) || safeHttpUrl(event.sourceUrl);
-							return <article className="public-calendar-event" key={`${event.organizationSlug}-${event.startsAt}-${event.title}`}>
-								<div className="public-calendar-event-time">{eventTime(event.startsAt)}</div>
-								{eventUrl ? <a href={eventUrl} rel="noopener noreferrer" target="_blank">{event.title}</a> : <strong>{event.title}</strong>}
-								{event.locationName && <p><Icon name="building" size={12} /> {event.locationName}</p>}
-								<Link className="public-calendar-organizer" to={`/directory/${encodeURIComponent(event.organizationSlug)}`}>
-									<span>{event.organizationHasLogo ? <img alt="" loading="lazy" src={`/directory/${encodeURIComponent(event.organizationSlug)}/media/logo`} /> : initials(event.organizationName, "Organization")}</span>
-									{event.organizationName}
-								</Link>
-							</article>;
-						})}
-					</section>;
-				})}
-			</div>
+			{loaderData.events.length > 0 && <div className="public-calendar-feed">{loaderData.events.map((event) => {
+				const eventUrl = safeHttpUrl(event.registrationUrl) || safeHttpUrl(event.externalUrl) || safeHttpUrl(event.sourceUrl);
+				const imageUrl = safeHttpUrl(event.imageUrl);
+				const date = eventDateParts(event.startsAt);
+				return <article className="public-calendar-feed-card" key={`${event.organizationSlug}-${event.startsAt}-${event.title}`}>
+					<div className="public-calendar-feed-image">{imageUrl ? <img alt="" loading="lazy" referrerPolicy="no-referrer" src={imageUrl} /> : <Icon name="calendar" size={34} />}</div>
+					<div aria-label={`${date.weekday}, ${date.month} ${date.day}`} className="public-calendar-feed-date"><span>{date.month}</span><strong>{date.day}</strong><small>{date.weekday}</small></div>
+					<div className="public-calendar-feed-body">
+						<p className="public-calendar-event-time">{eventTime(event.startsAt)}</p>
+						<h3>{eventUrl ? <a href={eventUrl} rel="noopener noreferrer" target="_blank">{event.title}</a> : event.title}</h3>
+						{event.locationName && <p className="public-calendar-feed-location"><Icon name="building" size={15} /> {event.locationName}</p>}
+						<div className="public-calendar-feed-footer">
+							<Link className="public-calendar-organizer" to={`/directory/${encodeURIComponent(event.organizationSlug)}`}><span>{event.organizationHasLogo ? <img alt="" loading="lazy" src={`/directory/${encodeURIComponent(event.organizationSlug)}/media/logo`} /> : initials(event.organizationName, "Organization")}</span><span><small>Hosted by</small>{event.organizationName}</span></Link>
+							{eventUrl && <a className="public-calendar-feed-action" href={eventUrl} rel="noopener noreferrer" target="_blank">View event <Icon name="chevron-right" size={15} /></a>}
+						</div>
+					</div>
+				</article>;
+			})}</div>}
 			{loaderData.events.length === 0 && <div className="public-calendar-empty"><Icon name="calendar" size={27} /><strong>No public events this month</strong><p>Try the next month, or check back as participating organizations add events.</p></div>}
 		</section>
 	</div>;

@@ -161,6 +161,42 @@ export async function listPublishedCalendarEvents(
 	return result.results;
 }
 
+export async function listPublishedUpcomingCalendarEvents(
+	env: Env,
+	today = new Date().toISOString().slice(0, 10),
+) {
+	const result = await env.DB.prepare(
+		`SELECT p.title,
+		        e.starts_at AS startsAt,
+		        e.ends_at AS endsAt,
+		        e.location_name AS locationName,
+		        e.registration_url AS registrationUrl,
+		        e.source_url AS sourceUrl,
+		        e.external_url AS externalUrl,
+		        e.image_url AS imageUrl,
+		        o.name AS organizationName,
+		        o.slug AS organizationSlug,
+		        CASE WHEN o.logo_object_key IS NULL THEN 0 ELSE 1 END AS organizationHasLogo
+		 FROM organizations AS o
+		 JOIN posts AS p ON p.organization_id = o.id
+		 JOIN events AS e ON e.post_id = p.id
+		 WHERE ${PUBLIC_DIRECTORY_WHERE}
+		   AND p.section = 'event'
+		   AND p.status = 'published'
+		   AND p.visibility = 'members'
+		   AND e.moderation_status = 'approved'
+		   AND substr(e.starts_at, 1, 10) >= ?1
+		   AND NOT EXISTS (
+		     SELECT 1 FROM post_affiliations AS pa WHERE pa.post_id = p.id
+		   )
+		 ORDER BY e.starts_at, o.name COLLATE NOCASE, p.id
+		 LIMIT 4`,
+	)
+		.bind(today)
+		.all<PublicCalendarEvent>();
+	return result.results;
+}
+
 export async function getPublishedOrganizationMediaKey(
 	env: Env,
 	slug: string,

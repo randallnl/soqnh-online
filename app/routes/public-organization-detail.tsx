@@ -56,7 +56,7 @@ export default function PublicOrganizationDetail({ loaderData }: Route.Component
 	const organizationSocialUrl = organization.socialHandle ? socialUrl(organization.socialPlatform, organization.socialHandle) : null;
 	const location = organization.operatesStatewide === 1 ? "Serving communities statewide" : [organization.townCity, organization.region].filter(Boolean).join(", ");
 	return <article className="public-organization-page">
-		<Link className="public-directory-back" to="/"><span>←</span> Back to the directory</Link>
+		<Link className="public-directory-back" to="/directory"><span>←</span> Back to the directory</Link>
 		<section className="public-organization-profile">
 			{organization.hasProfilePhoto ? <img alt={`${organization.name}`} className="public-organization-photo" src={`/directory/${encodeURIComponent(organization.slug)}/media/photo`} /> : <div className="public-organization-photo-placeholder" />}
 			<div className="public-organization-intro">
