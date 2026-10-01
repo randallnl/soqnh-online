@@ -143,13 +143,13 @@ export default function OrganizationDetail({ loaderData }: Route.ComponentProps)
 				{organization.profilePhotoObjectKey && <img alt={`${organization.name} profile`} className="organization-profile-photo" src={mediaUrl(organization.profilePhotoObjectKey) ?? undefined} />}
 				{organization.description && <div className="organization-description"><MentionText targets={[]} text={organization.description} /></div>}
 				<dl className="organization-profile-facts">
-					{organization.category && <div><dt>Categories</dt><dd className="organization-category-row">{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</dd></div>}
+					{organization.category && <div className="organization-profile-fact--wide"><dt>Categories</dt><dd className="organization-category-row">{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</dd></div>}
 					{organization.townCity && <div><dt>Town or city</dt><dd>{organization.townCity}</dd></div>}
 					{organization.region && <div><dt>Region</dt><dd>{organization.region}</dd></div>}
 					{organization.operatesStatewide !== null && <div><dt>Statewide services</dt><dd>{organization.operatesStatewide === 1 ? "Yes" : "No"}</dd></div>}
 					<div><dt>Organization members</dt><dd>{organization.memberCount} {organization.memberCount === 1 ? "member" : "members"} connected</dd></div>
 					<div><dt>Profile updated</dt><dd>{formatProfileDate(organization.updatedAt)}</dd></div>
-					{leadershipTags.length > 0 && <div><dt>Queer and/or BIPOC-led</dt><dd className="organization-category-row">{leadershipTags.map((tag) => <span className={`organization-category-chip organization-category-tone--${tag.tone}`} key={tag.label}>{tag.label}</span>)}</dd></div>}
+					{leadershipTags.length > 0 && <div className="organization-profile-fact--wide"><dt>Queer and/or BIPOC-led</dt><dd className="organization-category-row">{leadershipTags.map((tag) => <span className={`organization-category-chip organization-category-tone--${tag.tone}`} key={tag.label}>{tag.label}</span>)}</dd></div>}
 				</dl>
 				{organization.listingRationale && <div className="organization-profile-note"><p className="eyebrow">Why this resource is included</p><MentionText targets={[]} text={organization.listingRationale} /></div>}
 				{organization.affiliations.length > 0 && (

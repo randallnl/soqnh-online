@@ -3908,12 +3908,26 @@ h3 {
 
 .organization-profile-facts {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 12px;
-	margin-top: 22px;
+	grid-auto-flow: dense;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1px;
+	padding: 1px;
+	margin-top: 18px;
+	overflow: hidden;
+	border-radius: 10px;
+	background: var(--ink-100);
 }
 
-.organization-profile-facts div,
+.organization-profile-facts div {
+	min-width: 0;
+	padding: 10px 12px;
+	background: var(--surface);
+}
+
+.organization-profile-facts .organization-profile-fact--wide {
+	grid-column: span 2;
+}
+
 .organization-profile-note,
 .organization-source-images {
 	padding: 14px;
@@ -3924,15 +3938,27 @@ h3 {
 
 .organization-profile-facts dt {
 	color: var(--ink-500);
-	font-size: 0.75rem;
+	font-size: 0.68rem;
 	font-weight: 760;
+	letter-spacing: 0.035em;
+	line-height: 1.25;
+	text-transform: uppercase;
 }
 
 .organization-profile-facts dd {
-	margin-top: 5px;
+	margin-top: 3px;
 	color: var(--ink-800);
-	font-size: 0.8rem;
-	line-height: 1.55;
+	font-size: 0.78rem;
+	line-height: 1.4;
+}
+
+.organization-profile-facts .organization-category-row {
+	gap: 5px;
+}
+
+.organization-profile-facts .organization-category-chip {
+	padding: 4px 8px;
+	font-size: 0.7rem;
 }
 
 .organization-profile-note,
@@ -5077,6 +5103,7 @@ h3 {
 	.organization-profile-header { align-items: flex-start; flex-direction: column; }
 	.organization-profile h1 { font-size: 1.9rem; }
 	.organization-profile-facts { grid-template-columns: 1fr; }
+	.organization-profile-facts .organization-profile-fact--wide { grid-column: auto; }
 	.organization-activity-grid { grid-template-columns: 1fr; }
 	.organization-activity-group { border-right: 0; border-bottom: 1px solid var(--ink-100); }
 	.organization-activity-group:last-child { border-bottom: 0; }
