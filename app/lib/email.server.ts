@@ -180,3 +180,177 @@ export function createInvitationEmailContent(input: {
 		].join(""),
 	};
 }
+
+export type WeeklyDigestItem = {
+	id: string;
+	title: string;
+	organizationName: string | null;
+	createdAt: string;
+	eventStartsAt?: string | null;
+};
+
+function memberUrl(env: Env, path: string) {
+	return new URL(path, `${env.APP_ORIGIN.replace(/\/$/, "")}/`).toString();
+}
+
+function formatEmailDate(value: string) {
+	return new Intl.DateTimeFormat("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		timeZone: "America/New_York",
+	}).format(new Date(value));
+}
+
+export function createMentionEmailContent(input: {
+	recipientName: string | null;
+	actorName: string;
+	kind: "update" | "comment";
+	link: string;
+	preferencesLink: string;
+}) {
+	const safeActorName = escapeHtml(input.actorName);
+	const safeLink = escapeHtml(input.link);
+	const safePreferencesLink = escapeHtml(input.preferencesLink);
+	const greeting = input.recipientName ? `Hi ${input.recipientName},` : "Hello,";
+	const safeGreeting = escapeHtml(greeting);
+	const location = input.kind === "comment" ? "a comment" : "a community update";
+	const subject = `${input.actorName} mentioned you on NH Connect`;
+	return {
+		subject,
+		text: [
+			greeting,
+			"",
+			`${input.actorName} mentioned you in ${location}.`,
+			"",
+			"Open the conversation:",
+			input.link,
+			"",
+			`Manage notification preferences: ${input.preferencesLink}`,
+			"",
+			"NH Connect · A Queerlective initiative",
+		].join("\n"),
+		html: [
+			'<div style="margin:0;padding:30px 18px;background:#fff9ed;color:#211333;font-family:Arial,Helvetica,sans-serif;line-height:1.6">',
+			'<div style="max-width:600px;margin:0 auto;overflow:hidden;border:1px solid #dfd7c9;border-radius:16px;background:#fffef8">',
+			'<div style="height:7px;background:#754595"></div><div style="padding:28px 30px">',
+			'<p style="margin:0 0 8px;color:#9f2d69;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">You were tagged</p>',
+			`<h1 style="margin:0 0 16px;font-family:Georgia,serif;font-size:27px;line-height:1.25">${safeActorName} mentioned you</h1>`,
+			`<p style="margin:0 0 8px">${safeGreeting}</p><p style="margin:0 0 22px;color:#62566d">${safeActorName} tagged you in ${location} on NH Connect.</p>`,
+			`<a href="${safeLink}" style="display:inline-block;padding:12px 18px;border-radius:9px;background:#5b3178;color:#fff;font-weight:700;text-decoration:none">Open the conversation</a>`,
+			`<p style="margin:24px 0 0;color:#69636f;font-size:12px">You can change mention emails and weekly digests in your <a href="${safePreferencesLink}" style="color:#5b3178">notification preferences</a>.</p>`,
+			'</div><div style="padding:16px 30px;border-top:1px solid #eee7da;background:#f7effa;color:#62566d;font-size:12px">NH Connect &middot; A Queerlective initiative</div></div></div>',
+		].join(""),
+	};
+}
+
+export async function sendMentionEmail(env: Env, input: {
+	to: string;
+	recipientName: string | null;
+	actorName: string;
+	kind: "update" | "comment";
+	postId: string;
+	commentId?: string | null;
+}) {
+	const path = `/posts/${input.postId}${input.commentId ? `#comment-${input.commentId}` : ""}`;
+	const content = createMentionEmailContent({
+		recipientName: input.recipientName,
+		actorName: input.actorName,
+		kind: input.kind,
+		link: memberUrl(env, path),
+		preferencesLink: memberUrl(env, "/profile"),
+	});
+	return env.EMAIL.send({
+		to: input.to,
+		from: { email: env.EMAIL_FROM, name: SENDER_NAME },
+		subject: content.subject,
+		text: content.text,
+		html: content.html,
+	});
+}
+
+function digestSectionText(title: string, items: WeeklyDigestItem[], appOrigin: string, useEventDate = false) {
+	if (items.length === 0) return `${title}\nNothing new to share this week.`;
+	return [title, ...items.map((item) => {
+		const detail = item.organizationName ? ` · ${item.organizationName}` : "";
+		const date = formatEmailDate(useEventDate && item.eventStartsAt ? item.eventStartsAt : item.createdAt);
+		return `• ${item.title}${detail} · ${date}\n  ${new URL(`/posts/${item.id}`, `${appOrigin}/`)}`;
+	})].join("\n");
+}
+
+function digestSectionHtml(title: string, items: WeeklyDigestItem[], appOrigin: string, useEventDate = false) {
+	const safeTitle = escapeHtml(title);
+	if (items.length === 0) return `<h2 style="margin:24px 0 8px;font-family:Georgia,serif;font-size:20px">${safeTitle}</h2><p style="margin:0;color:#69636f">Nothing new to share this week.</p>`;
+	return [
+		`<h2 style="margin:24px 0 8px;font-family:Georgia,serif;font-size:20px">${safeTitle}</h2>`,
+		'<div style="border-top:1px solid #eee7da">',
+		...items.map((item) => {
+			const link = escapeHtml(new URL(`/posts/${item.id}`, `${appOrigin}/`).toString());
+			const detail = item.organizationName ? ` &middot; ${escapeHtml(item.organizationName)}` : "";
+			const date = escapeHtml(formatEmailDate(useEventDate && item.eventStartsAt ? item.eventStartsAt : item.createdAt));
+			return `<div style="padding:12px 0;border-bottom:1px solid #eee7da"><a href="${link}" style="color:#44275f;font-weight:700;text-decoration:none">${escapeHtml(item.title)}</a><p style="margin:3px 0 0;color:#69636f;font-size:13px">${date}${detail}</p></div>`;
+		}),
+		"</div>",
+	].join("");
+}
+
+export function createWeeklyDigestEmailContent(input: {
+	recipientName: string | null;
+	appOrigin: string;
+	updates: WeeklyDigestItem[];
+	projects: WeeklyDigestItem[];
+	events: WeeklyDigestItem[];
+}) {
+	const origin = input.appOrigin.replace(/\/$/, "");
+	const greeting = input.recipientName ? `Hi ${input.recipientName},` : "Hello,";
+	const homeLink = `${origin}/home`;
+	const preferencesLink = `${origin}/profile`;
+	return {
+		subject: "Your weekly NH Connect community update",
+		text: [
+			greeting,
+			"",
+			"Here is your weekly look at the NH Connect activity available to you.",
+			"",
+			digestSectionText("Community updates", input.updates, origin),
+			"",
+			digestSectionText("Projects", input.projects, origin),
+			"",
+			digestSectionText("Upcoming events", input.events, origin, true),
+			"",
+			`Open NH Connect: ${homeLink}`,
+			`Manage notification preferences: ${preferencesLink}`,
+		].join("\n"),
+		html: [
+			'<div style="margin:0;padding:30px 18px;background:#fff9ed;color:#211333;font-family:Arial,Helvetica,sans-serif;line-height:1.55">',
+			'<div style="max-width:620px;margin:0 auto;overflow:hidden;border:1px solid #dfd7c9;border-radius:16px;background:#fffef8">',
+			'<div style="height:7px;background:#754595"></div><div style="padding:28px 30px">',
+			'<p style="margin:0 0 8px;color:#9f2d69;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Your weekly digest</p>',
+			'<h1 style="margin:0 0 14px;font-family:Georgia,serif;font-size:29px;line-height:1.2">What’s happening on NH Connect</h1>',
+			`<p style="margin:0;color:#62566d">${escapeHtml(greeting)} Here is the latest activity available through your community network.</p>`,
+			digestSectionHtml("Community updates", input.updates, origin),
+			digestSectionHtml("Projects", input.projects, origin),
+			digestSectionHtml("Upcoming events", input.events, origin, true),
+			`<p style="margin:26px 0 0"><a href="${escapeHtml(homeLink)}" style="display:inline-block;padding:12px 18px;border-radius:9px;background:#5b3178;color:#fff;font-weight:700;text-decoration:none">Open NH Connect</a></p>`,
+			`<p style="margin:22px 0 0;color:#69636f;font-size:12px">This digest only includes content you can access. Change your email settings in <a href="${escapeHtml(preferencesLink)}" style="color:#5b3178">notification preferences</a>.</p>`,
+			'</div><div style="padding:16px 30px;border-top:1px solid #eee7da;background:#f7effa;color:#62566d;font-size:12px">NH Connect &middot; A Queerlective initiative</div></div></div>',
+		].join(""),
+	};
+}
+
+export async function sendWeeklyDigestEmail(env: Env, input: {
+	to: string;
+	recipientName: string | null;
+	updates: WeeklyDigestItem[];
+	projects: WeeklyDigestItem[];
+	events: WeeklyDigestItem[];
+}) {
+	const content = createWeeklyDigestEmailContent({ ...input, appOrigin: env.APP_ORIGIN });
+	return env.EMAIL.send({
+		to: input.to,
+		from: { email: env.EMAIL_FROM, name: SENDER_NAME },
+		subject: content.subject,
+		text: content.text,
+		html: content.html,
+	});
+}

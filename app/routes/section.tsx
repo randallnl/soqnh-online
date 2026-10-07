@@ -12,6 +12,7 @@ import { formatEventDateTime } from "~/lib/events";
 import { requireSameOrigin } from "~/lib/http.server";
 import { imageUploadAccept, mediaUrl, type ContentImageAttachment } from "~/lib/media";
 import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
+import { sendMentionNotificationEmails } from "~/lib/notification-email.server";
 import { CommentMutationError, createComment, listFeedCommentPreviews } from "~/models/comments.server";
 import { InteractionMutationError, listMentionableMembers, syncPostMentions, togglePostSupport } from "~/models/interactions.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
@@ -135,7 +136,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				attachment: uploadedImage,
 			});
 			attachmentPersisted = true;
-			await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
+			const mentions = await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
+			context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
+				recipientIds: mentions.mentionedUserIds,
+				actorName: user.name || "A member",
+				kind: "update",
+				postId: created.id,
+			}));
 			throw redirect(`/updates#post-${created.id}`);
 		}
 		if (result.data.intent === "toggle-support") {
@@ -147,6 +154,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		const post = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!post || post.section !== "update") throw new CommentMutationError("post-unavailable");
 		const created = await createComment(context.cloudflare.env, user, { postId: post.id, parentCommentId: null, body: result.data.body, mentionUserIds });
+		context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
+			recipientIds: created.mentionedUserIds,
+			actorName: user.name || "A member",
+			kind: "comment",
+			postId: post.id,
+			commentId: created.id,
+		}));
 		throw redirect(`/updates#comment-${created.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;

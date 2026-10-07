@@ -4,7 +4,7 @@ import type { D1Migration } from "@cloudflare/vitest-pool-workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { sanitizeReturnTo } from "../app/lib/auth";
-import { createInvitationEmailContent, createMagicLinkEmailContent } from "../app/lib/email.server";
+import { createInvitationEmailContent, createMagicLinkEmailContent, createMentionEmailContent, createWeeklyDigestEmailContent } from "../app/lib/email.server";
 import {
 	consumeLoginToken,
 	createRandomSecret,
@@ -128,11 +128,13 @@ import {
 } from "../app/models/events.server";
 import {
 	canReadIdentityObject,
+	getOwnProfileEditorData,
 	getVisibleMemberProfile,
 	listVisibleMembers,
 	isOwnProfileComplete,
 	updateOwnProfile,
 } from "../app/models/profiles.server";
+import { listMentionEmailRecipients, listWeeklyDigestRecipients } from "../app/models/notification-preferences.server";
 import {
 	getAdminOperationsData,
 	listAuditEvents,
@@ -146,6 +148,14 @@ import {
 	updateOrganizationScraperSettings,
 } from "../app/models/scraper.server";
 import { getDashboardData } from "../app/models/dashboard.server";
+import {
+	createPublicSpotlight,
+	deletePublicSpotlight,
+	getPublicSpotlightImageKey,
+	listActivePublicSpotlights,
+	listPublicSpotlightsForAdmin,
+	updatePublicSpotlight,
+} from "../app/models/public-spotlights.server";
 
 declare global {
 	namespace Cloudflare {
@@ -294,6 +304,7 @@ beforeAll(async () => {
 beforeEach(async () => {
 	await env.DB.batch([
 		env.DB.prepare("DELETE FROM audit_log"),
+		env.DB.prepare("DELETE FROM public_spotlights"),
 		env.DB.prepare("DELETE FROM scraper_imports"),
 		env.DB.prepare("DELETE FROM scraper_runs"),
 		env.DB.prepare("DELETE FROM notifications"),
@@ -319,6 +330,40 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM organizations"),
 		env.DB.prepare("DELETE FROM affiliations"),
 	]);
+});
+
+describe("public homepage spotlights", () => {
+	it("lets site administrators create, order, publish, update, and delete homepage spotlights", async () => {
+		await Promise.all([seedSiteAdmin(), seedUser()]);
+		const firstId = crypto.randomUUID();
+		const secondId = crypto.randomUUID();
+		const base = {
+			eyebrow: "Community spotlight",
+			message: "A public feature with enough detail to explain why this work matters.",
+			imageAlt: "Community members gathering outside",
+			photoCredit: "Photo by Community Photographer",
+			primaryButtonLabel: "Learn more",
+			primaryButtonUrl: "/directory",
+			secondaryButtonLabel: null,
+			secondaryButtonUrl: null,
+		};
+		await createPublicSpotlight(env, siteAdmin, { ...base, id: firstId, headline: "Second feature", imageObjectKey: `spotlight-images/${firstId}.jpg`, sortOrder: 20, isActive: true });
+		await createPublicSpotlight(env, siteAdmin, { ...base, id: secondId, headline: "First feature", imageObjectKey: `spotlight-images/${secondId}.jpg`, sortOrder: 10, isActive: false });
+
+		expect((await listPublicSpotlightsForAdmin(env)).map((item) => item.headline)).toEqual(["First feature", "Second feature"]);
+		expect((await listActivePublicSpotlights(env)).map((item) => item.headline)).toEqual(["Second feature"]);
+		await expect(getPublicSpotlightImageKey(env, firstId)).resolves.toBe(`spotlight-images/${firstId}.jpg`);
+
+		const images = await updatePublicSpotlight(env, siteAdmin, { ...base, spotlightId: secondId, headline: "Updated first feature", imageObjectKey: `spotlight-images/${secondId}-new.jpg`, sortOrder: 5, isActive: true });
+		expect(images).toEqual({ previousImageObjectKey: `spotlight-images/${secondId}.jpg`, imageObjectKey: `spotlight-images/${secondId}-new.jpg` });
+		expect((await listActivePublicSpotlights(env)).map((item) => item.headline)).toEqual(["Updated first feature", "Second feature"]);
+
+		await expect(createPublicSpotlight(env, activeUser, { ...base, id: crypto.randomUUID(), headline: "Not allowed", imageObjectKey: "spotlight-images/no.jpg", sortOrder: 0, isActive: true })).rejects.toMatchObject({ reason: "forbidden" });
+		await expect(deletePublicSpotlight(env, siteAdmin, firstId)).resolves.toBe(`spotlight-images/${firstId}.jpg`);
+		await expect(getPublicSpotlightImageKey(env, firstId)).resolves.toBeNull();
+		const actions = await env.DB.prepare("SELECT action FROM audit_log WHERE entity_type = 'public_spotlight' ORDER BY created_at, rowid").all<{ action: string }>();
+		expect(actions.results.map((entry) => entry.action)).toEqual(["public_spotlight.created", "public_spotlight.created", "public_spotlight.updated", "public_spotlight.deleted"]);
+	});
 });
 
 describe("directory filters", () => {
@@ -398,6 +443,8 @@ describe("member profiles", () => {
 			websiteUrl: "https://example.org",
 			profileVisibility: "hidden",
 			avatarObjectKey: "profile-photos/user-active.jpg",
+			mentionEmailEnabled: false,
+			weeklyDigestEnabled: true,
 		});
 
 		await expect(getVisibleMemberProfile(env, activeUser, activeUser.id)).resolves.toMatchObject({
@@ -407,7 +454,22 @@ describe("member profiles", () => {
 			avatarObjectKey: "profile-photos/user-active.jpg",
 		});
 		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first<string>("affiliation_id")).resolves.toBe("aff-shared");
+		await expect(getOwnProfileEditorData(env, activeUser)).resolves.toMatchObject({
+			profile: { mentionEmailEnabled: false, weeklyDigestEnabled: true },
+		});
 		await expect(isOwnProfileComplete(env, activeUser)).resolves.toBe(true);
+	});
+
+	it("enables both email notifications by default and honors each preference independently", async () => {
+		await Promise.all([seedUser(), seedSecondMember()]);
+		expect((await listMentionEmailRecipients(env, [activeUser.id, secondMember.id])).map((member) => member.id)).toEqual([activeUser.id, secondMember.id]);
+		expect((await listWeeklyDigestRecipients(env)).map((member) => member.id)).toEqual([activeUser.id, secondMember.id]);
+
+		await env.DB.prepare("UPDATE users SET mention_email_enabled = 0 WHERE id = ?1").bind(activeUser.id).run();
+		await env.DB.prepare("UPDATE users SET weekly_digest_enabled = 0 WHERE id = ?1").bind(secondMember.id).run();
+
+		expect((await listMentionEmailRecipients(env, [activeUser.id, secondMember.id])).map((member) => member.id)).toEqual([secondMember.id]);
+		expect((await listWeeklyDigestRecipients(env)).map((member) => member.id)).toEqual([activeUser.id]);
 	});
 });
 
@@ -854,6 +916,41 @@ describe("magic link email content", () => {
 		expect(content.html).toContain("token=a&amp;next=&quot;profile&quot;");
 		expect(content.html).toContain("size=small&amp;mode=round");
 		expect(content.html).not.toContain("token=a&next=\"profile\"");
+	});
+});
+
+describe("member notification email content", () => {
+	it("creates safe, actionable mention emails with a preference link", () => {
+		const content = createMentionEmailContent({
+			recipientName: "Alex <Member>",
+			actorName: "Taylor & Sam",
+			kind: "comment",
+			link: "https://connect.example/posts/one#comment-two",
+			preferencesLink: "https://connect.example/profile",
+		});
+
+		expect(content.subject).toContain("Taylor & Sam");
+		expect(content.text).toContain("mentioned you in a comment");
+		expect(content.text).toContain("https://connect.example/profile");
+		expect(content.html).toContain("Taylor &amp; Sam");
+		expect(content.html).toContain("Alex &lt;Member&gt;");
+	});
+
+	it("groups accessible activity into the weekly digest", () => {
+		const content = createWeeklyDigestEmailContent({
+			recipientName: "Alex",
+			appOrigin: "https://connect.example/",
+			updates: [{ id: "update-one", title: "Mutual aid update", organizationName: "Community Center", createdAt: "2026-09-30T14:00:00.000Z" }],
+			projects: [],
+			events: [{ id: "event-one", title: "Community gathering", organizationName: null, createdAt: "2026-09-29T14:00:00.000Z", eventStartsAt: "2026-10-10T18:00:00.000Z" }],
+		});
+
+		for (const body of [content.text, content.html]) {
+			expect(body).toContain("Mutual aid update");
+			expect(body).toContain("Community gathering");
+			expect(body).toContain("notification preferences");
+		}
+		expect(content.text).toContain("https://connect.example/posts/update-one");
 	});
 });
 

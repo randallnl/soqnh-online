@@ -120,6 +120,9 @@ export async function syncPostMentions(env: Env, actor: AuthenticatedUser, postI
 	}
 	const now = new Date().toISOString();
 	const actorName = actor.name || "A member";
+	const notifiedUserIds = recipients
+		.filter((recipient) => (notifyExisting || !existingIds.has(recipient.id)) && post.status === "published")
+		.map((recipient) => recipient.id);
 	await env.DB.batch([
 		env.DB.prepare("DELETE FROM post_mentions WHERE post_id = ?1").bind(postId),
 		...recipients.flatMap((recipient) => [
@@ -135,6 +138,7 @@ export async function syncPostMentions(env: Env, actor: AuthenticatedUser, postI
 			).bind(crypto.randomUUID(), recipient.id, actor.id, postId, `${actorName} mentioned you in an update.`, now)]),
 		]),
 	]);
+	return { mentionedUserIds: notifiedUserIds };
 }
 
 export async function listPostMentionUserIds(env: Env, actor: AuthenticatedUser, postId: string) {

@@ -34,6 +34,7 @@ const communityNavigation: NavigationItem[] = [
 const adminNavigation: NavigationItem[] = [
 	{ label: "Admin overview", to: "/admin", icon: "dashboard" },
 	{ label: "Event scraper", to: "/admin/scraper", icon: "sparkles" },
+	{ label: "Homepage spotlights", to: "/admin/spotlights", icon: "sparkles" },
 	{ label: "Organization admin", to: "/admin/organizations", icon: "building" },
 	{ label: "Manage affiliations", to: "/admin/affiliations", icon: "people" },
 	{ label: "Member access", to: "/admin/members", icon: "people" },

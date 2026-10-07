@@ -2,9 +2,11 @@ import { Link } from "react-router";
 
 import type { Route } from "./+types/public-home";
 import { Icon } from "~/components/icon";
+import { PublicHeroCarousel, type PublicHeroSlide } from "~/components/public-hero-carousel";
 import { initials } from "~/lib/media";
 import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 import { listPublishedOrganizations, listPublishedUpcomingCalendarEvents } from "~/models/public-directory.server";
+import { listActivePublicSpotlights } from "~/models/public-spotlights.server";
 
 function todayInNewHampshire() {
 	const parts = new Intl.DateTimeFormat("en-CA", {
@@ -54,32 +56,40 @@ export function headers() {
 }
 
 export async function loader({ context }: Route.LoaderArgs) {
-	const [organizations, upcomingEvents] = await Promise.all([
+	const [organizations, upcomingEvents, spotlights] = await Promise.all([
 		listPublishedOrganizations(context.cloudflare.env),
 		listPublishedUpcomingCalendarEvents(context.cloudflare.env, todayInNewHampshire()),
+		listActivePublicSpotlights(context.cloudflare.env),
 	]);
 	return {
 		organizationCount: organizations.length,
 		organizations: organizations.slice(0, 3),
 		upcomingEvents,
+		spotlights,
 	};
 }
 
 export default function PublicHome({ loaderData }: Route.ComponentProps) {
+	const slides: PublicHeroSlide[] = loaderData.spotlights.length > 0
+		? loaderData.spotlights.map((spotlight) => ({
+			...spotlight,
+			imageUrl: `/spotlights/${encodeURIComponent(spotlight.id)}/media`,
+		}))
+		: [{
+			id: "default",
+			eyebrow: "NH Connect by Queerlective",
+			headline: "Find community. Share space. Stay connected.",
+			message: "Discover affirming organizations, businesses, resources, and gatherings across New Hampshire—all in one community-maintained place.",
+			imageAlt: "Queerlective community members carrying a parade quilt through Manchester",
+			imageUrl: "/images/manchester-parade-quilt-hero.jpg",
+			photoCredit: "Photo by Steven Hamilton",
+			primaryButtonLabel: "Explore the directory",
+			primaryButtonUrl: "/directory",
+			secondaryButtonLabel: "View community events",
+			secondaryButtonUrl: "/calendar",
+		}];
 	return <>
-		<section className="public-directory-hero public-home-hero">
-			<div className="public-directory-hero-copy">
-				<p className="eyebrow">NH Connect by Queerlective</p>
-				<h1>Find community. Share space. Stay connected.</h1>
-				<p>Discover affirming organizations, businesses, resources, and gatherings across New Hampshire—all in one community-maintained place.</p>
-				<div className="public-home-hero-actions">
-					<Link className="button button--primary" to="/directory">Explore the directory</Link>
-					<Link className="button public-home-hero-secondary" to="/calendar">View community events</Link>
-				</div>
-			</div>
-			<div className="public-directory-hero-note"><Icon name="heart" size={24} /><div><strong>Built with community</strong><p>Organizations choose to participate and keep their public information current.</p></div></div>
-			<p className="public-directory-photo-credit">Photo by Steven Hamilton</p>
-		</section>
+		<PublicHeroCarousel slides={slides} />
 
 		<div className="public-home-content">
 			<section aria-label="Explore NH Connect" className="public-home-paths">

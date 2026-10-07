@@ -8,6 +8,7 @@ import { communityUpdateTitle, normalizeTags, postStatuses, postVisibilities, ro
 import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
 import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
+import { sendMentionNotificationEmails } from "~/lib/notification-email.server";
 import type { ContentImageAttachment } from "~/lib/media";
 import { getPostById, listAvailablePostAffiliations, listPostOrganizations, PostMutationError, updatePost } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
@@ -71,7 +72,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 		if (existing.section === "project" || existing.section === "update") uploadedImage = await uploadContentImage(context.cloudflare.env, formData.get("image"), user.id);
 		await updatePost(context.cloudflare.env, user, { ...result.data, title: existing.section === "update" ? communityUpdateTitle(result.data.body) : result.data.title, tags: normalizeTags(result.data.tags), affiliationIds, event: eventResult?.data, attachment: uploadedImage });
 		attachmentPersisted = true;
-		if (existing.section === "update") await syncPostMentions(context.cloudflare.env, user, result.data.postId, mentionUserIds, existing.status !== "published" && result.data.status === "published");
+		if (existing.section === "update") {
+			const mentions = await syncPostMentions(context.cloudflare.env, user, result.data.postId, mentionUserIds, existing.status !== "published" && result.data.status === "published");
+			context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
+				recipientIds: mentions.mentionedUserIds,
+				actorName: user.name || "A member",
+				kind: "update",
+				postId: result.data.postId,
+			}));
+		}
 		throw redirect(`/posts/${result.data.postId}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;

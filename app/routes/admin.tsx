@@ -41,6 +41,7 @@ export default function AdminOperations({ loaderData }: Route.ComponentProps) {
 		{ title: "Affiliations", copy: `${metrics.affiliations} networks controlling visibility`, to: "/admin/affiliations", icon: "activity", tone: "plum" },
 		{ title: "Event moderation", copy: `${metrics.pendingEvents} events awaiting review`, to: "/events/moderation", icon: "calendar", count: metrics.pendingEvents, tone: "gold" },
 		{ title: "Event scraper", copy: `${metrics.enabledScraperSources} enabled partner sources`, to: "/admin/scraper", icon: "sparkles", count: latestScraperRun?.status === "failed" ? 1 : 0, tone: "blue" },
+		{ title: "Homepage spotlights", copy: "Manage public homepage features and calls to action", to: "/admin/spotlights", icon: "sparkles", tone: "plum" },
 	];
 	return <div className="admin-page admin-operations-page">
 		<section className="page-heading"><div><p className="eyebrow">Site administration</p><h1>Operations center</h1><p>Run the member network, resolve pending work, and inspect system activity from one place.</p></div><Link className="button button--secondary heading-action" to="/admin/audit"><Icon name="activity" size={17} /> View audit log</Link></section>

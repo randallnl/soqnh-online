@@ -189,7 +189,7 @@ export async function createComment(
 			 VALUES (?1, ?2, ?3, ?4, ?5, 'comment', ?6, NULL, ?7)`,
 		).bind(crypto.randomUUID(), userId, actor.id, input.postId, id, input.parentCommentId ? `${actorName} replied in a conversation you follow.` : `${actorName} commented on your post.`, now)),
 	]);
-	return { id };
+	return { id, mentionedUserIds: [...mentionedIds] };
 }
 
 export async function updateComment(

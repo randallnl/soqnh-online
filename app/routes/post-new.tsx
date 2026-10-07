@@ -9,6 +9,7 @@ import { requireSameOrigin } from "~/lib/http.server";
 import { parseEventDetails } from "~/lib/events";
 import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
 import { MAX_PROJECT_PHOTOS, type ContentImageAttachment } from "~/lib/media";
+import { sendMentionNotificationEmails } from "~/lib/notification-email.server";
 import { createPost, listAvailablePostAffiliations, listPostOrganizations, PostMutationError } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
@@ -101,7 +102,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 			attachments: uploadedImages,
 		});
 		attachmentPersisted = true;
-		if (result.data.section === "updates") await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
+		if (result.data.section === "updates") {
+			const mentions = await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
+			context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
+				recipientIds: mentions.mentionedUserIds,
+				actorName: user.name || "A member",
+				kind: "update",
+				postId: created.id,
+			}));
+		}
 		throw redirect(`/posts/${created.id}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;

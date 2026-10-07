@@ -8,6 +8,7 @@ import {
 export default [
 	route("health", "routes/health.ts"),
 	route("directory/:slug/media/:kind", "routes/public-organization-media.ts"),
+	route("spotlights/:spotlightId/media", "routes/public-spotlight-media.ts"),
 	layout("routes/public-layout.tsx", [
 		index("routes/public-home.tsx"),
 		route("directory", "routes/public-directory.tsx"),
@@ -37,6 +38,7 @@ export default [
 		route("organizations/:slug/manage", "routes/organization-manage.tsx"),
 		route("organizations/:slug", "routes/organization-detail.tsx"),
 		route("admin/affiliations", "routes/admin-affiliations.tsx"),
+		route("admin/spotlights", "routes/admin-spotlights.tsx"),
 		route("admin", "routes/admin.tsx"),
 		route("admin/audit", "routes/admin-audit.tsx"),
 		route("admin/organizations", "routes/admin-organizations.tsx"),

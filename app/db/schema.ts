@@ -46,6 +46,8 @@ export const users = sqliteTable(
 		})
 			.notNull()
 			.default("members"),
+		mentionEmailEnabled: integer("mention_email_enabled").notNull().default(1),
+		weeklyDigestEnabled: integer("weekly_digest_enabled").notNull().default(1),
 	},
 	(table) => [
 		check(
@@ -522,6 +524,32 @@ export const auditLog = sqliteTable(
 		createdAt: createdAt(),
 	},
 	(table) => [index("idx_audit_log_entity").on(table.entityType, table.entityId)],
+);
+
+export const publicSpotlights = sqliteTable(
+	"public_spotlights",
+	{
+		id: text("id").primaryKey(),
+		eyebrow: text("eyebrow"),
+		headline: text("headline").notNull(),
+		message: text("message").notNull(),
+		imageObjectKey: text("image_object_key").notNull(),
+		imageAlt: text("image_alt").notNull(),
+		photoCredit: text("photo_credit"),
+		primaryButtonLabel: text("primary_button_label"),
+		primaryButtonUrl: text("primary_button_url"),
+		secondaryButtonLabel: text("secondary_button_label"),
+		secondaryButtonUrl: text("secondary_button_url"),
+		sortOrder: integer("sort_order").notNull().default(0),
+		isActive: integer("is_active").notNull().default(0),
+		createdByUserId: text("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		check("public_spotlights_is_active_check", sql`${table.isActive} in (0, 1)`),
+		index("idx_public_spotlights_active_order").on(table.isActive, table.sortOrder, table.createdAt),
+	],
 );
 
 export const authTokens = sqliteTable(

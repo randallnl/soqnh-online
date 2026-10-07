@@ -78,6 +78,20 @@
       "when": 1790168400000,
       "tag": "0010_organization_profile_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1790870400000,
+      "tag": "0011_notification_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791302400000,
+      "tag": "0012_public_spotlights",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,7 @@ import { eventPostIdSchema } from "~/lib/event-review";
 import { formatEventDateTime } from "~/lib/events";
 import { mediaUrl } from "~/lib/media";
 import { deleteContentImage } from "~/lib/media.server";
+import { sendMentionNotificationEmails } from "~/lib/notification-email.server";
 import { archivePost, deleteCommunityUpdate, getPostById, PostMutationError } from "~/models/posts.server";
 import { EventMutationError, removeEvent } from "~/models/events.server";
 import { archiveComment, CommentMutationError, createComment, listPostComments, updateComment } from "~/models/comments.server";
@@ -91,6 +92,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 		}
 		if (result.data.intent === "create-comment") {
 			const created = await createComment(context.cloudflare.env, user, { ...result.data, mentionUserIds });
+			context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
+				recipientIds: created.mentionedUserIds,
+				actorName: user.name || "A member",
+				kind: "comment",
+				postId: result.data.postId,
+				commentId: created.id,
+			}));
 			throw redirect(`/posts/${result.data.postId}#comment-${created.id}`);
 		}
 		if (result.data.intent === "update-comment") {
