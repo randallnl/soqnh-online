@@ -942,7 +942,7 @@ describe("member notification email content", () => {
 			appOrigin: "https://connect.example/",
 			updates: [{ id: "update-one", title: "Mutual aid update", organizationName: "Community Center", createdAt: "2026-09-30T14:00:00.000Z" }],
 			projects: [],
-			events: [{ id: "event-one", title: "Community gathering", organizationName: null, createdAt: "2026-09-29T14:00:00.000Z", eventStartsAt: "2026-10-10T18:00:00.000Z" }],
+			events: [{ id: "event-one", title: "Community gathering", organizationName: null, createdAt: "2026-09-29T14:00:00.000Z", eventStartsAt: "2026-10-10T18:00:00.000Z", imageUrl: "https://images.example/community.jpg?width=320&fit=cover" }],
 		});
 
 		for (const body of [content.text, content.html]) {
@@ -951,6 +951,21 @@ describe("member notification email content", () => {
 			expect(body).toContain("notification preferences");
 		}
 		expect(content.text).toContain("https://connect.example/posts/update-one");
+		expect(content.html).toContain("https://connect.example/brand/queerlective-logo.png");
+		expect(content.html).toContain("https://images.example/community.jpg?width=320&amp;fit=cover");
+		expect(content.html).toContain('width="104" height="72"');
+	});
+
+	it("does not render unsafe event image protocols", () => {
+		const content = createWeeklyDigestEmailContent({
+			recipientName: null,
+			appOrigin: "https://connect.example",
+			updates: [],
+			projects: [],
+			events: [{ id: "event-one", title: "Community gathering", organizationName: null, createdAt: "2026-09-29T14:00:00.000Z", eventStartsAt: "2026-10-10T18:00:00.000Z", imageUrl: "javascript:alert(1)" }],
+		});
+
+		expect(content.html).not.toContain("javascript:");
 	});
 });
 

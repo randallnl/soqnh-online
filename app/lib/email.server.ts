@@ -187,6 +187,7 @@ export type WeeklyDigestItem = {
 	organizationName: string | null;
 	createdAt: string;
 	eventStartsAt?: string | null;
+	imageUrl?: string | null;
 };
 
 function memberUrl(env: Env, path: string) {
@@ -200,6 +201,16 @@ function formatEmailDate(value: string) {
 		year: "numeric",
 		timeZone: "America/New_York",
 	}).format(new Date(value));
+}
+
+function safeEmailImageUrl(value: string | null | undefined) {
+	if (!value) return null;
+	try {
+		const url = new URL(value);
+		return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+	} catch {
+		return null;
+	}
 }
 
 export function createMentionEmailContent(input: {
@@ -288,7 +299,15 @@ function digestSectionHtml(title: string, items: WeeklyDigestItem[], appOrigin: 
 			const link = escapeHtml(new URL(`/posts/${item.id}`, `${appOrigin}/`).toString());
 			const detail = item.organizationName ? ` &middot; ${escapeHtml(item.organizationName)}` : "";
 			const date = escapeHtml(formatEmailDate(useEventDate && item.eventStartsAt ? item.eventStartsAt : item.createdAt));
-			return `<div style="padding:12px 0;border-bottom:1px solid #eee7da"><a href="${link}" style="color:#44275f;font-weight:700;text-decoration:none">${escapeHtml(item.title)}</a><p style="margin:3px 0 0;color:#69636f;font-size:13px">${date}${detail}</p></div>`;
+			const itemDetails = `<a href="${link}" style="color:#44275f;font-weight:700;text-decoration:none">${escapeHtml(item.title)}</a><p style="margin:3px 0 0;color:#69636f;font-size:13px">${date}${detail}</p>`;
+			const imageUrl = useEventDate ? safeEmailImageUrl(item.imageUrl) : null;
+			if (!imageUrl) return `<div style="padding:12px 0;border-bottom:1px solid #eee7da">${itemDetails}</div>`;
+			return [
+				'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-bottom:1px solid #eee7da"><tr>',
+				`<td width="104" style="width:104px;padding:12px 14px 12px 0;vertical-align:middle"><a href="${link}" style="text-decoration:none"><img src="${escapeHtml(imageUrl)}" alt="" width="104" height="72" style="display:block;width:104px;height:72px;border:0;border-radius:9px;object-fit:cover"></a></td>`,
+				`<td style="padding:12px 0;vertical-align:middle">${itemDetails}</td>`,
+				"</tr></table>",
+			].join("");
 		}),
 		"</div>",
 	].join("");
@@ -305,6 +324,7 @@ export function createWeeklyDigestEmailContent(input: {
 	const greeting = input.recipientName ? `Hi ${input.recipientName},` : "Hello,";
 	const homeLink = `${origin}/home`;
 	const preferencesLink = `${origin}/profile`;
+	const logoUrl = escapeHtml(`${origin}/brand/queerlective-logo.png`);
 	return {
 		subject: "Your weekly NH Connect community update",
 		text: [
@@ -324,7 +344,9 @@ export function createWeeklyDigestEmailContent(input: {
 		html: [
 			'<div style="margin:0;padding:30px 18px;background:#fff9ed;color:#211333;font-family:Arial,Helvetica,sans-serif;line-height:1.55">',
 			'<div style="max-width:620px;margin:0 auto;overflow:hidden;border:1px solid #dfd7c9;border-radius:16px;background:#fffef8">',
-			'<div style="height:7px;background:#754595"></div><div style="padding:28px 30px">',
+			'<div style="height:7px;background:#754595"></div>',
+			`<div style="padding:18px 30px;text-align:center;background:#f7bed1"><img src="${logoUrl}" alt="Queerlective" width="280" style="display:inline-block;width:100%;max-width:280px;height:auto;border:0"></div>`,
+			'<div style="padding:26px 30px 28px">',
 			'<p style="margin:0 0 8px;color:#9f2d69;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Your weekly digest</p>',
 			'<h1 style="margin:0 0 14px;font-family:Georgia,serif;font-size:29px;line-height:1.2">What’s happening on NH Connect</h1>',
 			`<p style="margin:0;color:#62566d">${escapeHtml(greeting)} Here is the latest activity available through your community network.</p>`,

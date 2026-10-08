@@ -10,6 +10,7 @@ function digestItem(post: PostRecord): WeeklyDigestItem {
 		organizationName: post.organizationName,
 		createdAt: post.createdAt,
 		eventStartsAt: post.eventStartsAt,
+		imageUrl: post.eventImageUrl,
 	};
 }
 
