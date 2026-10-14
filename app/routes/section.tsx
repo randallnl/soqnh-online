@@ -1,4 +1,5 @@
-import { Form, Link, redirect, useActionData, useNavigation } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Form, Link, redirect, useActionData, useFetcher, useNavigation } from "react-router";
 import { z } from "zod";
 
 import type { Route } from "./+types/section";
@@ -143,7 +144,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				kind: "update",
 				postId: created.id,
 			}));
-			throw redirect(`/updates#post-${created.id}`);
+			return { ok: true as const, intent: "create-update" as const, postId: created.id };
 		}
 		if (result.data.intent === "toggle-support") {
 			const post = await getPostById(context.cloudflare.env, user, result.data.postId);
@@ -161,7 +162,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			postId: post.id,
 			commentId: created.id,
 		}));
-		throw redirect(`/updates#comment-${created.id}`);
+		return { ok: true as const, intent: "create-feed-comment" as const, postId: post.id, commentId: created.id };
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned feed image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
@@ -202,11 +203,48 @@ function pageUrl(section: string, page: number, tag: string | null, organization
 	return `/${section}${search.size ? `?${search}` : ""}`;
 }
 
+function FeedCommentForm({ postId, targets }: { postId: string; targets: MentionTarget[] }) {
+	const fetcher = useFetcher<typeof action>();
+	const formRef = useRef<HTMLFormElement>(null);
+	const handledCommentId = useRef<string | null>(null);
+	const [composerKey, setComposerKey] = useState(0);
+	const data = fetcher.data;
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || !data?.ok || data.intent !== "create-feed-comment" || data.commentId === handledCommentId.current) return;
+		handledCommentId.current = data.commentId;
+		formRef.current?.reset();
+		setComposerKey((key) => key + 1);
+	}, [data, fetcher.state]);
+
+	return <fetcher.Form className="update-feed-comment-form" method="post" ref={formRef}>
+		<input name="intent" type="hidden" value="create-feed-comment" />
+		<input name="postId" type="hidden" value={postId} />
+		<label className="sr-only" htmlFor={`feed-comment-${postId}`}>Comment on this update</label>
+		<MentionTextarea id={`feed-comment-${postId}`} key={composerKey} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={targets} />
+		<button className="button button--secondary button--compact" disabled={fetcher.state !== "idle"} type="submit">{fetcher.state === "submitting" ? "Posting…" : "Comment"}</button>
+		{data && !data.ok && <span className="form-message form-message--error" role="alert">{data.error}</span>}
+	</fetcher.Form>;
+}
+
 export default function Section({ loaderData }: Route.ComponentProps) {
 	const { section, sectionKey, feed, filters } = loaderData;
 	const actionData = useActionData<typeof action>();
 	const navigation = useNavigation();
 	const submittingIntent = navigation.formData?.get("intent");
+	const updateFetcher = useFetcher<typeof action>();
+	const updateFormRef = useRef<HTMLFormElement>(null);
+	const handledPostId = useRef<string | null>(null);
+	const [updateComposerKey, setUpdateComposerKey] = useState(0);
+	const updateData = updateFetcher.data;
+
+	useEffect(() => {
+		if (updateFetcher.state !== "idle" || !updateData?.ok || updateData.intent !== "create-update" || updateData.postId === handledPostId.current) return;
+		handledPostId.current = updateData.postId;
+		updateFormRef.current?.reset();
+		setUpdateComposerKey((key) => key + 1);
+		requestAnimationFrame(() => document.getElementById(`post-${updateData.postId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+	}, [updateData, updateFetcher.state]);
 	return (
 		<div className={`section-page content-section-page content-section-page--${sectionKey}`}>
 			<section className={`section-hero${sectionKey === "updates" ? " section-hero--community" : ""}`}>
@@ -221,10 +259,10 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 
 			{sectionKey === "updates" && loaderData.canCreate && <details className="panel community-update-composer" id="community-update-composer">
 				<summary className="community-update-composer-summary"><span><Icon name="message" size={19} /><span><strong>Post a community update</strong><span className="community-update-composer-preview">Share news, ask a question, or celebrate a win…</span></span></span><Icon className="community-update-expand-icon" name="plus" size={18} /></summary>
-				<Form className="community-update-composer-form" encType="multipart/form-data" method="post">
+				<updateFetcher.Form className="community-update-composer-form" encType="multipart/form-data" method="post" ref={updateFormRef}>
 					<input name="intent" type="hidden" value="create-update" />
 					<label className="sr-only" htmlFor="community-update-body">Community update</label>
-					<MentionTextarea id="community-update-body" maxLength={12000} minLength={2} placeholder="Share news, ask a question, celebrate a win, or let the community know what’s happening… Type @ to tag." required rows={4} targets={loaderData.mentionTargets} />
+					<MentionTextarea id="community-update-body" key={`body-${updateComposerKey}`} maxLength={12000} minLength={2} placeholder="Share news, ask a question, celebrate a win, or let the community know what’s happening… Type @ to tag." required rows={4} targets={loaderData.mentionTargets} />
 					<div className="community-update-options">
 						<label>Post as<select defaultValue={loaderData.authoringOrganizations[0]?.id ?? ""} name="organizationId"><option value="">Yourself · community-wide</option>{loaderData.authoringOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}{organization.directoryStatus === "published" ? " · Public directory" : ""}</option>)}</select></label>
 						<label>Topics <span>(optional)</span><input maxLength={320} name="tags" placeholder="mutual-aid, celebration, question" /></label>
@@ -233,10 +271,11 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 					<details className="community-update-audience">
 						<summary>Choose audience</summary>
 						<p>Community updates default to Ecosystem-wide. Select affiliations to limit this update to those coalition spaces.</p>
-						<AffiliationAudiencePicker affiliations={loaderData.availableAffiliations} />
+						<AffiliationAudiencePicker affiliations={loaderData.availableAffiliations} key={`audience-${updateComposerKey}`} />
 					</details>
-					<div className="community-update-composer-actions"><span>Community posts are shared with your selected audience.</span><button className="button button--primary" disabled={navigation.state === "submitting" && submittingIntent === "create-update"} type="submit">{navigation.state === "submitting" && submittingIntent === "create-update" ? "Posting…" : "Post update"}</button></div>
-				</Form>
+					<div className="community-update-composer-actions"><span>Community posts are shared with your selected audience.</span><button className="button button--primary" disabled={updateFetcher.state !== "idle"} type="submit">{updateFetcher.state === "submitting" ? "Posting…" : "Post update"}</button></div>
+					{updateData && !updateData.ok && <p className="form-message form-message--error" role="alert">{updateData.error}</p>}
+				</updateFetcher.Form>
 			</details>}
 
 			<section className={`panel content-filter-panel${sectionKey === "updates" ? " content-filter-panel--community" : ""}`}>
@@ -289,7 +328,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 							{post.section === "update" && <section className="update-comment-preview" aria-label={`Conversation on update from ${post.authorName || "Member"}`}>
 								<div className="update-comment-preview-heading"><strong>Conversation</strong>{post.commentCount > 0 && <Link to={`/posts/${post.id}#conversation`}>View all {post.commentCount}</Link>}</div>
 								{commentPreviews.length > 0 && <div className="update-comment-preview-list">{commentPreviews.map((comment) => <article className="update-comment-preview-item" id={`comment-${comment.id}`} key={comment.id}><IdentityAvatar name={comment.authorName || "Member"} objectKey={comment.authorAvatarObjectKey} /><div><p><strong>{comment.authorName || "Member"}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt)}</time></p><MentionText targets={loaderData.mentionTargets} text={comment.body} />{comment.imageAttachments.map((image) => <img alt={image.filename} className="comment-image" key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div></article>)}</div>}
-				<Form className="update-feed-comment-form" method="post"><input name="intent" type="hidden" value="create-feed-comment" /><input name="postId" type="hidden" value={post.id} /><label className="sr-only" htmlFor={`feed-comment-${post.id}`}>Comment on this update</label><MentionTextarea id={`feed-comment-${post.id}`} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={commentMentionTargets} /><button className="button button--secondary button--compact" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Comment</button></Form>
+								<FeedCommentForm postId={post.id} targets={commentMentionTargets} />
 							</section>}
 							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span>{post.section === "update" ? <Form method="post"><input name="intent" type="hidden" value="toggle-support" /><input name="postId" type="hidden" value={post.id} /><button aria-label={`${post.viewerSupported ? "Remove support from" : "Support"} this update`} aria-pressed={post.viewerSupported} className={`support-button${post.viewerSupported ? " support-button--active" : ""}`} disabled={navigation.state === "submitting" && submittingIntent === "toggle-support" && navigation.formData?.get("postId") === post.id} type="submit"><Icon name="heart" size={15} /> {post.viewerSupported ? "Supported" : "Support"} · {post.supportCount}</button></Form> : <span><Icon name="heart" size={15} /> {post.supportCount} supports</span>}{post.section === "event" && <span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>}{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link>{post.section === "project" && loaderData.canArchiveProjects && <Form method="post" onSubmit={(event) => { if (!window.confirm("Archive this project? It will leave project and affiliation feeds, but its history will be retained.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-project" /><input name="postId" type="hidden" value={post.id} /><button className="content-card-action-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Archive</button></Form>}{post.section === "update" && loaderData.canDeleteUpdates && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="update-delete-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Delete</button></Form>}</footer>
 						</article>;

@@ -1,4 +1,5 @@
-import { Form, Link, redirect, useActionData, useNavigation } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Form, Link, redirect, useActionData, useFetcher, useNavigation } from "react-router";
 import { z } from "zod";
 
 import type { Route } from "./+types/post-detail";
@@ -99,7 +100,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				postId: result.data.postId,
 				commentId: created.id,
 			}));
-			throw redirect(`/posts/${result.data.postId}#comment-${created.id}`);
+			return { ok: true as const, intent: "create-comment" as const, postId: result.data.postId, commentId: created.id };
 		}
 		if (result.data.intent === "update-comment") {
 			await updateComment(context.cloudflare.env, user, result.data);
@@ -129,6 +130,31 @@ function formatDate(value: string) {
 	return new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(new Date(value));
 }
 
+function CommentComposer({ postId, targets }: { postId: string; targets: MentionTarget[] }) {
+	const fetcher = useFetcher<typeof action>();
+	const formRef = useRef<HTMLFormElement>(null);
+	const handledCommentId = useRef<string | null>(null);
+	const [composerKey, setComposerKey] = useState(0);
+	const data = fetcher.data;
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || !data?.ok || data.intent !== "create-comment" || data.commentId === handledCommentId.current) return;
+		handledCommentId.current = data.commentId;
+		formRef.current?.reset();
+		setComposerKey((key) => key + 1);
+		requestAnimationFrame(() => document.getElementById(`comment-${data.commentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+	}, [data, fetcher.state]);
+
+	return <fetcher.Form className="comment-compose-form" method="post" ref={formRef}>
+		<input name="intent" type="hidden" value="create-comment" />
+		<input name="postId" type="hidden" value={postId} />
+		<label htmlFor="new-comment">Add to the conversation</label>
+		<MentionTextarea id="new-comment" key={composerKey} maxLength={4000} minLength={2} placeholder="Share context, a question, or a next step… Type @ to tag." required rows={4} targets={targets} />
+		<div><span>Type @ to tag a person or organization. Tagged people are notified.</span><button className="button button--primary" disabled={fetcher.state !== "idle"} type="submit">{fetcher.state === "submitting" ? "Posting…" : "Post comment"}</button></div>
+		{data && !data.ok && <p className="form-message form-message--error" role="alert">{data.error}</p>}
+	</fetcher.Form>;
+}
+
 export default function PostDetail({ loaderData }: Route.ComponentProps) {
 	const { post, comments, mentionTargets, composerMentionTargets, section } = loaderData;
 	const actionData = useActionData<typeof action>();
@@ -150,7 +176,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 			</article>
 			<section className="panel conversation-panel" id="conversation">
 				<div className="conversation-heading"><div><p className="eyebrow">Conversation</p><h2>{post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</h2></div><Icon name="message" size={22} /></div>
-				{post.status === "published" && <Form className="comment-compose-form" method="post"><input name="intent" type="hidden" value="create-comment" /><input name="postId" type="hidden" value={post.id} /><label htmlFor="new-comment">Add to the conversation</label><MentionTextarea id="new-comment" maxLength={4000} minLength={2} placeholder="Share context, a question, or a next step… Type @ to tag." required rows={4} targets={composerMentionTargets} /><div><span>Type @ to tag a person or organization. Tagged people are notified.</span><button className="button button--primary" disabled={navigation.state === "submitting"} type="submit">Post comment</button></div></Form>}
+				{post.status === "published" && <CommentComposer postId={post.id} targets={composerMentionTargets} />}
 				{comments.length > 0 ? <CommentThread comments={comments} composerMentionTargets={composerMentionTargets} interactive={post.status === "published"} mentionTargets={mentionTargets} postId={post.id} submitting={navigation.state === "submitting"} visibleMemberIds={loaderData.visibleMemberIds} /> : <div className="conversation-empty"><strong>No comments yet</strong><p>Start the conversation with a question, resource, or next step.</p></div>}
 			</section>
 			{actionData && !actionData.ok && <p className="form-message form-message--error">{actionData.error}</p>}

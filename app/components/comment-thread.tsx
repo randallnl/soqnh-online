@@ -1,4 +1,5 @@
-import { Form, Link } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Form, Link, useFetcher } from "react-router";
 
 import { IdentityAvatar } from "~/components/identity-avatar";
 import { MentionText, MentionTextarea, type MentionTarget } from "~/components/mention-textarea";
@@ -9,6 +10,39 @@ function formatCommentDate(value: string) {
 	return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
+type CommentActionData = {
+	ok: boolean;
+	intent?: string;
+	commentId?: string;
+	error?: string;
+};
+
+function ReplyComposer({ comment, postId, targets }: { comment: CommentRecord; postId: string; targets: MentionTarget[] }) {
+	const fetcher = useFetcher<CommentActionData>();
+	const formRef = useRef<HTMLFormElement>(null);
+	const handledCommentId = useRef<string | null>(null);
+	const [composerKey, setComposerKey] = useState(0);
+	const data = fetcher.data;
+
+	useEffect(() => {
+		if (fetcher.state !== "idle" || !data?.ok || data.intent !== "create-comment" || !data.commentId || data.commentId === handledCommentId.current) return;
+		handledCommentId.current = data.commentId;
+		formRef.current?.reset();
+		setComposerKey((key) => key + 1);
+		requestAnimationFrame(() => document.getElementById(`comment-${data.commentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+	}, [data, fetcher.state]);
+
+	return <fetcher.Form className="comment-inline-form" method="post" ref={formRef}>
+		<input name="intent" type="hidden" value="create-comment" />
+		<input name="postId" type="hidden" value={postId} />
+		<input name="parentCommentId" type="hidden" value={comment.id} />
+		<label className="sr-only" htmlFor={`reply-${comment.id}`}>Reply to {comment.authorName || "comment"}</label>
+		<MentionTextarea id={`reply-${comment.id}`} key={composerKey} maxLength={4000} minLength={2} placeholder="Write a reply… Type @ to tag someone." required rows={3} targets={targets} />
+		<button className="button button--primary button--compact" disabled={fetcher.state !== "idle"} type="submit">{fetcher.state === "submitting" ? "Posting…" : "Post reply"}</button>
+		{data && !data.ok && <span className="form-message form-message--error" role="alert">{data.error}</span>}
+	</fetcher.Form>;
+}
+
 function CommentItem({ comment, postId, submitting, interactive, mentionTargets, composerMentionTargets, visibleMemberIds, reply = false }: { comment: CommentRecord; postId: string; submitting: boolean; interactive: boolean; mentionTargets: MentionTarget[]; composerMentionTargets: MentionTarget[]; visibleMemberIds: string[]; reply?: boolean }) {
 	const edited = comment.updatedAt !== comment.createdAt && comment.status === "published";
 	return (
@@ -17,7 +51,7 @@ function CommentItem({ comment, postId, submitting, interactive, mentionTargets,
 			{comment.status === "archived" ? <p className="comment-tombstone">This comment was removed.</p> : <div className="comment-body">{comment.body && <MentionText targets={mentionTargets} text={comment.body} />}</div>}
 			{comment.status === "published" && comment.imageAttachments.map((image) => <img alt={image.filename} className="comment-image" key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}
 			{interactive && comment.status === "published" && <div className="comment-actions">
-				{!reply && <details><summary>Reply</summary><Form className="comment-inline-form" method="post"><input name="intent" type="hidden" value="create-comment" /><input name="postId" type="hidden" value={postId} /><input name="parentCommentId" type="hidden" value={comment.id} /><label className="sr-only" htmlFor={`reply-${comment.id}`}>Reply to {comment.authorName || "comment"}</label><MentionTextarea id={`reply-${comment.id}`} maxLength={4000} minLength={2} placeholder="Write a reply… Type @ to tag someone." required rows={3} targets={composerMentionTargets} /><button className="button button--primary button--compact" disabled={submitting} type="submit">Post reply</button></Form></details>}
+				{!reply && <details><summary>Reply</summary><ReplyComposer comment={comment} postId={postId} targets={composerMentionTargets} /></details>}
 				{comment.canEdit && <details><summary>Edit</summary><Form className="comment-inline-form" method="post"><input name="intent" type="hidden" value="update-comment" /><input name="postId" type="hidden" value={postId} /><input name="commentId" type="hidden" value={comment.id} /><label className="sr-only" htmlFor={`edit-${comment.id}`}>Edit comment</label><textarea defaultValue={comment.body ?? ""} id={`edit-${comment.id}`} maxLength={4000} minLength={2} name="body" required rows={3} /><button className="button button--secondary button--compact" disabled={submitting} type="submit">Save comment</button></Form></details>}
 				{comment.canDelete && <Form method="post" onSubmit={(event) => { if (!window.confirm("Remove this comment?")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-comment" /><input name="postId" type="hidden" value={postId} /><input name="commentId" type="hidden" value={comment.id} /><button className="comment-remove-button" disabled={submitting} type="submit">Remove</button></Form>}
 			</div>}
