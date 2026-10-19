@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Form, Link, NavLink, Outlet, redirect, useLocation } from "react-router";
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 
@@ -108,6 +108,8 @@ export function shouldRevalidate({ currentUrl, nextUrl, formMethod, defaultShoul
 
 export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [createMenuOpen, setCreateMenuOpen] = useState(false);
+	const createMenuRef = useRef<HTMLDivElement>(null);
 	const { user } = loaderData;
 	const managedNavigation: NavigationItem[] = loaderData.managedOrganizations.map((organization) => ({
 		label: organization.name,
@@ -119,6 +121,21 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 		[...primaryNavigation, ...communityNavigation, ...managedNavigation, ...adminNavigation].find(
 			(item) => item.to === location.pathname,
 		)?.label ?? "Overview";
+	useEffect(() => {
+		if (!createMenuOpen) return;
+		const closeOnPointerDown = (event: PointerEvent) => {
+			if (!createMenuRef.current?.contains(event.target as Node)) setCreateMenuOpen(false);
+		};
+		const closeOnEscape = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setCreateMenuOpen(false);
+		};
+		document.addEventListener("pointerdown", closeOnPointerDown);
+		document.addEventListener("keydown", closeOnEscape);
+		return () => {
+			document.removeEventListener("pointerdown", closeOnPointerDown);
+			document.removeEventListener("keydown", closeOnEscape);
+		};
+	}, [createMenuOpen]);
 	if (!loaderData.profileComplete) {
 		return <div className="onboarding-frame">
 			<header className="onboarding-header">
@@ -241,10 +258,18 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 							<Icon name="bell" />
 							{loaderData.unreadCount > 0 && <span />}
 						</Link>
-						<Link className="button button--primary button--compact" to="/updates">
-							<Icon name="plus" size={17} />
-							<span>New post</span>
-						</Link>
+						<div className="create-menu" ref={createMenuRef}>
+							<button aria-expanded={createMenuOpen} aria-haspopup="menu" className="button button--primary button--compact create-menu-trigger" onClick={() => setCreateMenuOpen((open) => !open)} type="button">
+								<Icon name="plus" size={17} />
+								<span>Create</span>
+							</button>
+							{createMenuOpen && <div aria-label="Create new content" className="create-menu-popover" role="menu">
+								<p>Create something</p>
+								<Link onClick={() => setCreateMenuOpen(false)} role="menuitem" to="/posts/new?section=updates"><span className="create-menu-icon create-menu-icon--update"><Icon name="message" size={18} /></span><span><strong>Community update</strong><small>Share news, a question, or a win</small></span></Link>
+								<Link onClick={() => setCreateMenuOpen(false)} role="menuitem" to="/posts/new?section=projects"><span className="create-menu-icon create-menu-icon--project"><Icon name="clipboard" size={18} /></span><span><strong>Project</strong><small>Coordinate a focused piece of work</small></span></Link>
+								<Link onClick={() => setCreateMenuOpen(false)} role="menuitem" to="/posts/new?section=events"><span className="create-menu-icon create-menu-icon--event"><Icon name="calendar" size={18} /></span><span><strong>Event</strong><small>Add an event for moderation</small></span></Link>
+							</div>}
+						</div>
 					</div>
 				</header>
 

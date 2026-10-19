@@ -2,6 +2,7 @@ import type { AuthenticatedUser } from "../lib/auth.server";
 import type { ContentImageAttachment } from "../lib/media";
 import { getPostById } from "./posts.server";
 import { getMentionRecipient } from "./interactions.server";
+import { claimSubmission, completeSubmissionStatement, releaseSubmission } from "./submissions.server";
 
 export type CommentRecord = {
 	id: string;
@@ -138,7 +139,7 @@ export async function listFeedCommentPreviews(env: Env, postIds: string[], limit
 export async function createComment(
 	env: Env,
 	actor: AuthenticatedUser,
-	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null; mentionUserIds?: string[] },
+	input: { postId: string; parentCommentId: string | null; body: string; mentionUserId?: string | null; mentionUserIds?: string[]; submissionId?: string | null },
 ) {
 	const post = await requirePublishedPost(env, actor, input.postId);
 	let parentAuthorUserId: string | null = null;
@@ -155,12 +156,16 @@ export async function createComment(
 	}
 	const requestedMentionIds = [...new Set([...(input.mentionUserIds ?? []), ...(input.mentionUserId ? [input.mentionUserId] : [])])].slice(0, 10);
 	const mentioned = await Promise.all(requestedMentionIds.map((userId) => getMentionRecipient(env, actor, input.postId, userId)));
+	const submission = await claimSubmission(env, actor, input.submissionId, "comment");
+	if (submission.entityId) return { id: submission.entityId, mentionedUserIds: [], duplicate: true as const };
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
 	const actorName = actor.name || "A member";
 	const mentionedIds = new Set(mentioned.map((recipient) => recipient.id));
 	const commentRecipients = new Set([post.authorUserId, parentAuthorUserId].filter((userId): userId is string => typeof userId === "string" && userId !== actor.id && !mentionedIds.has(userId)));
-	await env.DB.batch([
+	const completion = completeSubmissionStatement(env, actor, input.submissionId, "comment", id);
+	try {
+		await env.DB.batch([
 		env.DB.prepare(
 			`INSERT INTO comments
 			 (id, post_id, parent_comment_id, author_user_id, body, status, created_at, updated_at)
@@ -188,8 +193,13 @@ export async function createComment(
 			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
 			 VALUES (?1, ?2, ?3, ?4, ?5, 'comment', ?6, NULL, ?7)`,
 		).bind(crypto.randomUUID(), userId, actor.id, input.postId, id, input.parentCommentId ? `${actorName} replied in a conversation you follow.` : `${actorName} commented on your post.`, now)),
-	]);
-	return { id, mentionedUserIds: [...mentionedIds] };
+		...(completion ? [completion] : []),
+		]);
+	} catch (error) {
+		if (submission.claimed) await releaseSubmission(env, actor, input.submissionId, "comment").catch(() => undefined);
+		throw error;
+	}
+	return { id, mentionedUserIds: [...mentionedIds], duplicate: false as const };
 }
 
 export async function updateComment(

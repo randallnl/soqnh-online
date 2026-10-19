@@ -7,6 +7,7 @@ import { Icon } from "~/components/icon";
 import { CommentThread } from "~/components/comment-thread";
 import { IdentityAvatar } from "~/components/identity-avatar";
 import { MentionText, MentionTextarea, type MentionTarget } from "~/components/mention-textarea";
+import { SupportButton } from "~/components/support-button";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { requireSameOrigin } from "~/lib/http.server";
 import { routeSectionForDatabase, sectionDefinitions } from "~/lib/content";
@@ -14,26 +15,31 @@ import { eventPostIdSchema } from "~/lib/event-review";
 import { formatEventDateTime } from "~/lib/events";
 import { mediaUrl } from "~/lib/media";
 import { deleteContentImage } from "~/lib/media.server";
-import { sendMentionNotificationEmails } from "~/lib/notification-email.server";
+import { sendMentionNotificationEmails, sendSupportNotificationEmail } from "~/lib/notification-email.server";
+import { ensureSubmissionId } from "~/lib/submission.client";
 import { archivePost, deleteCommunityUpdate, getPostById, PostMutationError } from "~/models/posts.server";
 import { EventMutationError, removeEvent } from "~/models/events.server";
 import { archiveComment, CommentMutationError, createComment, listPostComments, updateComment } from "~/models/comments.server";
 import { InteractionMutationError, listMentionableMembers, togglePostSupport } from "~/models/interactions.server";
 import { listVisibleMembers } from "~/models/profiles.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
+import { SubmissionInProgressError } from "~/models/submissions.server";
+
+const optionalSubmissionId = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().uuid().nullable());
 
 const actionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("archive-post"), postId: z.string().uuid() }),
 	z.object({ intent: z.literal("delete-update"), postId: z.string().uuid() }),
 	z.object({ intent: z.literal("remove-event"), postId: eventPostIdSchema }),
 	z.object({ intent: z.literal("toggle-support"), postId: z.string().uuid() }),
-	z.object({ intent: z.literal("create-comment"), postId: z.string().uuid(), parentCommentId: z.preprocess((value) => typeof value === "string" && value ? value : null, z.string().uuid().nullable()), body: z.string().trim().min(2).max(4000) }),
+	z.object({ intent: z.literal("create-comment"), postId: z.string().uuid(), parentCommentId: z.preprocess((value) => typeof value === "string" && value ? value : null, z.string().uuid().nullable()), body: z.string().trim().min(2).max(4000), submissionId: optionalSubmissionId }),
 	z.object({ intent: z.literal("update-comment"), postId: z.string().uuid(), commentId: z.string().uuid(), body: z.string().trim().min(2).max(4000) }),
 	z.object({ intent: z.literal("archive-comment"), postId: z.string().uuid(), commentId: z.string().uuid() }),
 ]);
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
 	const user = await requireAuthenticatedUser(request, context.cloudflare.env);
+	const url = new URL(request.url);
 	const post = await getPostById(context.cloudflare.env, user, params.postId);
 	if (!post) throw new Response("Post not found", { status: 404 });
 	const [comments, mentionableMembers, visibleMembers, visibleOrganizations] = await Promise.all([
@@ -61,6 +67,11 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 		canRemoveEvent: post.section === "event" && (post.authorUserId === user.id || post.canModerateEvent),
 		canArchiveProject: post.section === "project" && user.siteRole === "site_admin",
 		canDeleteUpdate: post.section === "update" && user.siteRole === "site_admin",
+		creationMessage: url.searchParams.has("created")
+			? url.searchParams.has("duplicate")
+				? "This submission had already been received, so the existing item is shown below."
+				: post.section === "event" ? "Event submitted for moderation." : post.section === "project" ? "Project created." : "Community update posted."
+			: null,
 	};
 }
 
@@ -88,8 +99,15 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			throw redirect(`/${post ? routeSectionForDatabase(post.section) : "updates"}`);
 		}
 		if (result.data.intent === "toggle-support") {
-			await togglePostSupport(context.cloudflare.env, user, result.data.postId);
-			throw redirect(`/posts/${result.data.postId}`);
+			const toggled = await togglePostSupport(context.cloudflare.env, user, result.data.postId);
+			if (toggled.notifiedUserId) context.cloudflare.ctx.waitUntil(sendSupportNotificationEmail(context.cloudflare.env, {
+				recipientId: toggled.notifiedUserId,
+				actorName: user.name || "A member",
+				postId: result.data.postId,
+				postTitle: toggled.postTitle,
+				postKind: toggled.postKind,
+			}));
+			return { ok: true as const, intent: "toggle-support" as const, postId: result.data.postId, supported: toggled.supported, supportCount: toggled.supportCount };
 		}
 		if (result.data.intent === "create-comment") {
 			const created = await createComment(context.cloudflare.env, user, { ...result.data, mentionUserIds });
@@ -100,7 +118,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				postId: result.data.postId,
 				commentId: created.id,
 			}));
-			return { ok: true as const, intent: "create-comment" as const, postId: result.data.postId, commentId: created.id };
+			return { ok: true as const, intent: "create-comment" as const, postId: result.data.postId, commentId: created.id, duplicate: created.duplicate };
 		}
 		if (result.data.intent === "update-comment") {
 			await updateComment(context.cloudflare.env, user, result.data);
@@ -112,6 +130,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (error instanceof EventMutationError) return { ok: false as const, error: error.reason === "forbidden" ? "You cannot remove this event." : "That event is no longer available." };
+		if (error instanceof SubmissionInProgressError) return { ok: false as const, error: "That comment is already being posted. Please wait a moment." };
 		if (error instanceof PostMutationError) return { ok: false as const, error: error.reason === "forbidden" ? result.data.intent === "delete-update" ? "Only site administrators can delete community updates." : "You cannot archive this post." : "That post is no longer available." };
 		if (error instanceof CommentMutationError) {
 			const messages = { "not-found": "That comment is no longer available.", forbidden: "You cannot change that comment.", "post-unavailable": "Comments are only available on published posts you can view.", "invalid-parent": "That conversation can no longer accept replies." };
@@ -145,13 +164,15 @@ function CommentComposer({ postId, targets }: { postId: string; targets: Mention
 		requestAnimationFrame(() => document.getElementById(`comment-${data.commentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
 	}, [data, fetcher.state]);
 
-	return <fetcher.Form className="comment-compose-form" method="post" ref={formRef}>
+	return <fetcher.Form className="comment-compose-form" method="post" onSubmit={(event) => ensureSubmissionId(event.currentTarget)} ref={formRef}>
 		<input name="intent" type="hidden" value="create-comment" />
 		<input name="postId" type="hidden" value={postId} />
+		<input name="submissionId" type="hidden" />
 		<label htmlFor="new-comment">Add to the conversation</label>
 		<MentionTextarea id="new-comment" key={composerKey} maxLength={4000} minLength={2} placeholder="Share context, a question, or a next step… Type @ to tag." required rows={4} targets={targets} />
 		<div><span>Type @ to tag a person or organization. Tagged people are notified.</span><button className="button button--primary" disabled={fetcher.state !== "idle"} type="submit">{fetcher.state === "submitting" ? "Posting…" : "Post comment"}</button></div>
 		{data && !data.ok && <p className="form-message form-message--error" role="alert">{data.error}</p>}
+		{data?.ok && fetcher.state === "idle" && <p className="form-message form-message--success" role="status">{data.duplicate ? "Comment was already posted." : "Comment posted."}</p>}
 	</fetcher.Form>;
 }
 
@@ -161,6 +182,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 	const navigation = useNavigation();
 	return (
 		<div className="post-detail-page">
+			{loaderData.creationMessage && <p className="form-message form-message--success post-creation-message" role="status">{loaderData.creationMessage}</p>}
 			<div className="organization-detail-actions"><Link className="back-link" to={`/${section}`}>← {sectionDefinitions[section].title}</Link><div>{post.canModerateEvent && <Link className="button button--secondary button--compact" to="/events/moderation"><Icon name="settings" size={16} /> Moderation queue</Link>}{post.canEdit && <Link className="button button--secondary button--compact" to={`/posts/${post.id}/edit`}><Icon name="settings" size={16} /> Edit {post.section === "event" ? "event" : "post"}</Link>}{loaderData.canArchiveProject && post.status !== "archived" && <Form method="post" onSubmit={(event) => { if (!window.confirm("Archive this project? It will leave project and affiliation feeds, but its history will be retained.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-post" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Archive project</button></Form>}{loaderData.canRemoveEvent && post.status !== "archived" && <Form method="post" onSubmit={(event) => { if (!window.confirm("Remove this event? It will leave the event feed and moderation queue.")) event.preventDefault(); }}><input name="intent" type="hidden" value="remove-event" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--suspend" disabled={navigation.state === "submitting"} type="submit">Remove event</button></Form>}{loaderData.canDeleteUpdate && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="member-action-button member-action-button--delete" disabled={navigation.state === "submitting"} type="submit">Delete update</button></Form>}</div></div>
 			{post.section === "event" && post.eventModerationStatus !== "approved" && <div className={`event-review-banner event-review-banner--${post.eventModerationStatus}`}><strong>{post.eventModerationStatus === "rejected" ? "Changes requested" : "Pending approval"}</strong><span>{post.eventModerationStatus === "rejected" ? post.eventRejectionReason || "Edit the event and resubmit it for review." : "This event is visible only to its author and moderators until approved."}</span></div>}
 			<article className="panel post-detail-card">
@@ -172,7 +194,7 @@ export default function PostDetail({ loaderData }: Route.ComponentProps) {
 				{post.imageAttachments.length > 0 && <div className="content-image-gallery content-image-gallery--detail">{post.imageAttachments.map((image) => <img alt={image.filename} key={image.id} src={mediaUrl(image.objectKey) ?? undefined} />)}</div>}
 				{post.affiliations.length > 0 && <div className="content-affiliation-row" aria-label="Affiliations">{post.affiliations.map((affiliation) => <span key={affiliation.id}>{affiliation.name}</span>)}</div>}
 				{post.tags.length > 0 && <div className="content-tag-row">{post.tags.map((tag) => <Link key={tag} to={`/${section}?tag=${encodeURIComponent(tag)}`}>#{tag}</Link>)}</div>}
-				<footer><span><Icon name="message" size={16} /> {post.commentCount} comments</span>{post.status === "published" ? <Form method="post"><input name="intent" type="hidden" value="toggle-support" /><input name="postId" type="hidden" value={post.id} /><button aria-pressed={post.viewerSupported} className={`support-button${post.viewerSupported ? " support-button--active" : ""}`} disabled={navigation.state === "submitting"} type="submit"><Icon name="heart" size={16} /> {post.viewerSupported ? "Supported" : "Support"} · {post.supportCount}</button></Form> : <span><Icon name="heart" size={16} /> {post.supportCount} supports</span>}</footer>
+				<footer><span><Icon name="message" size={16} /> {post.commentCount} comments</span>{post.status === "published" ? <SupportButton initialCount={post.supportCount} initialSupported={post.viewerSupported} postId={post.id} size={16} /> : <span><Icon name="heart" size={16} /> {post.supportCount} supports</span>}</footer>
 			</article>
 			<section className="panel conversation-panel" id="conversation">
 				<div className="conversation-heading"><div><p className="eyebrow">Conversation</p><h2>{post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</h2></div><Icon name="message" size={22} /></div>

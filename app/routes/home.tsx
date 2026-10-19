@@ -137,6 +137,7 @@ function initials(name: string | null) {
 
 export default function Home({ loaderData }: Route.ComponentProps) {
 	const { dashboard } = loaderData;
+	const attentionTotal = dashboard.attentionItems.reduce((total, item) => total + (item.count ?? 1), 0);
 	const stats: Array<{
 		label: string;
 		value: number;
@@ -215,6 +216,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 				))}
 			</section>
 
+			<section className="panel action-center-panel">
+				<div className="panel-heading">
+					<div><p className="eyebrow">Your action center</p><h2>What needs your attention</h2></div>
+					{attentionTotal > 0 && <span aria-label={`${attentionTotal} items need attention`} className="action-center-total">{attentionTotal}</span>}
+				</div>
+				{dashboard.attentionItems.length === 0 ? <div className="action-center-clear"><span><Icon name="sparkles" size={20} /></span><div><strong>You’re all caught up</strong><p>No pending actions need your attention right now.</p></div></div> : <div className="action-center-grid">{dashboard.attentionItems.map((item) => <Link className={`action-center-item action-center-item--${item.tone}`} key={item.id} to={item.to}><span className="action-center-icon"><Icon name={item.id === "notifications" ? "bell" : item.id === "profile" ? "user" : item.id === "event-review" ? "calendar" : item.id.includes("review") ? "clipboard" : item.id === "organization" ? "building" : "activity"} size={19} /></span><div><strong>{item.title}</strong><p>{item.detail}</p></div>{item.count !== null && <b>{item.count}</b>}<Icon className="action-center-arrow" name="chevron-right" size={17} /></Link>)}</div>}
+			</section>
+
 			<div className="dashboard-columns">
 				<div className="dashboard-primary">
 					<section className="panel feed-panel">
@@ -263,6 +272,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								})}
 							</div>
 						)}
+					</section>
+
+					<section className="panel feed-panel">
+						<div className="panel-heading"><div><p className="eyebrow">Your affiliations</p><h2>Latest coalition activity</h2></div><Link to="/affiliations">Open My Affiliations</Link></div>
+						{dashboard.affiliationActivity.length === 0 ? <div className="empty-state empty-state--compact dashboard-empty-state"><Icon name="people" size={25} /><strong>No recent affiliation activity</strong><p>Updates tagged to affiliations you belong to will appear here.</p></div> : <div className="feed-list">{dashboard.affiliationActivity.map((post) => {
+							const routeSection = routeSectionForDatabase(post.section);
+							const section = sectionDefinitions[routeSection];
+							const thumbnailUrl = mediaUrl(post.thumbnailObjectKey) ?? post.thumbnailUrl;
+							return <article className="feed-item" key={post.id}><span className={`feed-icon feed-icon--${feedColors[post.section]}`}><Icon name={section.icon} size={20} /></span><div><p className="feed-type">{post.affiliationNames.split(",").join(" · ")}</p><h3><Link to={`/posts/${post.id}`}>{post.title}</Link></h3><p>{excerpt(post.body)}</p><small>{post.organizationName || "Ecosystem-wide"} · {formatPostDate(post.createdAt)}</small></div>{thumbnailUrl && <Link aria-label={`Open ${post.title}`} className="feed-thumbnail" to={`/posts/${post.id}`}><img alt="" loading="lazy" referrerPolicy={post.thumbnailObjectKey ? undefined : "no-referrer"} src={thumbnailUrl} /></Link>}<Link aria-label={`Open ${post.title}`} className="icon-button subtle-button" to={`/posts/${post.id}`}><Icon name="chevron-right" size={18} /></Link></article>;
+						})}</div>}
 					</section>
 
 					{loaderData.user.siteRole === "site_admin" && (
@@ -329,7 +348,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 						{dashboard.recentActivity.length === 0 ? (
 							<div className="empty-state empty-state--compact dashboard-empty-state">
 								<Icon name="activity" size={24} />
-								<strong>No recent comments</strong>
+								<strong>No new responses</strong>
+								<p>Replies and comments on your posts will appear here.</p>
 							</div>
 						) : (
 							<div className="activity-list">

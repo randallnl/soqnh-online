@@ -23,13 +23,16 @@ async function requirePublishedPost(env: Env, actor: AuthenticatedUser, postId: 
 }
 
 export async function togglePostSupport(env: Env, actor: AuthenticatedUser, postId: string) {
-	await requirePublishedPost(env, actor, postId);
+	const post = await requirePublishedPost(env, actor, postId);
 	const existing = await env.DB.prepare(
 		"SELECT 1 FROM post_reactions WHERE post_id = ?1 AND user_id = ?2 AND reaction = 'support'",
 	).bind(postId, actor.id).first<number>("1");
 	const now = new Date().toISOString();
 	const supported = existing === null;
-	await env.DB.batch([
+	const shouldNotify = supported && post.authorUserId !== actor.id && post.authorUserId !== "system:event-scraper";
+	const notificationId = crypto.randomUUID();
+	const postKind = post.section === "update" ? "community update" : post.section === "project" ? "project" : post.section === "event" ? "event" : "post";
+	const statements = [
 		supported
 			? env.DB.prepare("INSERT INTO post_reactions (post_id, user_id, reaction, created_at) VALUES (?1, ?2, 'support', ?3)").bind(postId, actor.id, now)
 			: env.DB.prepare("DELETE FROM post_reactions WHERE post_id = ?1 AND user_id = ?2 AND reaction = 'support'").bind(postId, actor.id),
@@ -38,8 +41,26 @@ export async function togglePostSupport(env: Env, actor: AuthenticatedUser, post
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, ?3, 'post', ?4, NULL, ?5)`,
 		).bind(crypto.randomUUID(), actor.id, supported ? "post.supported" : "post.unsupported", postId, now),
-	]);
-	return supported;
+	];
+	if (shouldNotify) {
+		statements.push(env.DB.prepare(
+			`INSERT OR IGNORE INTO notifications
+			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
+			 VALUES (?1, ?2, ?3, ?4, NULL, 'support', ?5, NULL, ?6)`,
+		).bind(notificationId, post.authorUserId, actor.id, postId, `${actor.name || "A member"} supported your ${postKind}.`, now));
+	}
+	const results = await env.DB.batch(statements);
+	const notificationCreated = shouldNotify && results.at(-1)?.meta.changes === 1;
+	const supportCount = await env.DB.prepare(
+		"SELECT count(*) AS count FROM post_reactions WHERE post_id = ?1 AND reaction = 'support'",
+	).bind(postId).first<number>("count") ?? 0;
+	return {
+		supported,
+		supportCount,
+		notifiedUserId: notificationCreated ? post.authorUserId : null,
+		postTitle: post.title,
+		postKind,
+	};
 }
 
 export async function listMentionableMembers(env: Env, actor: AuthenticatedUser, postId: string) {

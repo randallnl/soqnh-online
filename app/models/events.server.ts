@@ -96,8 +96,8 @@ export async function reviewEvent(
 		).bind(postStatus, now, input.postId, moderationStatus, actor.id),
 		...(event.authorUserId !== actor.id ? [env.DB.prepare(
 			`INSERT INTO notifications
-			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
-			 SELECT ?1, ?2, ?3, ?4, NULL, 'approval', ?5, NULL, ?6
+			 (id, user_id, actor_user_id, post_id, comment_id, target_url, type, body, read_at, created_at)
+			 SELECT ?1, ?2, ?3, ?4, NULL, NULL, 'moderation', ?5, NULL, ?6
 			 WHERE EXISTS (
 			   SELECT 1 FROM events
 			   WHERE post_id = ?4 AND moderation_status = ?7

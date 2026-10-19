@@ -7,24 +7,28 @@ import { AffiliationAudiencePicker } from "~/components/affiliation-audience-pic
 import { Icon } from "~/components/icon";
 import { IdentityAvatar, OrganizationIdentity } from "~/components/identity-avatar";
 import { MentionText, MentionTextarea, type MentionTarget } from "~/components/mention-textarea";
+import { SupportButton } from "~/components/support-button";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { communityUpdateTitle, isContentSection, isEventTiming, normalizeTags, sectionDefinitions, type EventTiming } from "~/lib/content";
 import { formatEventDateTime } from "~/lib/events";
 import { requireSameOrigin } from "~/lib/http.server";
 import { imageUploadAccept, mediaUrl, type ContentImageAttachment } from "~/lib/media";
 import { deleteContentImage, ImageUploadError, requireUploadRequestSize, uploadContentImage } from "~/lib/media.server";
-import { sendMentionNotificationEmails } from "~/lib/notification-email.server";
+import { sendMentionNotificationEmails, sendSupportNotificationEmail } from "~/lib/notification-email.server";
+import { ensureSubmissionId } from "~/lib/submission.client";
 import { CommentMutationError, createComment, listFeedCommentPreviews } from "~/models/comments.server";
 import { InteractionMutationError, listMentionableMembers, syncPostMentions, togglePostSupport } from "~/models/interactions.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 import { archivePost, createPost, deleteCommunityUpdate, getPostById, listAvailablePostAffiliations, listPostOrganizations, listSectionPosts, PostMutationError } from "~/models/posts.server";
 import { listVisibleMembers } from "~/models/profiles.server";
+import { SubmissionInProgressError } from "~/models/submissions.server";
 
 const optionalOrganization = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().max(100).nullable());
+const optionalSubmissionId = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().uuid().nullable());
 const updateActionSchema = z.discriminatedUnion("intent", [
 	z.object({ intent: z.literal("archive-project"), postId: z.string().uuid() }),
-	z.object({ intent: z.literal("create-update"), body: z.string().trim().min(2, "Write a community update").max(12000), organizationId: optionalOrganization, tags: z.string().max(320) }),
-	z.object({ intent: z.literal("create-feed-comment"), postId: z.string().uuid(), body: z.string().trim().min(2, "Write a comment").max(4000) }),
+	z.object({ intent: z.literal("create-update"), body: z.string().trim().min(2, "Write a community update").max(12000), organizationId: optionalOrganization, tags: z.string().max(320), submissionId: optionalSubmissionId }),
+	z.object({ intent: z.literal("create-feed-comment"), postId: z.string().uuid(), body: z.string().trim().min(2, "Write a comment").max(4000), submissionId: optionalSubmissionId }),
 	z.object({ intent: z.literal("toggle-support"), postId: z.string().uuid() }),
 	z.object({ intent: z.literal("delete-update"), postId: z.string().uuid() }),
 ]);
@@ -135,26 +139,40 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 				tags: normalizeTags(result.data.tags),
 				affiliationIds,
 				attachment: uploadedImage,
+				submissionId: result.data.submissionId,
 			});
-			attachmentPersisted = true;
-			const mentions = await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
-			context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
-				recipientIds: mentions.mentionedUserIds,
-				actorName: user.name || "A member",
-				kind: "update",
-				postId: created.id,
-			}));
-			return { ok: true as const, intent: "create-update" as const, postId: created.id };
+			attachmentPersisted = !created.duplicate;
+			if (created.duplicate && uploadedImage) {
+				await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch(() => undefined);
+				uploadedImage = null;
+			}
+			if (!created.duplicate) {
+				const mentions = await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
+				context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
+					recipientIds: mentions.mentionedUserIds,
+					actorName: user.name || "A member",
+					kind: "update",
+					postId: created.id,
+				}));
+			}
+			return { ok: true as const, intent: "create-update" as const, postId: created.id, duplicate: created.duplicate };
 		}
 		if (result.data.intent === "toggle-support") {
 			const post = await getPostById(context.cloudflare.env, user, result.data.postId);
 			if (!post || post.section !== "update") throw new InteractionMutationError("post-unavailable");
-			await togglePostSupport(context.cloudflare.env, user, post.id);
-			throw redirect(`/updates#post-${post.id}`);
+			const toggled = await togglePostSupport(context.cloudflare.env, user, post.id);
+			if (toggled.notifiedUserId) context.cloudflare.ctx.waitUntil(sendSupportNotificationEmail(context.cloudflare.env, {
+				recipientId: toggled.notifiedUserId,
+				actorName: user.name || "A member",
+				postId: post.id,
+				postTitle: toggled.postTitle,
+				postKind: toggled.postKind,
+			}));
+			return { ok: true as const, intent: "toggle-support" as const, postId: post.id, supported: toggled.supported, supportCount: toggled.supportCount };
 		}
 		const post = await getPostById(context.cloudflare.env, user, result.data.postId);
 		if (!post || post.section !== "update") throw new CommentMutationError("post-unavailable");
-		const created = await createComment(context.cloudflare.env, user, { postId: post.id, parentCommentId: null, body: result.data.body, mentionUserIds });
+		const created = await createComment(context.cloudflare.env, user, { postId: post.id, parentCommentId: null, body: result.data.body, mentionUserIds, submissionId: result.data.submissionId });
 		context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
 			recipientIds: created.mentionedUserIds,
 			actorName: user.name || "A member",
@@ -162,11 +180,12 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 			postId: post.id,
 			commentId: created.id,
 		}));
-		return { ok: true as const, intent: "create-feed-comment" as const, postId: post.id, commentId: created.id };
+		return { ok: true as const, intent: "create-feed-comment" as const, postId: post.id, commentId: created.id, duplicate: created.duplicate };
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (uploadedImage && !attachmentPersisted) await deleteContentImage(context.cloudflare.env, uploadedImage.objectKey).catch((cleanupError) => console.error(JSON.stringify({ message: "orphaned feed image cleanup failed", objectKey: uploadedImage?.objectKey, error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError) })));
 		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 10 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
+		if (error instanceof SubmissionInProgressError) return { ok: false as const, error: "That submission is already being processed. Please wait a moment." };
 		if (error instanceof PostMutationError) return {
 			ok: false as const,
 			error: result.data.intent === "archive-project"
@@ -217,13 +236,15 @@ function FeedCommentForm({ postId, targets }: { postId: string; targets: Mention
 		setComposerKey((key) => key + 1);
 	}, [data, fetcher.state]);
 
-	return <fetcher.Form className="update-feed-comment-form" method="post" ref={formRef}>
+	return <fetcher.Form className="update-feed-comment-form" method="post" onSubmit={(event) => ensureSubmissionId(event.currentTarget)} ref={formRef}>
 		<input name="intent" type="hidden" value="create-feed-comment" />
 		<input name="postId" type="hidden" value={postId} />
+		<input name="submissionId" type="hidden" />
 		<label className="sr-only" htmlFor={`feed-comment-${postId}`}>Comment on this update</label>
 		<MentionTextarea id={`feed-comment-${postId}`} key={composerKey} maxLength={4000} minLength={2} placeholder="Write a comment… Type @ to tag." required rows={2} targets={targets} />
 		<button className="button button--secondary button--compact" disabled={fetcher.state !== "idle"} type="submit">{fetcher.state === "submitting" ? "Posting…" : "Comment"}</button>
 		{data && !data.ok && <span className="form-message form-message--error" role="alert">{data.error}</span>}
+		{data?.ok && fetcher.state === "idle" && <span className="form-message form-message--success" role="status">{data.duplicate ? "Comment was already posted." : "Comment posted."}</span>}
 	</fetcher.Form>;
 }
 
@@ -247,6 +268,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 	}, [updateData, updateFetcher.state]);
 	return (
 		<div className={`section-page content-section-page content-section-page--${sectionKey}`}>
+			{updateData?.ok && updateFetcher.state === "idle" && <p className="submission-toast" role="status">{updateData.duplicate ? "That update was already posted." : "Community update posted."}</p>}
 			<section className={`section-hero${sectionKey === "updates" ? " section-hero--community" : ""}`}>
 				<div className="section-hero-copy">
 					<span className="section-hero-icon"><Icon name={section.icon} size={24} /></span>
@@ -259,8 +281,9 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 
 			{sectionKey === "updates" && loaderData.canCreate && <details className="panel community-update-composer" id="community-update-composer">
 				<summary className="community-update-composer-summary"><span><Icon name="message" size={19} /><span><strong>Post a community update</strong><span className="community-update-composer-preview">Share news, ask a question, or celebrate a win…</span></span></span><Icon className="community-update-expand-icon" name="plus" size={18} /></summary>
-				<updateFetcher.Form className="community-update-composer-form" encType="multipart/form-data" method="post" ref={updateFormRef}>
+				<updateFetcher.Form className="community-update-composer-form" encType="multipart/form-data" method="post" onSubmit={(event) => ensureSubmissionId(event.currentTarget)} ref={updateFormRef}>
 					<input name="intent" type="hidden" value="create-update" />
+					<input name="submissionId" type="hidden" />
 					<label className="sr-only" htmlFor="community-update-body">Community update</label>
 					<MentionTextarea id="community-update-body" key={`body-${updateComposerKey}`} maxLength={12000} minLength={2} placeholder="Share news, ask a question, celebrate a win, or let the community know what’s happening… Type @ to tag." required rows={4} targets={loaderData.mentionTargets} />
 					<div className="community-update-options">
@@ -273,7 +296,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 						<p>Community updates default to Ecosystem-wide. Select affiliations to limit this update to those coalition spaces.</p>
 						<AffiliationAudiencePicker affiliations={loaderData.availableAffiliations} key={`audience-${updateComposerKey}`} />
 					</details>
-					<div className="community-update-composer-actions"><span>Community posts are shared with your selected audience.</span><button className="button button--primary" disabled={updateFetcher.state !== "idle"} type="submit">{updateFetcher.state === "submitting" ? "Posting…" : "Post update"}</button></div>
+					<div className="community-update-composer-actions"><span>{updateFetcher.state === "submitting" ? "Uploading and posting your update…" : "Community posts are shared with your selected audience."}</span><button className="button button--primary" disabled={updateFetcher.state !== "idle"} type="submit">{updateFetcher.state === "submitting" ? "Posting update…" : "Post update"}</button></div>
 					{updateData && !updateData.ok && <p className="form-message form-message--error" role="alert">{updateData.error}</p>}
 				</updateFetcher.Form>
 			</details>}
@@ -330,7 +353,7 @@ export default function Section({ loaderData }: Route.ComponentProps) {
 								{commentPreviews.length > 0 && <div className="update-comment-preview-list">{commentPreviews.map((comment) => <article className="update-comment-preview-item" id={`comment-${comment.id}`} key={comment.id}><IdentityAvatar name={comment.authorName || "Member"} objectKey={comment.authorAvatarObjectKey} /><div><p><strong>{comment.authorName || "Member"}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt)}</time></p><MentionText targets={loaderData.mentionTargets} text={comment.body} />{comment.imageAttachments.map((image) => <img alt={image.filename} className="comment-image" key={image.id} loading="lazy" src={mediaUrl(image.objectKey) ?? undefined} />)}</div></article>)}</div>}
 								<FeedCommentForm postId={post.id} targets={commentMentionTargets} />
 							</section>}
-							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span>{post.section === "update" ? <Form method="post"><input name="intent" type="hidden" value="toggle-support" /><input name="postId" type="hidden" value={post.id} /><button aria-label={`${post.viewerSupported ? "Remove support from" : "Support"} this update`} aria-pressed={post.viewerSupported} className={`support-button${post.viewerSupported ? " support-button--active" : ""}`} disabled={navigation.state === "submitting" && submittingIntent === "toggle-support" && navigation.formData?.get("postId") === post.id} type="submit"><Icon name="heart" size={15} /> {post.viewerSupported ? "Supported" : "Support"} · {post.supportCount}</button></Form> : <span><Icon name="heart" size={15} /> {post.supportCount} supports</span>}{post.section === "event" && <span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>}{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link>{post.section === "project" && loaderData.canArchiveProjects && <Form method="post" onSubmit={(event) => { if (!window.confirm("Archive this project? It will leave project and affiliation feeds, but its history will be retained.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-project" /><input name="postId" type="hidden" value={post.id} /><button className="content-card-action-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Archive</button></Form>}{post.section === "update" && loaderData.canDeleteUpdates && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="update-delete-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Delete</button></Form>}</footer>
+							<footer><span><Icon name="message" size={15} /> {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</span>{post.section === "update" ? <SupportButton initialCount={post.supportCount} initialSupported={post.viewerSupported} postId={post.id} /> : <span><Icon name="heart" size={15} /> {post.supportCount} supports</span>}{post.section === "event" && <span className="visibility-pill">{post.visibility === "organization" ? "Organization only" : "Shared network"}</span>}{post.canEdit && <Link to={`/posts/${post.id}/edit`}>Edit</Link>}<Link to={`/posts/${post.id}`}>{post.section === "update" ? "View update" : "Open"} <Icon name="chevron-right" size={15} /></Link>{post.section === "project" && loaderData.canArchiveProjects && <Form method="post" onSubmit={(event) => { if (!window.confirm("Archive this project? It will leave project and affiliation feeds, but its history will be retained.")) event.preventDefault(); }}><input name="intent" type="hidden" value="archive-project" /><input name="postId" type="hidden" value={post.id} /><button className="content-card-action-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Archive</button></Form>}{post.section === "update" && loaderData.canDeleteUpdates && <Form method="post" onSubmit={(event) => { if (!window.confirm("Permanently delete this community update and all of its comments? This cannot be undone.")) event.preventDefault(); }}><input name="intent" type="hidden" value="delete-update" /><input name="postId" type="hidden" value={post.id} /><button className="update-delete-button" disabled={navigation.state === "submitting" && navigation.formData?.get("postId") === post.id} type="submit">Delete</button></Form>}</footer>
 						</article>;
 					})}
 				</section>

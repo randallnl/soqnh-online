@@ -1,6 +1,6 @@
 import type { AuthenticatedUser } from "./auth.server";
-import { sendMentionEmail, sendWeeklyDigestEmail, type WeeklyDigestItem } from "./email.server";
-import { listMentionEmailRecipients, listWeeklyDigestRecipients } from "../models/notification-preferences.server";
+import { sendMentionEmail, sendSupportEmail, sendWeeklyDigestEmail, type WeeklyDigestItem } from "./email.server";
+import { getSupportEmailRecipient, listMentionEmailRecipients, listWeeklyDigestRecipients } from "../models/notification-preferences.server";
 import { listSectionPosts, type PostRecord } from "../models/posts.server";
 
 function digestItem(post: PostRecord): WeeklyDigestItem {
@@ -48,6 +48,31 @@ export async function sendMentionNotificationEmails(env: Env, input: {
 		else logEmailFailure("mention email failed", { recipientUserId: recipients[index]?.id, postId: input.postId }, result.reason);
 	});
 	return { eligible: recipients.length, sent, failed: recipients.length - sent };
+}
+
+export async function sendSupportNotificationEmail(env: Env, input: {
+	recipientId: string;
+	actorName: string;
+	postId: string;
+	postTitle: string;
+	postKind: string;
+}) {
+	const recipient = await getSupportEmailRecipient(env, input.recipientId);
+	if (!recipient) return { eligible: 0, sent: 0, failed: 0 };
+	try {
+		await sendSupportEmail(env, {
+			to: recipient.email,
+			recipientName: recipient.name,
+			actorName: input.actorName,
+			postId: input.postId,
+			postTitle: input.postTitle,
+			postKind: input.postKind,
+		});
+		return { eligible: 1, sent: 1, failed: 0 };
+	} catch (error) {
+		logEmailFailure("support email failed", { recipientUserId: recipient.id, postId: input.postId }, error);
+		return { eligible: 1, sent: 0, failed: 1 };
+	}
 }
 
 async function buildWeeklyDigest(env: Env, recipient: AuthenticatedUser, scheduledAt: Date) {

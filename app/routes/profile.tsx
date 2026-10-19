@@ -137,6 +137,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				profileVisibility: editor.profile.profileVisibility,
 				avatarObjectKey: null,
 				mentionEmailEnabled: editor.profile.mentionEmailEnabled,
+				supportEmailEnabled: editor.profile.supportEmailEnabled,
 				weeklyDigestEnabled: editor.profile.weeklyDigestEnabled,
 			});
 			context.cloudflare.ctx.waitUntil(deleteIdentityImage(context.cloudflare.env, editor.profile.avatarObjectKey));
@@ -150,6 +151,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				...parsed.data,
 				avatarObjectKey: newAvatarKey ?? editor.profile.avatarObjectKey,
 				mentionEmailEnabled: formData.get("mentionEmailEnabled") === "on",
+				supportEmailEnabled: formData.get("supportEmailEnabled") === "on",
 				weeklyDigestEnabled: formData.get("weeklyDigestEnabled") === "on",
 			});
 		} catch (error) {
@@ -183,6 +185,7 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
 					<legend>Notification preferences</legend>
 					<p>Choose which NH Connect activity reaches your inbox. In-app notifications will still appear in the workspace.</p>
 					<label><input defaultChecked={profile.mentionEmailEnabled} name="mentionEmailEnabled" type="checkbox" /><span><strong>Email me when someone tags me</strong><small>Receive an immediate email when you are mentioned in a community update or comment.</small></span></label>
+					<label><input defaultChecked={profile.supportEmailEnabled} name="supportEmailEnabled" type="checkbox" /><span><strong>Email me when someone supports my posts</strong><small>Receive an immediate email when another member adds support. You will still see support notifications in the workspace if this is off.</small></span></label>
 					<label><input defaultChecked={profile.weeklyDigestEnabled} name="weeklyDigestEnabled" type="checkbox" /><span><strong>Send me the weekly NH Connect digest</strong><small>Receive a Monday summary of recent updates, projects, and upcoming events you can access.</small></span></label>
 				</fieldset>
 				<button className="button button--primary" disabled={submitting} type="submit">{submitting ? "Saving…" : loaderData.onboarding ? "Save profile and continue" : "Save profile"}</button>

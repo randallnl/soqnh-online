@@ -4,7 +4,7 @@ import type { D1Migration } from "@cloudflare/vitest-pool-workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { sanitizeReturnTo } from "../app/lib/auth";
-import { createInvitationEmailContent, createMagicLinkEmailContent, createMentionEmailContent, createWeeklyDigestEmailContent } from "../app/lib/email.server";
+import { createInvitationEmailContent, createMagicLinkEmailContent, createMentionEmailContent, createSupportEmailContent, createWeeklyDigestEmailContent } from "../app/lib/email.server";
 import {
 	consumeLoginToken,
 	createRandomSecret,
@@ -134,7 +134,7 @@ import {
 	isOwnProfileComplete,
 	updateOwnProfile,
 } from "../app/models/profiles.server";
-import { listMentionEmailRecipients, listWeeklyDigestRecipients } from "../app/models/notification-preferences.server";
+import { getSupportEmailRecipient, listMentionEmailRecipients, listWeeklyDigestRecipients } from "../app/models/notification-preferences.server";
 import {
 	getAdminOperationsData,
 	listAuditEvents,
@@ -303,6 +303,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
 	await env.DB.batch([
+		env.DB.prepare("DELETE FROM submission_receipts"),
 		env.DB.prepare("DELETE FROM audit_log"),
 		env.DB.prepare("DELETE FROM public_spotlights"),
 		env.DB.prepare("DELETE FROM scraper_imports"),
@@ -330,6 +331,37 @@ beforeEach(async () => {
 		env.DB.prepare("DELETE FROM organizations"),
 		env.DB.prepare("DELETE FROM affiliations"),
 	]);
+});
+
+describe("submission idempotency", () => {
+	it("returns the original post and comment when a submission is repeated", async () => {
+		await seedUser();
+		const postSubmissionId = crypto.randomUUID();
+		const postInput = {
+			organizationId: null,
+			section: "update" as const,
+			title: "A single community update",
+			body: "This update should only be stored once.",
+			visibility: "members" as const,
+			status: "published" as const,
+			tags: [],
+			affiliationIds: [],
+			submissionId: postSubmissionId,
+		};
+		const firstPost = await createPost(env, activeUser, postInput);
+		const repeatedPost = await createPost(env, activeUser, postInput);
+		expect(firstPost).toMatchObject({ duplicate: false });
+		expect(repeatedPost).toEqual({ id: firstPost.id, duplicate: true });
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM posts WHERE author_user_id = ?1").bind(activeUser.id).first<number>("count")).toBe(1);
+
+		const commentSubmissionId = crypto.randomUUID();
+		const commentInput = { postId: firstPost.id, parentCommentId: null, body: "This comment should also appear once.", submissionId: commentSubmissionId };
+		const firstComment = await createComment(env, activeUser, commentInput);
+		const repeatedComment = await createComment(env, activeUser, commentInput);
+		expect(firstComment).toMatchObject({ duplicate: false });
+		expect(repeatedComment).toEqual({ id: firstComment.id, mentionedUserIds: [], duplicate: true });
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM comments WHERE author_user_id = ?1").bind(activeUser.id).first<number>("count")).toBe(1);
+	});
 });
 
 describe("public homepage spotlights", () => {
@@ -444,6 +476,7 @@ describe("member profiles", () => {
 			profileVisibility: "hidden",
 			avatarObjectKey: "profile-photos/user-active.jpg",
 			mentionEmailEnabled: false,
+			supportEmailEnabled: false,
 			weeklyDigestEnabled: true,
 		});
 
@@ -455,20 +488,23 @@ describe("member profiles", () => {
 		});
 		await expect(env.DB.prepare("SELECT affiliation_id FROM user_affiliations WHERE user_id = ?1").bind(activeUser.id).first<string>("affiliation_id")).resolves.toBe("aff-shared");
 		await expect(getOwnProfileEditorData(env, activeUser)).resolves.toMatchObject({
-			profile: { mentionEmailEnabled: false, weeklyDigestEnabled: true },
+			profile: { mentionEmailEnabled: false, supportEmailEnabled: false, weeklyDigestEnabled: true },
 		});
 		await expect(isOwnProfileComplete(env, activeUser)).resolves.toBe(true);
 	});
 
-	it("enables both email notifications by default and honors each preference independently", async () => {
+	it("enables email notifications by default and honors each preference independently", async () => {
 		await Promise.all([seedUser(), seedSecondMember()]);
 		expect((await listMentionEmailRecipients(env, [activeUser.id, secondMember.id])).map((member) => member.id)).toEqual([activeUser.id, secondMember.id]);
+		expect(await getSupportEmailRecipient(env, activeUser.id)).toMatchObject({ id: activeUser.id });
 		expect((await listWeeklyDigestRecipients(env)).map((member) => member.id)).toEqual([activeUser.id, secondMember.id]);
 
 		await env.DB.prepare("UPDATE users SET mention_email_enabled = 0 WHERE id = ?1").bind(activeUser.id).run();
+		await env.DB.prepare("UPDATE users SET support_email_enabled = 0 WHERE id = ?1").bind(activeUser.id).run();
 		await env.DB.prepare("UPDATE users SET weekly_digest_enabled = 0 WHERE id = ?1").bind(secondMember.id).run();
 
 		expect((await listMentionEmailRecipients(env, [activeUser.id, secondMember.id])).map((member) => member.id)).toEqual([secondMember.id]);
+		expect(await getSupportEmailRecipient(env, activeUser.id)).toBeNull();
 		expect((await listWeeklyDigestRecipients(env)).map((member) => member.id)).toEqual([activeUser.id]);
 	});
 });
@@ -499,7 +535,7 @@ describe("affiliation membership requests", () => {
 			expect.objectContaining({ id: "aff-shared", hasDirectAccess: true, hasEffectiveAccess: true, hasPendingRequest: false }),
 		]);
 		await expect(submitAffiliationRequest(env, activeUser, "aff-shared")).rejects.toMatchObject({ reason: "already-member" });
-		expect(await env.DB.prepare("SELECT count(*) AS count FROM notifications WHERE user_id = ?1 AND type = 'approval'").bind(activeUser.id).first<number>("count")).toBe(1);
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM notifications WHERE user_id = ?1 AND type = 'membership'").bind(activeUser.id).first<number>("count")).toBe(1);
 		expect(await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('affiliation.request_submitted', 'affiliation.request_approved')").first<number>("count")).toBe(2);
 	});
 
@@ -539,7 +575,7 @@ describe("organization membership claims", () => {
 		await reviewOrganizationClaim(env, siteAdmin, { claimId: claim.id, decision: "approve", reason: null });
 		expect(await env.DB.prepare("SELECT role FROM organization_memberships WHERE organization_id = 'org-one' AND user_id = ?1").bind(activeUser.id).first<string>("role")).toBe("contributor");
 		expect((await listOwnOrganizationClaims(env, activeUser))[0]).toMatchObject({ status: "approved" });
-		expect(await listNotifications(env, activeUser)).toEqual([expect.objectContaining({ type: "approval", body: expect.stringContaining("approved") })]);
+		expect(await listNotifications(env, activeUser)).toEqual([expect.objectContaining({ type: "membership", targetUrl: "/profile", body: expect.stringContaining("approved") })]);
 		expect(await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE action IN ('organization.claim_submitted', 'organization.claim_approved')").first<number>("count")).toBe(2);
 	});
 
@@ -934,6 +970,24 @@ describe("member notification email content", () => {
 		expect(content.text).toContain("https://connect.example/profile");
 		expect(content.html).toContain("Taylor &amp; Sam");
 		expect(content.html).toContain("Alex &lt;Member&gt;");
+	});
+
+	it("creates actionable support emails with a preference link", () => {
+		const content = createSupportEmailContent({
+			recipientName: "Alex <Member>",
+			actorName: "Taylor & Sam",
+			postTitle: "A community win",
+			postKind: "community update",
+			link: "https://connect.example/posts/one",
+			preferencesLink: "https://connect.example/profile",
+		});
+
+		expect(content.subject).toContain("Taylor & Sam");
+		expect(content.text).toContain("supported your community update");
+		expect(content.text).toContain("https://connect.example/profile");
+		expect(content.html).toContain("Taylor &amp; Sam");
+		expect(content.html).toContain("Alex &lt;Member&gt;");
+		expect(content.html).not.toContain("Alex <Member>");
 	});
 
 	it("groups accessible activity into the weekly digest", () => {
@@ -1932,7 +1986,7 @@ describe("NH Connect public directory participation", () => {
 		await requestDirectoryParticipation(env, activeUser, "org-one");
 		await reviewDirectoryParticipation(env, siteAdmin, { organizationId: "org-one", decision: "approve", note: null });
 		expect((await getOrganizationBySlug(env, "community-center", siteAdmin))?.organization).toMatchObject({ directoryStatus: "published", directoryReviewNote: null });
-		expect(await env.DB.prepare("SELECT count(*) AS count FROM notifications WHERE user_id = ?1 AND type = 'approval'").bind(activeUser.id).first<number>("count")).toBe(2);
+		expect(await env.DB.prepare("SELECT count(*) AS count FROM notifications WHERE user_id = ?1 AND type = 'directory'").bind(activeUser.id).first<number>("count")).toBe(2);
 
 		await withdrawDirectoryParticipation(env, activeUser, "org-one");
 		expect((await getOrganizationBySlug(env, "community-center", siteAdmin))?.organization.directoryStatus).toBe("opted_out");
@@ -2471,7 +2525,7 @@ describe("event moderation", () => {
 		await reviewEvent(env, secondMember, { postId: event.id, decision: "approve", reason: null });
 		await expect(getPostById(env, activeUser, event.id)).resolves.toMatchObject({ status: "published", eventModerationStatus: "approved" });
 		expect((await listSectionPosts(env, activeUser, { section: "event", tag: null, organizationId: null, page: 1 })).posts[0]).toMatchObject({ id: event.id, eventLocationName: eventDetails.locationName });
-		expect(await listNotifications(env, activeUser)).toEqual([expect.objectContaining({ type: "approval", postId: event.id })]);
+		expect(await listNotifications(env, activeUser)).toEqual([expect.objectContaining({ type: "moderation", postId: event.id })]);
 		expect(await env.DB.prepare("SELECT count(*) AS count FROM audit_log WHERE entity_id = ?1 AND action IN ('event.submitted', 'event.approved')").bind(event.id).first<number>("count")).toBe(2);
 	});
 
@@ -2616,6 +2670,11 @@ describe("dashboard data", () => {
 			body: "Thanks for sharing this update.",
 			parentCommentId: null,
 		});
+		await createComment(env, siteAdmin, {
+			postId: privatePost.id,
+			body: "I added the requested planning notes.",
+			parentCommentId: null,
+		});
 
 		const memberDashboard = await getDashboardData(env, activeUser);
 		expect(memberDashboard.recentPosts.map((post) => post.id)).toEqual(
@@ -2627,11 +2686,16 @@ describe("dashboard data", () => {
 		});
 		expect(memberDashboard.recentActivity).toEqual([
 			expect.objectContaining({
-				postId: networkPost.id,
-				thumbnailObjectKey: "content-images/dashboard-image.jpg",
+				postId: privatePost.id,
+				authorName: "Site Admin",
+				thumbnailObjectKey: null,
 				thumbnailUrl: null,
 			}),
 		]);
+		expect(memberDashboard.attentionItems).toEqual(expect.arrayContaining([
+			expect.objectContaining({ id: "notifications", to: "/notifications" }),
+			expect.objectContaining({ id: "profile", to: "/profile" }),
+		]));
 
 		const unrelatedDashboard = await getDashboardData(env, thirdMember);
 		expect(unrelatedDashboard.recentPosts.map((post) => post.id)).toContain(
@@ -2640,6 +2704,37 @@ describe("dashboard data", () => {
 		expect(unrelatedDashboard.recentPosts.map((post) => post.id)).not.toContain(
 			privatePost.id,
 		);
+	});
+
+	it("personalizes affiliation activity and pending actions for the signed-in member", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedAffiliation();
+		await seedAffiliation("aff-other", "Other Coalition", "other-coalition");
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+		const affiliatedPost = await createPost(env, siteAdmin, {
+			organizationId: null,
+			section: "project",
+			title: "Coalition planning sprint",
+			body: "A planning update shared only with participating coalition members.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+			affiliationIds: ["aff-shared"],
+		});
+		await submitAffiliationRequest(env, activeUser, "aff-other");
+
+		const dashboard = await getDashboardData(env, activeUser);
+		expect(dashboard.affiliationActivity).toEqual([
+			expect.objectContaining({
+				id: affiliatedPost.id,
+				affiliationNames: "Shared Coalition",
+			}),
+		]);
+		expect(dashboard.attentionItems).toEqual(expect.arrayContaining([
+			expect.objectContaining({ id: "profile", count: null }),
+			expect.objectContaining({ id: "requests", count: 1, to: "/profile" }),
+		]));
 	});
 
 	it("scopes moderation counts and lists only approved future events", async () => {
@@ -2785,18 +2880,21 @@ describe("post conversations", () => {
 });
 
 describe("post interactions and notifications", () => {
-	it("toggles one support per member and audits both states", async () => {
+	it("toggles one support per member, notifies the author once, and audits both states", async () => {
 		await seedSiteAdmin();
 		await seedUser();
 		const post = await createPost(env, siteAdmin, {
 			organizationId: null, section: "update", title: "A supported update", body: "Members can signal support for this published update.", visibility: "members", status: "published", tags: [],
 		});
-		await expect(togglePostSupport(env, activeUser, post.id)).resolves.toBe(true);
+		await expect(togglePostSupport(env, activeUser, post.id)).resolves.toMatchObject({ supported: true, supportCount: 1, notifiedUserId: siteAdmin.id });
 		await expect(getPostById(env, activeUser, post.id)).resolves.toMatchObject({ supportCount: 1, viewerSupported: true });
-		await expect(togglePostSupport(env, activeUser, post.id)).resolves.toBe(false);
+		expect(await listNotifications(env, siteAdmin)).toEqual([expect.objectContaining({ type: "support", postId: post.id, body: expect.stringContaining("Test Member") })]);
+		await expect(togglePostSupport(env, activeUser, post.id)).resolves.toMatchObject({ supported: false, supportCount: 0, notifiedUserId: null });
 		await expect(getPostById(env, activeUser, post.id)).resolves.toMatchObject({ supportCount: 0, viewerSupported: false });
+		await expect(togglePostSupport(env, activeUser, post.id)).resolves.toMatchObject({ supported: true, supportCount: 1, notifiedUserId: null });
+		expect(await listNotifications(env, siteAdmin)).toHaveLength(1);
 		const actions = await env.DB.prepare("SELECT action FROM audit_log WHERE action LIKE 'post.%supported' ORDER BY created_at, rowid").all<{ action: string }>();
-		expect(actions.results.map((entry) => entry.action)).toEqual(["post.supported", "post.unsupported"]);
+		expect(actions.results.map((entry) => entry.action)).toEqual(["post.supported", "post.unsupported", "post.supported"]);
 	});
 
 	it("only offers mention targets who can see the post", async () => {

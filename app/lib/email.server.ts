@@ -280,6 +280,74 @@ export async function sendMentionEmail(env: Env, input: {
 	});
 }
 
+export function createSupportEmailContent(input: {
+	recipientName: string | null;
+	actorName: string;
+	postTitle: string;
+	postKind: string;
+	link: string;
+	preferencesLink: string;
+}) {
+	const greeting = input.recipientName ? `Hi ${input.recipientName},` : "Hello,";
+	const subject = `${input.actorName} supported your ${input.postKind} on NH Connect`;
+	const safeActorName = escapeHtml(input.actorName);
+	const safeTitle = escapeHtml(input.postTitle);
+	const safeKind = escapeHtml(input.postKind);
+	const safeLink = escapeHtml(input.link);
+	const safePreferencesLink = escapeHtml(input.preferencesLink);
+	return {
+		subject,
+		text: [
+			greeting,
+			"",
+			`${input.actorName} supported your ${input.postKind}: ${input.postTitle}`,
+			"",
+			"Open the post:",
+			input.link,
+			"",
+			`Manage notification preferences: ${input.preferencesLink}`,
+			"",
+			"NH Connect · A Queerlective initiative",
+		].join("\n"),
+		html: [
+			'<div style="margin:0;padding:30px 18px;background:#fff9ed;color:#211333;font-family:Arial,Helvetica,sans-serif;line-height:1.6">',
+			'<div style="max-width:600px;margin:0 auto;overflow:hidden;border:1px solid #dfd7c9;border-radius:16px;background:#fffef8">',
+			'<div style="height:7px;background:#754595"></div><div style="padding:28px 30px">',
+			'<p style="margin:0 0 8px;color:#9f2d69;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">New support</p>',
+			`<h1 style="margin:0 0 16px;font-family:Georgia,serif;font-size:27px;line-height:1.25">${safeActorName} supported your ${safeKind}</h1>`,
+			`<p style="margin:0 0 22px;color:#62566d">${escapeHtml(greeting)} Your post, <strong>${safeTitle}</strong>, received support on NH Connect.</p>`,
+			`<a href="${safeLink}" style="display:inline-block;padding:12px 18px;border-radius:9px;background:#5b3178;color:#fff;font-weight:700;text-decoration:none">Open the post</a>`,
+			`<p style="margin:24px 0 0;color:#69636f;font-size:12px">Turn support emails on or off in your <a href="${safePreferencesLink}" style="color:#5b3178">notification preferences</a>. In-app notifications will remain available.</p>`,
+			'</div><div style="padding:16px 30px;border-top:1px solid #eee7da;background:#f7effa;color:#62566d;font-size:12px">NH Connect &middot; A Queerlective initiative</div></div></div>',
+		].join(""),
+	};
+}
+
+export async function sendSupportEmail(env: Env, input: {
+	to: string;
+	recipientName: string | null;
+	actorName: string;
+	postId: string;
+	postTitle: string;
+	postKind: string;
+}) {
+	const content = createSupportEmailContent({
+		recipientName: input.recipientName,
+		actorName: input.actorName,
+		postTitle: input.postTitle,
+		postKind: input.postKind,
+		link: memberUrl(env, `/posts/${input.postId}`),
+		preferencesLink: memberUrl(env, "/profile"),
+	});
+	return env.EMAIL.send({
+		to: input.to,
+		from: { email: env.EMAIL_FROM, name: SENDER_NAME },
+		subject: content.subject,
+		text: content.text,
+		html: content.html,
+	});
+}
+
 function digestSectionText(title: string, items: WeeklyDigestItem[], appOrigin: string, useEventDate = false) {
 	if (items.length === 0) return `${title}\nNothing new to share this week.`;
 	return [title, ...items.map((item) => {

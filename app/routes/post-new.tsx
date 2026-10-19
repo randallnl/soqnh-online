@@ -14,9 +14,11 @@ import { createPost, listAvailablePostAffiliations, listPostOrganizations, PostM
 import { listVisibleMembers } from "~/models/profiles.server";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 import { syncPostMentions } from "~/models/interactions.server";
+import { SubmissionInProgressError } from "~/models/submissions.server";
 import type { MentionTarget } from "~/components/mention-textarea";
 
 const optionalOrganization = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().max(100).nullable());
+const optionalSubmissionId = z.preprocess((value) => typeof value === "string" && value.trim() ? value.trim() : null, z.string().uuid().nullable());
 const formSchema = z.object({
 	section: z.enum(contentSections),
 	title: z.string().trim().min(3, "Enter a title").max(180),
@@ -25,6 +27,7 @@ const formSchema = z.object({
 	visibility: z.enum(postVisibilities),
 	status: z.enum(postStatuses),
 	tags: z.string().max(320),
+	submissionId: optionalSubmissionId,
 });
 
 function messageFor(error: PostMutationError) {
@@ -101,8 +104,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			event: eventResult?.data,
 			attachments: uploadedImages,
 		});
-		attachmentPersisted = true;
-		if (result.data.section === "updates") {
+		attachmentPersisted = !created.duplicate;
+		if (created.duplicate && uploadedImages.length > 0) {
+			await Promise.all(uploadedImages.map((image) => deleteContentImage(context.cloudflare.env, image.objectKey).catch(() => undefined)));
+		}
+		if (result.data.section === "updates" && !created.duplicate) {
 			const mentions = await syncPostMentions(context.cloudflare.env, user, created.id, mentionUserIds);
 			context.cloudflare.ctx.waitUntil(sendMentionNotificationEmails(context.cloudflare.env, {
 				recipientIds: mentions.mentionedUserIds,
@@ -111,7 +117,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				postId: created.id,
 			}));
 		}
-		throw redirect(`/posts/${created.id}`);
+		throw redirect(`/posts/${created.id}?created=${result.data.section}${created.duplicate ? "&duplicate=1" : ""}`);
 	} catch (error) {
 		if (error instanceof Response) throw error;
 		if (!attachmentPersisted) {
@@ -126,6 +132,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			));
 		}
 		if (error instanceof ImageUploadError) return { ok: false as const, error: error.reason === "too-large" ? "Upload an image smaller than 10 MB." : error.reason === "unsupported" ? "Upload a PNG, JPG, WebP, or GIF image." : "The uploaded file does not appear to be a valid image." };
+		if (error instanceof SubmissionInProgressError) return { ok: false as const, error: "This post is already being submitted. Please wait a moment." };
 		if (error instanceof PostMutationError) return { ok: false as const, error: messageFor(error) };
 		console.error(JSON.stringify({ message: "post creation failed", actorUserId: user.id, error: error instanceof Error ? error.message : String(error) }));
 		return { ok: false as const, error: "The post could not be created." };

@@ -4,6 +4,7 @@ import { Form, Link, useFetcher } from "react-router";
 import { IdentityAvatar } from "~/components/identity-avatar";
 import { MentionText, MentionTextarea, type MentionTarget } from "~/components/mention-textarea";
 import { mediaUrl } from "~/lib/media";
+import { ensureSubmissionId } from "~/lib/submission.client";
 import type { CommentRecord } from "~/models/comments.server";
 
 function formatCommentDate(value: string) {
@@ -14,6 +15,7 @@ type CommentActionData = {
 	ok: boolean;
 	intent?: string;
 	commentId?: string;
+	duplicate?: boolean;
 	error?: string;
 };
 
@@ -32,14 +34,16 @@ function ReplyComposer({ comment, postId, targets }: { comment: CommentRecord; p
 		requestAnimationFrame(() => document.getElementById(`comment-${data.commentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
 	}, [data, fetcher.state]);
 
-	return <fetcher.Form className="comment-inline-form" method="post" ref={formRef}>
+	return <fetcher.Form className="comment-inline-form" method="post" onSubmit={(event) => ensureSubmissionId(event.currentTarget)} ref={formRef}>
 		<input name="intent" type="hidden" value="create-comment" />
 		<input name="postId" type="hidden" value={postId} />
 		<input name="parentCommentId" type="hidden" value={comment.id} />
+		<input name="submissionId" type="hidden" />
 		<label className="sr-only" htmlFor={`reply-${comment.id}`}>Reply to {comment.authorName || "comment"}</label>
 		<MentionTextarea id={`reply-${comment.id}`} key={composerKey} maxLength={4000} minLength={2} placeholder="Write a reply… Type @ to tag someone." required rows={3} targets={targets} />
 		<button className="button button--primary button--compact" disabled={fetcher.state !== "idle"} type="submit">{fetcher.state === "submitting" ? "Posting…" : "Post reply"}</button>
 		{data && !data.ok && <span className="form-message form-message--error" role="alert">{data.error}</span>}
+		{data?.ok && fetcher.state === "idle" && <span className="form-message form-message--success" role="status">{data.duplicate ? "Reply was already posted." : "Reply posted."}</span>}
 	</fetcher.Form>;
 }
 

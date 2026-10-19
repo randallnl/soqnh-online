@@ -20,6 +20,16 @@ export async function listMentionEmailRecipients(env: Env, userIds: string[]) {
 	return result.results;
 }
 
+export async function getSupportEmailRecipient(env: Env, userId: string) {
+	return env.DB.prepare(
+		`SELECT id, email, name, site_role AS siteRole, status
+		 FROM users
+		 WHERE id = ?1
+		   AND status = 'active'
+		   AND support_email_enabled = 1`,
+	).bind(userId).first<EmailNotificationRecipient>();
+}
+
 export async function listWeeklyDigestRecipients(env: Env) {
 	const result = await env.DB.prepare(
 		`SELECT id, email, name, site_role AS siteRole, status

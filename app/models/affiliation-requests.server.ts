@@ -203,8 +203,8 @@ export async function reviewAffiliationRequest(
 		).bind(nextStatus, actor.id, now, input.reason, request.id),
 		env.DB.prepare(
 			`INSERT INTO notifications
-			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
-			 SELECT ?1, user_id, ?2, NULL, NULL, 'approval', ?3, NULL, ?4
+			 (id, user_id, actor_user_id, post_id, comment_id, target_url, type, body, read_at, created_at)
+			 SELECT ?1, user_id, ?2, NULL, NULL, '/profile', 'membership', ?3, NULL, ?4
 			 FROM affiliation_membership_requests
 			 WHERE id = ?5 AND status = ?6 AND reviewed_by_user_id = ?2 AND reviewed_at = ?4`,
 		).bind(crypto.randomUUID(), actor.id, notificationBody, now, request.id, nextStatus),

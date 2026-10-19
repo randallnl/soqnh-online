@@ -47,6 +47,7 @@ export const users = sqliteTable(
 			.notNull()
 			.default("members"),
 		mentionEmailEnabled: integer("mention_email_enabled").notNull().default(1),
+		supportEmailEnabled: integer("support_email_enabled").notNull().default(1),
 		weeklyDigestEnabled: integer("weekly_digest_enabled").notNull().default(1),
 	},
 	(table) => [
@@ -83,6 +84,27 @@ export const sessions = sqliteTable(
 	(table) => [
 		index("idx_sessions_user_id").on(table.userId),
 		index("idx_sessions_expires_at").on(table.expiresAt),
+	],
+);
+
+export const submissionReceipts = sqliteTable(
+	"submission_receipts",
+	{
+		submissionId: text("submission_id").notNull(),
+		actorUserId: text("actor_user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		entityType: text("entity_type", { enum: ["post", "comment"] }).notNull(),
+		entityId: text("entity_id"),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.actorUserId, table.submissionId] }),
+		check(
+			"submission_receipts_entity_type_check",
+			sql`${table.entityType} in ('post', 'comment')`,
+		),
+		index("idx_submission_receipts_created_at").on(table.createdAt),
 	],
 );
 
@@ -728,7 +750,8 @@ export const notifications = sqliteTable(
 		commentId: text("comment_id").references(() => comments.id, {
 			onDelete: "cascade",
 		}),
-		type: text("type", { enum: ["comment", "mention", "approval"] }).notNull(),
+		targetUrl: text("target_url"),
+		type: text("type", { enum: ["comment", "mention", "approval", "support", "moderation", "membership", "directory"] }).notNull(),
 		body: text("body").notNull(),
 		readAt: text("read_at"),
 		createdAt: createdAt(),
@@ -736,13 +759,16 @@ export const notifications = sqliteTable(
 	(table) => [
 		check(
 			"notifications_type_check",
-			sql`${table.type} in ('comment', 'mention', 'approval')`,
+			sql`${table.type} in ('comment', 'mention', 'approval', 'support', 'moderation', 'membership', 'directory')`,
 		),
 		index("idx_notifications_user_read_created").on(
 			table.userId,
 			table.readAt,
 			desc(table.createdAt),
 		),
+		uniqueIndex("idx_notifications_support_actor_post")
+			.on(table.userId, table.actorUserId, table.postId, table.type)
+			.where(sql`${table.type} = 'support'`),
 	],
 );
 

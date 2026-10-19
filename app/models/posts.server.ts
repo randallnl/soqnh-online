@@ -6,6 +6,7 @@ import type {
 	PostVisibility,
 } from "../lib/content";
 import type { ContentImageAttachment } from "../lib/media";
+import { claimSubmission, completeSubmissionStatement, releaseSubmission } from "./submissions.server";
 
 const PAGE_SIZE = 10;
 const EVENT_PAGE_SIZE = 12;
@@ -672,6 +673,7 @@ export async function createPost(
 		event?: EventDetailsInput;
 		attachment?: ContentImageAttachment | null;
 		attachments?: ContentImageAttachment[];
+		submissionId?: string | null;
 	},
 ) {
 	await requirePostOrganization(env, actor, input.organizationId);
@@ -682,10 +684,14 @@ export async function createPost(
 		throw new PostMutationError("event-details-required");
 	}
 	const affiliationIds = await requirePostAffiliations(env, actor, input.visibility, input.affiliationIds);
+	const submission = await claimSubmission(env, actor, input.submissionId, "post");
+	if (submission.entityId) return { id: submission.entityId, duplicate: true as const };
 	const id = crypto.randomUUID();
 	const now = new Date().toISOString();
 	const status = input.section === "event" ? "draft" : input.status;
-	await env.DB.batch([
+	const completion = completeSubmissionStatement(env, actor, input.submissionId, "post", id);
+	try {
+		await env.DB.batch([
 		env.DB.prepare(
 			`INSERT INTO posts
 			 (id, organization_id, author_user_id, section, title, body, visibility, status, created_at, updated_at, archived_at)
@@ -716,8 +722,13 @@ export async function createPost(
 			 (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'event.submitted', 'event', ?3, NULL, ?4)`,
 		).bind(crypto.randomUUID(), actor.id, id, now)] : []),
-	]);
-	return { id };
+		...(completion ? [completion] : []),
+		]);
+	} catch (error) {
+		if (submission.claimed) await releaseSubmission(env, actor, input.submissionId, "post").catch(() => undefined);
+		throw error;
+	}
+	return { id, duplicate: false as const };
 }
 
 export async function updatePost(

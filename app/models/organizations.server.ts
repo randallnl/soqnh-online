@@ -461,9 +461,9 @@ export async function reviewDirectoryParticipation(
 	const now = new Date().toISOString();
 	const status = input.decision === "approve" ? "published" : "rejected";
 	const existing = await env.DB.prepare(
-		`SELECT directory_requested_by_user_id AS requesterUserId
+		`SELECT directory_requested_by_user_id AS requesterUserId, slug
 		 FROM organizations WHERE id = ?1 AND directory_status = 'pending'`,
-	).bind(input.organizationId).first<{ requesterUserId: string | null }>();
+	).bind(input.organizationId).first<{ requesterUserId: string | null; slug: string }>();
 	if (!existing) throw new OrganizationMutationError("directory-transition");
 	const statements = [
 		env.DB.prepare(
@@ -488,14 +488,14 @@ export async function reviewDirectoryParticipation(
 	if (existing.requesterUserId) {
 		statements.push(env.DB.prepare(
 			`INSERT INTO notifications
-			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
-			 SELECT ?1, ?2, ?3, NULL, NULL, 'approval',
+			 (id, user_id, actor_user_id, post_id, comment_id, target_url, type, body, read_at, created_at)
+			 SELECT ?1, ?2, ?3, NULL, NULL, ?6, 'directory',
 			        CASE WHEN ?4 = 'published'
 			          THEN 'Your organization is now approved for the NH Connect public directory.'
 			          ELSE 'Your NH Connect public directory request needs changes.' END,
 			        NULL, ?5
 			 WHERE EXISTS (SELECT 1 FROM users WHERE id = ?2 AND status = 'active')`,
-		).bind(crypto.randomUUID(), existing.requesterUserId, actor.id, status, now));
+		).bind(crypto.randomUUID(), existing.requesterUserId, actor.id, status, now, `/organizations/${existing.slug}`));
 	}
 	const results = await env.DB.batch(statements);
 	if (results[0]?.meta.changes !== 1) throw new OrganizationMutationError("directory-transition");
@@ -944,8 +944,8 @@ export async function setOrganizationMembership(
 		).bind(actor.id, now, input.organizationId, input.userId),
 		env.DB.prepare(
 			`INSERT INTO notifications
-			 (id, user_id, actor_user_id, post_id, comment_id, type, body, read_at, created_at)
-			 SELECT ?1, claim.user_id, ?2, NULL, NULL, 'approval',
+			 (id, user_id, actor_user_id, post_id, comment_id, target_url, type, body, read_at, created_at)
+			 SELECT ?1, claim.user_id, ?2, NULL, NULL, '/profile', 'membership',
 			        'Your ' || o.name || ' membership claim was approved.', NULL, ?3
 			 FROM organization_membership_claims AS claim
 			 JOIN organizations AS o ON o.id = claim.organization_id

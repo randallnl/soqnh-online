@@ -112,14 +112,16 @@ export async function getOwnProfileEditorData(env: Env, actor: AuthenticatedUser
 		getVisibleMemberProfile(env, actor, actor.id),
 		env.DB.prepare(
 			`SELECT mention_email_enabled AS mentionEmailEnabled,
+			        support_email_enabled AS supportEmailEnabled,
 			        weekly_digest_enabled AS weeklyDigestEnabled
 			 FROM users WHERE id = ?1 AND status = 'active'`,
-		).bind(actor.id).first<{ mentionEmailEnabled: number; weeklyDigestEnabled: number }>(),
+		).bind(actor.id).first<{ mentionEmailEnabled: number; supportEmailEnabled: number; weeklyDigestEnabled: number }>(),
 	]);
 	return {
 		profile: profile && preferences ? {
 			...profile,
 			mentionEmailEnabled: preferences.mentionEmailEnabled === 1,
+			supportEmailEnabled: preferences.supportEmailEnabled === 1,
 			weeklyDigestEnabled: preferences.weeklyDigestEnabled === 1,
 		} : null,
 	};
@@ -145,6 +147,7 @@ export async function updateOwnProfile(
 		profileVisibility: "members" | "hidden";
 		avatarObjectKey: string | null;
 		mentionEmailEnabled: boolean;
+		supportEmailEnabled: boolean;
 		weeklyDigestEnabled: boolean;
 	},
 ) {
@@ -153,18 +156,20 @@ export async function updateOwnProfile(
 		env.DB.prepare(
 			`UPDATE users SET name = ?1, profile_title = ?2, pronouns = ?3, bio = ?4,
 			 location = ?5, website_url = ?6, profile_visibility = ?7,
-			 avatar_object_key = ?8, mention_email_enabled = ?9, weekly_digest_enabled = ?10,
-			 profile_completed_at = coalesce(profile_completed_at, ?11),
-			 updated_at = ?11 WHERE id = ?12 AND status = 'active'`,
+			 avatar_object_key = ?8, mention_email_enabled = ?9, support_email_enabled = ?10,
+			 weekly_digest_enabled = ?11, profile_completed_at = coalesce(profile_completed_at, ?12),
+			 updated_at = ?12 WHERE id = ?13 AND status = 'active'`,
 		).bind(input.name, input.profileTitle, input.pronouns, input.bio, input.location,
 			input.websiteUrl, input.profileVisibility, input.avatarObjectKey,
-			input.mentionEmailEnabled ? 1 : 0, input.weeklyDigestEnabled ? 1 : 0, now, actor.id),
+			input.mentionEmailEnabled ? 1 : 0, input.supportEmailEnabled ? 1 : 0,
+			input.weeklyDigestEnabled ? 1 : 0, now, actor.id),
 		env.DB.prepare(
 			`INSERT INTO audit_log (id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
 			 VALUES (?1, ?2, 'member.profile_self_updated', 'user', ?2, ?3, ?4)`,
 		).bind(crypto.randomUUID(), actor.id, JSON.stringify({
 			profileVisibility: input.profileVisibility,
 			mentionEmailEnabled: input.mentionEmailEnabled,
+			supportEmailEnabled: input.supportEmailEnabled,
 			weeklyDigestEnabled: input.weeklyDigestEnabled,
 		}), now),
 	]);
