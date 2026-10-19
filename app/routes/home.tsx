@@ -2,6 +2,7 @@ import type { Route } from "./+types/home";
 import { Link } from "react-router";
 
 import { Icon, type IconName } from "~/components/icon";
+import { OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import {
 	routeSectionForDatabase,
@@ -255,9 +256,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 												<p className="feed-type">{section.title}</p>
 												<h3><Link to={`/posts/${post.id}`}>{post.title}</Link></h3>
 												<p>{excerpt(post.body)}</p>
-												<small>
-													{post.organizationName || "Ecosystem-wide"} · {formatPostDate(post.createdAt)} · {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}
-												</small>
+												<div className="dashboard-attribution">
+													{post.organizationName && post.organizationSlug && <Link aria-label={`View ${post.organizationName}`} className="dashboard-organization-logo" to={`/organizations/${post.organizationSlug}`}><OrganizationIdentity logoObjectKey={post.organizationLogoObjectKey} name={post.organizationName} /></Link>}
+													<small>{post.organizationName || "Ecosystem-wide"} · {formatPostDate(post.createdAt)} · {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}</small>
+												</div>
 											</div>
 											{thumbnailUrl && (
 												<Link aria-label={`Open ${post.title}`} className="feed-thumbnail" to={`/posts/${post.id}`}>
@@ -280,7 +282,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 							const routeSection = routeSectionForDatabase(post.section);
 							const section = sectionDefinitions[routeSection];
 							const thumbnailUrl = mediaUrl(post.thumbnailObjectKey) ?? post.thumbnailUrl;
-							return <article className="feed-item" key={post.id}><span className={`feed-icon feed-icon--${feedColors[post.section]}`}><Icon name={section.icon} size={20} /></span><div><p className="feed-type">{post.affiliationNames.split(",").join(" · ")}</p><h3><Link to={`/posts/${post.id}`}>{post.title}</Link></h3><p>{excerpt(post.body)}</p><small>{post.organizationName || "Ecosystem-wide"} · {formatPostDate(post.createdAt)}</small></div>{thumbnailUrl && <Link aria-label={`Open ${post.title}`} className="feed-thumbnail" to={`/posts/${post.id}`}><img alt="" loading="lazy" referrerPolicy={post.thumbnailObjectKey ? undefined : "no-referrer"} src={thumbnailUrl} /></Link>}<Link aria-label={`Open ${post.title}`} className="icon-button subtle-button" to={`/posts/${post.id}`}><Icon name="chevron-right" size={18} /></Link></article>;
+							return <article className="feed-item" key={post.id}><span className={`feed-icon feed-icon--${feedColors[post.section]}`}><Icon name={section.icon} size={20} /></span><div><p className="feed-type">{post.affiliationNames.split(",").join(" · ")}</p><h3><Link to={`/posts/${post.id}`}>{post.title}</Link></h3><p>{excerpt(post.body)}</p><div className="dashboard-attribution">{post.organizationName && post.organizationSlug && <Link aria-label={`View ${post.organizationName}`} className="dashboard-organization-logo" to={`/organizations/${post.organizationSlug}`}><OrganizationIdentity logoObjectKey={post.organizationLogoObjectKey} name={post.organizationName} /></Link>}<small>{post.organizationName || "Ecosystem-wide"} · {formatPostDate(post.createdAt)}</small></div></div>{thumbnailUrl && <Link aria-label={`Open ${post.title}`} className="feed-thumbnail" to={`/posts/${post.id}`}><img alt="" loading="lazy" referrerPolicy={post.thumbnailObjectKey ? undefined : "no-referrer"} src={thumbnailUrl} /></Link>}<Link aria-label={`Open ${post.title}`} className="icon-button subtle-button" to={`/posts/${post.id}`}><Icon name="chevron-right" size={18} /></Link></article>;
 						})}</div>}
 					</section>
 
@@ -331,6 +333,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 											<div>
 												<h3><Link to={`/posts/${event.postId}`}>{event.title}</Link></h3>
 												<p>{date.time}{event.locationName ? ` · ${event.locationName}` : ""}</p>
+												{event.organizationName && event.organizationSlug && <Link className="dashboard-event-host" to={`/organizations/${event.organizationSlug}`}><span className="dashboard-organization-logo"><OrganizationIdentity logoObjectKey={event.organizationLogoObjectKey} name={event.organizationName} /></span><span>{event.organizationName}</span></Link>}
 											</div>
 											{thumbnailUrl && <Link aria-label={`Open ${event.title}`} className="event-row-thumbnail" to={`/posts/${event.postId}`}><img alt="" loading="lazy" referrerPolicy={event.thumbnailObjectKey ? undefined : "no-referrer"} src={thumbnailUrl} /></Link>}
 										</article>

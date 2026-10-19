@@ -5,7 +5,7 @@ import { Icon } from "~/components/icon";
 import { OrganizationIdentity } from "~/components/identity-avatar";
 import { requireAuthenticatedUser } from "~/lib/auth.server";
 import { directoryFilterValue, filterOrganizations, uniqueDirectoryOptions } from "~/lib/directory-filters";
-import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
+import { organizationCategoryLabel, organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 import { listVisibleOrganizations } from "~/models/organizations.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -80,7 +80,7 @@ export default function Organizations({ loaderData }: Route.ComponentProps) {
 								<p>{organization.summary || "A member organization in the NH Connect community network."}</p>
 								{parseOrganizationCategories(organization.category).length > 0 && (
 									<div className="organization-category-row">
-										{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}
+										{parseOrganizationCategories(organization.category).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category} title={category}>{organizationCategoryLabel(category)}</span>)}
 									</div>
 								)}
 								{organization.affiliations.length > 0 && (

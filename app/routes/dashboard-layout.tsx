@@ -25,6 +25,7 @@ const primaryNavigation: NavigationItem[] = [
 ];
 
 const communityNavigation: NavigationItem[] = [
+	{ label: "Search", to: "/search", icon: "search" },
 	{ label: "Organizations", to: "/organizations", icon: "building" },
 	{ label: "Members", to: "/members", icon: "people" },
 	{ label: "Notifications", to: "/notifications", icon: "bell" },
@@ -110,6 +111,7 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [createMenuOpen, setCreateMenuOpen] = useState(false);
 	const createMenuRef = useRef<HTMLDivElement>(null);
+	const searchInputRef = useRef<HTMLInputElement>(null);
 	const { user } = loaderData;
 	const managedNavigation: NavigationItem[] = loaderData.managedOrganizations.map((organization) => ({
 		label: organization.name,
@@ -121,6 +123,16 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 		[...primaryNavigation, ...communityNavigation, ...managedNavigation, ...adminNavigation].find(
 			(item) => item.to === location.pathname,
 		)?.label ?? "Overview";
+	useEffect(() => {
+		const focusSearch = (event: KeyboardEvent) => {
+			if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "k" && searchInputRef.current?.offsetParent !== null) {
+				event.preventDefault();
+				searchInputRef.current?.focus();
+			}
+		};
+		document.addEventListener("keydown", focusSearch);
+		return () => document.removeEventListener("keydown", focusSearch);
+	}, []);
 	useEffect(() => {
 		if (!createMenuOpen) return;
 		const closeOnPointerDown = (event: PointerEvent) => {
@@ -247,12 +259,12 @@ export default function DashboardLayout({ loaderData }: Route.ComponentProps) {
 						</button>
 						<p className="mobile-page-title">{currentPage}</p>
 					</div>
-					<label className="search-box">
-						<span className="sr-only">Search the ecosystem</span>
-						<Icon name="search" size={18} />
-						<input placeholder="Search people, organizations, posts…" type="search" />
+					<Form action="/search" className="search-box" method="get" role="search">
+						<label className="sr-only" htmlFor="topbar-search">Search the workspace</label>
+						<button aria-label="Search" className="search-box-submit" type="submit"><Icon name="search" size={18} /></button>
+						<input defaultValue={location.pathname === "/search" ? new URLSearchParams(location.search).get("q") ?? "" : ""} id="topbar-search" key={`${location.pathname}:${location.search}`} maxLength={100} name="q" placeholder="Search people, organizations, posts…" ref={searchInputRef} type="search" />
 						<kbd>⌘ K</kbd>
-					</label>
+					</Form>
 					<div className="topbar-actions">
 						<Link aria-label="Notifications" className="icon-button notification-button" to="/notifications">
 							<Icon name="bell" />

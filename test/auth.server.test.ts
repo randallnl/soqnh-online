@@ -86,7 +86,7 @@ import { normalizeTags } from "../app/lib/content";
 import { uploadContentImage, uploadIdentityImage } from "../app/lib/media.server";
 import { getContentImagePostId } from "../app/models/attachments.server";
 import { filterMembers, filterOrganizations } from "../app/lib/directory-filters";
-import { parseOrganizationCategories, serializeOrganizationCategories } from "../app/lib/organization-categories";
+import { organizationCategoryLabel, parseOrganizationCategories, serializeOrganizationCategories } from "../app/lib/organization-categories";
 import { parseOrganizationLeadership, serializeOrganizationLeadership } from "../app/lib/organization-leadership";
 import { eventReviewSchema, eventScheduleSchema } from "../app/lib/event-review";
 import { scraperParsers } from "../app/lib/scraper";
@@ -148,6 +148,7 @@ import {
 	updateOrganizationScraperSettings,
 } from "../app/models/scraper.server";
 import { getDashboardData } from "../app/models/dashboard.server";
+import { searchWorkspace } from "../app/models/search.server";
 import {
 	createPublicSpotlight,
 	deletePublicSpotlight,
@@ -1406,6 +1407,7 @@ describe("organization administration", () => {
 	it("normalizes multiple organization categories while preserving legacy values", () => {
 		expect(serializeOrganizationCategories(["Arts & Culture", "Health & Wellness", "Arts & Culture"])).toBe("Arts & Culture\nHealth & Wellness");
 		expect(parseOrganizationCategories("Community services\nHealth & Wellness")).toEqual(["Community services", "Health & Wellness"]);
+		expect(organizationCategoryLabel("Health & Wellness (Mental health and peer support)")).toBe("Health & Wellness");
 	});
 
 	it("normalizes multiselect organization leadership values and legacy responses", () => {
@@ -2742,6 +2744,7 @@ describe("dashboard data", () => {
 		await seedUser();
 		await seedSecondMember();
 		await seedOrganization();
+		await env.DB.prepare("UPDATE organizations SET logo_object_key = 'organization-logos/community-center.png' WHERE id = 'org-one'").run();
 		await setOrganizationMembership(env, siteAdmin, {
 			organizationId: "org-one",
 			userId: activeUser.id,
@@ -2788,14 +2791,72 @@ describe("dashboard data", () => {
 			expect.objectContaining({
 				postId: event.id,
 				locationName: "Concord",
+				organizationName: "Community Center",
+				organizationSlug: "community-center",
+				organizationLogoObjectKey: "organization-logos/community-center.png",
 				thumbnailObjectKey: null,
 				thumbnailUrl: "https://example.org/community-gathering.jpg",
 			}),
 		]);
 		expect(dashboard.recentPosts.find((post) => post.id === event.id)).toMatchObject({
+			organizationName: "Community Center",
+			organizationSlug: "community-center",
+			organizationLogoObjectKey: "organization-logos/community-center.png",
 			thumbnailObjectKey: null,
 			thumbnailUrl: "https://example.org/community-gathering.jpg",
 		});
+	});
+});
+
+describe("workspace search", () => {
+	it("groups matching records and preserves profile and affiliation visibility", async () => {
+		await seedSiteAdmin();
+		await seedUser();
+		await seedSecondMember("hidden");
+		await seedThirdMember();
+		await seedOrganization();
+		await seedAffiliation();
+		await addUserAffiliation(env, siteAdmin, { affiliationId: "aff-shared", userId: activeUser.id });
+		const project = await createPost(env, siteAdmin, {
+			organizationId: null,
+			section: "project",
+			title: "Coalition resource exchange",
+			body: "Shared planning for coalition participants.",
+			visibility: "members",
+			status: "published",
+			tags: ["mutual-aid"],
+			affiliationIds: ["aff-shared"],
+		});
+		const update = await createPost(env, siteAdmin, {
+			organizationId: null,
+			section: "update",
+			title: "Statewide resource exchange",
+			body: "A network update available to every active member.",
+			visibility: "members",
+			status: "published",
+			tags: [],
+		});
+
+		const organizationResults = await searchWorkspace(env, activeUser, "community");
+		expect(organizationResults.organizations).toEqual([
+			expect.objectContaining({ id: "org-one", slug: "community-center" }),
+		]);
+
+		const memberResults = await searchWorkspace(env, activeUser, "second");
+		expect(memberResults.members).toHaveLength(0);
+		expect((await searchWorkspace(env, siteAdmin, "second")).members).toEqual([
+			expect.objectContaining({ id: secondMember.id }),
+		]);
+
+		expect((await searchWorkspace(env, activeUser, "resource exchange")).projects.map((item) => item.id)).toContain(project.id);
+		expect((await searchWorkspace(env, thirdMember, "resource exchange")).projects.map((item) => item.id)).not.toContain(project.id);
+		expect((await searchWorkspace(env, thirdMember, "resource exchange")).updates.map((item) => item.id)).toContain(update.id);
+	});
+
+	it("treats SQL wildcard characters as literal search text", async () => {
+		await seedUser();
+		await seedOrganization();
+		expect((await searchWorkspace(env, activeUser, "%_")).organizations).toHaveLength(0);
 	});
 });
 

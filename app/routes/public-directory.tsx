@@ -4,7 +4,7 @@ import type { Route } from "./+types/public-directory";
 import { Icon } from "~/components/icon";
 import { directoryFilterValue, uniqueDirectoryOptions } from "~/lib/directory-filters";
 import { initials } from "~/lib/media";
-import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
+import { organizationCategoryLabel, organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 import { listPublishedOrganizations } from "~/models/public-directory.server";
 
 export function meta() {
@@ -77,7 +77,7 @@ export default function PublicDirectory({ loaderData }: Route.ComponentProps) {
 						<span className="public-directory-logo">{organization.hasLogo ? <img alt="" loading="lazy" src={`/directory/${encodeURIComponent(organization.slug)}/media/logo`} /> : initials(organization.name, "Organization")}</span>
 						<h3>{organization.name}</h3>
 						<p>{organization.summary || "An affirming organization in New Hampshire’s community ecosystem."}</p>
-						{categories.length > 0 && <div className="public-directory-tags">{categories.slice(0, 3).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</div>}
+						{categories.length > 0 && <div className="public-directory-tags">{categories.slice(0, 3).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category} title={category}>{organizationCategoryLabel(category)}</span>)}</div>}
 					</div>
 					<footer><span>{organization.operatesStatewide === 1 ? "Statewide" : [organization.townCity, organization.region].filter(Boolean).join(" · ") || "New Hampshire"}</span><span>View profile <Icon name="chevron-right" size={16} /></span></footer>
 				</Link>;

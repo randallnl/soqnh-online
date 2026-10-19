@@ -16,6 +16,8 @@ export type DashboardPost = {
 	title: string;
 	body: string;
 	organizationName: string | null;
+	organizationSlug: string | null;
+	organizationLogoObjectKey: string | null;
 	thumbnailObjectKey: string | null;
 	thumbnailUrl: string | null;
 	createdAt: string;
@@ -27,6 +29,9 @@ export type DashboardEvent = {
 	title: string;
 	startsAt: string;
 	locationName: string | null;
+	organizationName: string | null;
+	organizationSlug: string | null;
+	organizationLogoObjectKey: string | null;
 	thumbnailObjectKey: string | null;
 	thumbnailUrl: string | null;
 };
@@ -177,6 +182,8 @@ export async function getDashboardData(
 			`WITH ${viewerAffiliations}
 			 SELECT p.id, p.section, p.title, p.body,
 			        o.name AS organizationName,
+			        o.slug AS organizationSlug,
+			        o.logo_object_key AS organizationLogoObjectKey,
 			        (SELECT attachment.object_key
 			         FROM attachments AS attachment
 			         WHERE attachment.post_id = p.id
@@ -201,6 +208,8 @@ export async function getDashboardData(
 			`WITH ${viewerAffiliations}
 			 SELECT p.id, p.section, p.title, p.body,
 			        o.name AS organizationName,
+			        o.slug AS organizationSlug,
+			        o.logo_object_key AS organizationLogoObjectKey,
 			        group_concat(DISTINCT a.name) AS affiliationNames,
 			        (SELECT attachment.object_key
 			         FROM attachments AS attachment
@@ -228,6 +237,9 @@ export async function getDashboardData(
 			 `WITH ${viewerAffiliations}
 			 SELECT p.id AS postId, p.title, e.starts_at AS startsAt,
 			        e.location_name AS locationName,
+			        o.name AS organizationName,
+			        o.slug AS organizationSlug,
+			        o.logo_object_key AS organizationLogoObjectKey,
 			        (SELECT attachment.object_key
 			         FROM attachments AS attachment
 			         WHERE attachment.post_id = p.id

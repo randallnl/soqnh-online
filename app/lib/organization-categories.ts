@@ -30,6 +30,10 @@ export function parseOrganizationCategories(value: string | null | undefined) {
 	return [...new Set((value ?? "").split(/\r?\n+/).map((category) => category.trim()).filter(Boolean))].slice(0, 10);
 }
 
+export function organizationCategoryLabel(category: string) {
+	return category.replace(/\s*\([^)]*\)/g, "").replace(/\s+/g, " ").trim() || category.trim();
+}
+
 export function serializeOrganizationCategories(values: readonly unknown[]) {
 	return [...new Set(values
 		.filter((value): value is string => typeof value === "string")

@@ -4,7 +4,7 @@ import type { Route } from "./+types/public-home";
 import { Icon } from "~/components/icon";
 import { PublicHeroCarousel, type PublicHeroSlide } from "~/components/public-hero-carousel";
 import { initials } from "~/lib/media";
-import { organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
+import { organizationCategoryLabel, organizationCategoryTone, parseOrganizationCategories } from "~/lib/organization-categories";
 import { listPublishedOrganizations, listPublishedUpcomingCalendarEvents } from "~/models/public-directory.server";
 import { listActivePublicSpotlights } from "~/models/public-spotlights.server";
 
@@ -118,7 +118,7 @@ export default function PublicHome({ loaderData }: Route.ComponentProps) {
 					const categories = parseOrganizationCategories(organization.category);
 					return <Link className="public-directory-card" key={organization.slug} to={`/directory/${organization.slug}`}>
 						<div className={`public-directory-card-cover${organization.hasProfilePhoto ? " public-directory-card-cover--photo" : ""}`}>{organization.hasProfilePhoto && <img alt="" loading="lazy" src={`/directory/${encodeURIComponent(organization.slug)}/media/photo`} />}</div>
-						<div className="public-directory-card-body"><span className="public-directory-logo">{organization.hasLogo ? <img alt="" loading="lazy" src={`/directory/${encodeURIComponent(organization.slug)}/media/logo`} /> : initials(organization.name, "Organization")}</span><h3>{organization.name}</h3><p>{organization.summary || "An affirming organization in New Hampshire’s community ecosystem."}</p>{categories.length > 0 && <div className="public-directory-tags">{categories.slice(0, 3).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category}>{category}</span>)}</div>}</div>
+						<div className="public-directory-card-body"><span className="public-directory-logo">{organization.hasLogo ? <img alt="" loading="lazy" src={`/directory/${encodeURIComponent(organization.slug)}/media/logo`} /> : initials(organization.name, "Organization")}</span><h3>{organization.name}</h3><p>{organization.summary || "An affirming organization in New Hampshire’s community ecosystem."}</p>{categories.length > 0 && <div className="public-directory-tags">{categories.slice(0, 3).map((category) => <span className={`organization-category-chip organization-category-tone--${organizationCategoryTone(category)}`} key={category} title={category}>{organizationCategoryLabel(category)}</span>)}</div>}</div>
 						<footer><span>{organization.operatesStatewide === 1 ? "Statewide" : [organization.townCity, organization.region].filter(Boolean).join(" · ") || "New Hampshire"}</span><span>View profile <Icon name="chevron-right" size={16} /></span></footer>
 					</Link>;
 				})}</div>

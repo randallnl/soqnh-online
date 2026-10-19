@@ -24,6 +24,7 @@ export default [
 	route("media/*", "routes/media.ts"),
 	layout("routes/dashboard-layout.tsx", [
 		route("home", "routes/home.tsx"),
+		route("search", "routes/search.tsx"),
 		route("members", "routes/members.tsx"),
 		route("members/:memberId", "routes/member-detail.tsx"),
 		route("profile", "routes/profile.tsx"),
