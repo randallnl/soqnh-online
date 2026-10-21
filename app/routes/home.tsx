@@ -139,10 +139,9 @@ function initials(name: string | null) {
 export default function Home({ loaderData }: Route.ComponentProps) {
 	const { dashboard } = loaderData;
 	const attentionTotal = dashboard.attentionItems.reduce((total, item) => total + (item.count ?? 1), 0);
-	const stats: Array<{
+	const networkStats: Array<{
 		label: string;
 		value: number;
-		note: string;
 		icon: IconName;
 		color: string;
 		to: string;
@@ -150,7 +149,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		{
 			label: "Active members",
 			value: dashboard.counts.activeMembers,
-			note: "Visible in your network",
 			icon: "people",
 			color: "green",
 			to: "/members",
@@ -158,26 +156,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 		{
 			label: "Organizations",
 			value: dashboard.counts.organizations,
-			note: "Visible in your network",
 			icon: "building",
 			color: "blue",
 			to: "/organizations",
-		},
-		{
-			label: "Upcoming events",
-			value: dashboard.counts.upcomingEvents,
-			note: "Visible to you",
-			icon: "calendar",
-			color: "gold",
-			to: "/events",
-		},
-		{
-			label: "Pending review",
-			value: dashboard.counts.pendingEvents,
-			note: "Events you can moderate",
-			icon: "clipboard",
-			color: "plum",
-			to: loaderData.eventModerator ? "/events/moderation" : "/events",
 		},
 	];
 
@@ -199,30 +180,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 					<Icon name="calendar" size={17} />
 					View calendar
 				</Link>
-			</section>
-
-			<section aria-label="Ecosystem summary" className="stat-grid">
-				{stats.map((stat) => (
-					<Link className="stat-card" key={stat.label} to={stat.to}>
-						<span className={`stat-icon stat-icon--${stat.color}`}>
-							<Icon name={stat.icon} size={21} />
-						</span>
-						<div className="stat-copy">
-							<strong>{stat.value}</strong>
-							<p>{stat.label}</p>
-							<small>{stat.note}</small>
-						</div>
-						<Icon className="stat-card-arrow" name="chevron-right" size={17} />
-					</Link>
-				))}
-			</section>
-
-			<section className="panel action-center-panel">
-				<div className="panel-heading">
-					<div><p className="eyebrow">Your action center</p><h2>What needs your attention</h2></div>
-					{attentionTotal > 0 && <span aria-label={`${attentionTotal} items need attention`} className="action-center-total">{attentionTotal}</span>}
-				</div>
-				{dashboard.attentionItems.length === 0 ? <div className="action-center-clear"><span><Icon name="sparkles" size={20} /></span><div><strong>You’re all caught up</strong><p>No pending actions need your attention right now.</p></div></div> : <div className="action-center-grid">{dashboard.attentionItems.map((item) => <Link className={`action-center-item action-center-item--${item.tone}`} key={item.id} to={item.to}><span className="action-center-icon"><Icon name={item.id === "notifications" ? "bell" : item.id === "profile" ? "user" : item.id === "event-review" ? "calendar" : item.id.includes("review") ? "clipboard" : item.id === "organization" ? "building" : "activity"} size={19} /></span><div><strong>{item.title}</strong><p>{item.detail}</p></div>{item.count !== null && <b>{item.count}</b>}<Icon className="action-center-arrow" name="chevron-right" size={17} /></Link>)}</div>}
 			</section>
 
 			<div className="dashboard-columns">
@@ -274,6 +231,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								})}
 							</div>
 						)}
+					</section>
+
+					<section className="panel action-center-panel">
+						<div className="panel-heading">
+							<div><p className="eyebrow">Your action center</p><h2>What needs your attention</h2></div>
+							{attentionTotal > 0 && <span aria-label={`${attentionTotal} items need attention`} className="action-center-total">{attentionTotal}</span>}
+						</div>
+						{dashboard.attentionItems.length === 0 ? <div className="action-center-clear"><span><Icon name="sparkles" size={20} /></span><div><strong>You’re all caught up</strong><p>No pending actions need your attention right now.</p></div></div> : <div className="action-center-grid">{dashboard.attentionItems.map((item) => <Link className={`action-center-item action-center-item--${item.tone}`} key={item.id} to={item.to}><span className="action-center-icon"><Icon name={item.id === "notifications" ? "bell" : item.id === "profile" ? "user" : item.id === "event-review" ? "calendar" : item.id.includes("review") ? "clipboard" : item.id === "organization" ? "building" : "activity"} size={19} /></span><div><strong>{item.title}</strong><p>{item.detail}</p></div>{item.count !== null && <b>{item.count}</b>}<Icon className="action-center-arrow" name="chevron-right" size={17} /></Link>)}</div>}
 					</section>
 
 					<section className="panel feed-panel">
@@ -366,6 +331,21 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 								})}
 							</div>
 						)}
+					</section>
+
+					<section aria-label="Network snapshot" className="panel compact-panel network-snapshot-panel">
+						<div className="panel-heading">
+							<div><p className="eyebrow">At a glance</p><h2>Network snapshot</h2></div>
+						</div>
+						<div className="network-snapshot-grid">
+							{networkStats.map((stat) => (
+								<Link className="network-snapshot-item" key={stat.label} to={stat.to}>
+									<span className={`stat-icon stat-icon--${stat.color}`}><Icon name={stat.icon} size={17} /></span>
+									<span><strong>{stat.value}</strong><small>{stat.label}</small></span>
+									<Icon name="chevron-right" size={15} />
+								</Link>
+							))}
+						</div>
 					</section>
 				</aside>
 			</div>

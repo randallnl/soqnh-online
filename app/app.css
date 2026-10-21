@@ -846,6 +846,63 @@ h3 {
 	font-size: 0.75rem;
 }
 
+.network-snapshot-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	padding: 0 10px 10px;
+}
+
+.network-snapshot-item {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 9px;
+	min-width: 0;
+	padding: 12px 10px;
+	border-top: 1px solid var(--ink-100);
+	transition: background 160ms ease;
+}
+
+.network-snapshot-item:first-child {
+	border-right: 1px solid var(--ink-100);
+}
+
+.network-snapshot-item:hover {
+	background: var(--surface-soft);
+}
+
+.network-snapshot-item .stat-icon {
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+}
+
+.network-snapshot-item > span:nth-child(2) {
+	display: grid;
+	min-width: 0;
+}
+
+.network-snapshot-item strong {
+	font-family: Nunito, ui-rounded, sans-serif;
+	font-size: 1.15rem;
+	font-weight: 900;
+	line-height: 1;
+}
+
+.network-snapshot-item small {
+	margin-top: 4px;
+	overflow: hidden;
+	color: var(--ink-500);
+	font-size: 0.67rem;
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.network-snapshot-item > svg {
+	color: var(--ink-300);
+}
+
 .dashboard-columns {
 	display: grid;
 	grid-template-columns: minmax(0, 1.62fr) minmax(295px, 0.78fr);
