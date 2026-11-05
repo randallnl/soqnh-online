@@ -123,6 +123,24 @@ function cleanUrl(value: string) {
 	}
 }
 
+const monthNumberByName: Record<string, string> = {
+	jan: "01", january: "01", feb: "02", february: "02", mar: "03", march: "03",
+	apr: "04", april: "04", may: "05", jun: "06", june: "06", jul: "07", july: "07",
+	aug: "08", august: "08", sep: "09", sept: "09", september: "09", oct: "10", october: "10",
+	nov: "11", november: "11", dec: "12", december: "12",
+};
+
+function sourceTextConflictsWithStartDate(record: ScraperRecord) {
+	const [expectedYear, expectedMonth, expectedDay] = record.start_date.split("-");
+	const matchingYears = [...record.description.matchAll(
+		/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)?(?:day|sday|nesday|rsday|urday)?[,]?\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),\s*(\d{4})\b/gi,
+	)]
+		.filter((match) => monthNumberByName[match[1].toLowerCase()] === expectedMonth
+			&& String(Number(match[2])).padStart(2, "0") === expectedDay)
+		.map((match) => match[3]);
+	return matchingYears.length > 0 && !matchingYears.includes(expectedYear);
+}
+
 async function sha256(value: string) {
 	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
 	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -283,6 +301,7 @@ export async function importScraperRecords(
 		if (!organization) invalidReason = "No active organization matches the partner name";
 		else if ((record.kind || "event") !== "event") invalidReason = "Record is not an event";
 		else if (!startsAt) invalidReason = "Start date or time is invalid";
+		else if (sourceTextConflictsWithStartDate(record)) invalidReason = "Start date year conflicts with the event source text";
 		else if ((record.end_date || record.end_time) && !endsAt) invalidReason = "End date or time is invalid";
 		else if (endsAt && endsAt < startsAt) invalidReason = "End date or time precedes the start";
 

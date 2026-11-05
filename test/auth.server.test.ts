@@ -848,6 +848,21 @@ describe("partner event scraper imports", () => {
 		});
 	});
 
+	it("rejects scraper dates rolled into a future year when the source text has an explicit year", async () => {
+		await seedOrganization();
+		const result = await importScraperRecords(env, [{
+			...scrapedEvent,
+			title: "School Supply Drive",
+			start_date: "2027-06-01",
+			end_date: "2027-08-01",
+			description: "Sun, Jun 1, 2025 9:00 AM Fri, Aug 1, 2025 10:00 AM Help students get ready for school.",
+		}], null);
+
+		expect(result).toMatchObject({ imported: 0, new: 0, invalid: 1, skipped: 1 });
+		await expect(env.DB.prepare("SELECT count(*) AS count FROM events").first<number>("count"))
+			.resolves.toBe(0);
+	});
+
 	it("does not overwrite an approved scraper event", async () => {
 		await seedOrganization();
 		await importScraperRecords(env, [scrapedEvent], null);
